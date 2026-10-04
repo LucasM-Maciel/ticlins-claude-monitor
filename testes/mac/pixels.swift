@@ -1,5 +1,5 @@
 // Conta quantos pixels (quase opacos) de um PNG têm uma cor, com tolerância.
-// Uso: pixels arquivo.png r g b tolerância [lista]
+// Uso: pixels arquivo.png r g b tolerância [lista | alfaMin alfaMax]
 // Compara o valor CRU gravado no arquivo, sem converter cor: o NSBitmapImageRep
 // ignora o perfil do PNG e lê como "Generic RGB", e aí o magenta (255,0,255)
 // virava (255,64,255) na conversão pra sRGB. Com "lista": em vez do total,
@@ -7,13 +7,15 @@
 import AppKit
 
 let a = CommandLine.arguments
-guard a.count == 6 || a.count == 7, let dados = FileManager.default.contents(atPath: a[1]),
+guard (6...8).contains(a.count), let dados = FileManager.default.contents(atPath: a[1]),
       let rep = NSBitmapImageRep(data: dados),
       let r = Int(a[2]), let g = Int(a[3]), let b = Int(a[4]), let tol = Int(a[5]) else {
     print("-1")
     exit(1)
 }
 let lista = a.count == 7
+// "pixels arquivo.png r g b tol 0.3 0.6": conta os com alfa entre 0,3 e 0,6 (com tol 255, de qualquer cor)
+let faixa = a.count == 8 ? (Double(a[6]) ?? 0, Double(a[7]) ?? 1) : (0.78, 1.01)
 var n = 0
 var vistas: [String: Int] = [:]
 for y in 0..<rep.pixelsHigh {
@@ -21,7 +23,7 @@ for y in 0..<rep.pixelsHigh {
         guard let c = rep.colorAt(x: x, y: y) else { continue }
         let (cr, cg, cb) = (Int(c.redComponent * 255), Int(c.greenComponent * 255), Int(c.blueComponent * 255))
         guard abs(cr - r) <= tol && abs(cg - g) <= tol && abs(cb - b) <= tol else { continue }
-        if c.alphaComponent > 0.78 { n += 1 }
+        if Double(c.alphaComponent) > faixa.0 && Double(c.alphaComponent) <= faixa.1 { n += 1 }
         if lista { vistas["\(cr),\(cg),\(cb) alfa=\(String(format: "%.2f", c.alphaComponent))", default: 0] += 1 }
     }
 }

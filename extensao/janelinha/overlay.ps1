@@ -7,7 +7,7 @@
 # Sons e texturas do Minecraft vêm do servidor da Mojang (minecraft.js);
 # sem eles, sons do Windows e os desenhos daqui.
 # Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
-# traz o VS Code. Botão direito: "Fechar".
+# traz o VS Code. Botão direito: Clawd (liga/desliga), Opacidade, Volume e Fechar.
 # Passar o mouse numa sessão: o estado dela.
 # Saiu versão nova (a extensão consulta o GitHub): linha roxa embaixo; o clique baixa o zip.
 # A extensão abre isto a cada janela do VS Code; o mutex deixa uma só. Quando a
@@ -76,21 +76,36 @@ $sons = @{
     tudo       = $levelup  # subir de nível: a última terminou e não sobrou nada rodando nem esperando
 }
 $nomeDoSom = @{ permission = 'aldeao'; question = 'aldeao'; finished = 'xp'; tudo = 'levelup' }  # pro .txt do -Foto
-# configurações do usuário gravadas em config.json
+# botão direito: Clawd, opacidade e volume, gravados em config.json (o Mac lê o mesmo).
+# Sem o arquivo, tudo como antes do menu existir: Clawd ligado, opaca, volume cheio
 $configArquivo = Join-Path $Pasta 'config.json'
-$config = @{ opacidade = 0.9; clawd = $true; volume = 0.4 }
-try {
-    $c = Get-Content -LiteralPath $configArquivo -Raw -ErrorAction Stop | ConvertFrom-Json
-    if ($null -ne $c.opacidade) { $config.opacidade = [double]$c.opacidade }
-    if ($null -ne $c.clawd)    { $config.clawd    = [bool]$c.clawd }
-    if ($null -ne $c.volume)   { $config.volume   = [double]$c.volume }
-} catch {}
+$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0 }
+# Exists antes: arquivo que não existe soma no $Error mesmo pego no try (o "fechou (1 erros)" do diário)
+if ([IO.File]::Exists($configArquivo)) {
+    try {
+        $configLido = [IO.File]::ReadAllText($configArquivo) | ConvertFrom-Json
+        # 1.0, não 1: o [math]::Min(1, x) escolhe a versão inteira e 0,5 vira 0
+        if ($null -ne $configLido.opacidade) { $config.opacidade = [math]::Min(1.0, [math]::Max(0.2, [double]$configLido.opacidade)) }
+        if ($null -ne $configLido.clawd) { $config.clawd = [bool]$configLido.clawd }
+        if ($null -ne $configLido.volume) { $config.volume = [math]::Min(1.0, [math]::Max(0.0, [double]$configLido.volume)) }
+    } catch { Anotar "config.json com defeito, fiquei com o padrão: $_" }
+}
 function SalvarConfig {
     try { [IO.File]::WriteAllText($configArquivo, ($config | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false)) } catch {}
 }
+# MediaPlayer (o do WPF) tem volume; o SoundPlayer não. O Open não dá erro: a falha chega
+# depois, no MediaFailed. Sem o Windows Media Player (Windows "N" sem o pacote de mídia)
+# ele não toca nada: aí vai pelo SoundPlayer, sem volume.
 $tocador = New-Object Windows.Media.MediaPlayer
 $tocador.Volume = $config.volume
 $tocador.Add_MediaOpened({ $tocador.Play() })
+$tocadorSemVolume = New-Object Media.SoundPlayer
+$tocador.Add_MediaFailed({
+    $motivoDaFalha = $_.ErrorException.Message
+    $somQueFalhou = $tocador.Source.LocalPath
+    try { $tocadorSemVolume.SoundLocation = $somQueFalhou; $tocadorSemVolume.Play(); Anotar "toquei $(Split-Path $somQueFalhou -Leaf) sem volume (o player com volume falhou: $motivoDaFalha)" }
+    catch { Anotar "não toquei $($somQueFalhou): $motivoDaFalha / $($_.Exception.Message)" }
+})
 $ultimo = @{}  # id da sessão -> última situação vista
 # teste: o -Foto parte da situação anterior em antes.json, pra ver qual som tocaria
 if ($Foto -and (Test-Path -LiteralPath "$Pasta\antes.json")) {
@@ -304,7 +319,9 @@ function Avisar($sessoes) {
         if ($Foto) { return }
         $arquivo = $sons[$tocar] | Get-Random
         # no diário: amigo sem som manda o janelinha.log e dá pra ver se ela tentou tocar
-        try { $tocador.Open([Uri]("file:///" + $arquivo.Replace('\', '/'))); Anotar "tocou $($nomeDoSom[$tocar]) ($(Split-Path $arquivo -Leaf))" }
+        if ($config.volume -le 0) { Anotar "não toquei $($nomeDoSom[$tocar]): volume no 0 (botão direito > Volume)"; return }
+        # [Uri]::new e não "file:///" + caminho: com # no caminho (C:\Users\a#b) o resto virava âncora
+        try { $tocador.Open([Uri]::new($arquivo)); Anotar "tocou $($nomeDoSom[$tocar]) ($(Split-Path $arquivo -Leaf))" }
         catch { Anotar "não toquei $arquivo : $($_.Exception.Message)" }
     }
 }
@@ -910,8 +927,9 @@ $itemClawd = New-Object Windows.Controls.MenuItem
 $itemClawd.Header = 'Clawd'
 $itemClawd.IsCheckable = $true
 $itemClawd.IsChecked = $config.clawd
-$itemClawd.Add_Checked({ $config.clawd = $true; $passeio.modo = $null; SalvarConfig })
-$itemClawd.Add_Unchecked({ $config.clawd = $false; SalvarConfig })
+# Atualizar: aparece/some na hora, sem esperar o próximo tique de 2 s
+$itemClawd.Add_Checked({ $config.clawd = $true; $passeio.modo = $null; SalvarConfig; Atualizar })
+$itemClawd.Add_Unchecked({ $config.clawd = $false; SalvarConfig; Atualizar })
 [void]$menu.Items.Add($itemClawd)
 
 # opacidade
@@ -1048,7 +1066,7 @@ if ($Foto) {
         }
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"
-        }) + "clawd: $($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
+        }) + "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
             "som: $(if ($somDaVez) { $nomeDoSom[$somDaVez] } else { 'nenhum' })" +
             "clique: $(if ($cliqueDaVez) { $cliqueDaVez } else { 'nenhum' })" +
             "atualizacao: $(if ($n = VersaoNova) { $n } else { 'nenhuma' })"

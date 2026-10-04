@@ -86,6 +86,8 @@ estiver trabalhando nele.
   perguntar de novo. Funciona com o VS Code (com o Cursor, não).
 - **Mover**: clique e arraste.
 - **Ir pro VS Code**: duplo clique na janelinha.
+- **Preferências**: botão direito na janelinha liga/desliga o **Clawd** e muda a
+  **Opacidade** e o **Volume** dos sons. Ficam gravadas pra próxima vez.
 - **Fechar**: botão direito > Fechar.
 - **Reabrir**: no VS Code, `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) >
   **Claude Monitor: Abrir janelinha flutuante**. No Windows também tem o

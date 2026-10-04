@@ -7,7 +7,7 @@
 // Sons e texturas do Minecraft vêm do servidor da Mojang (minecraft.js); sem
 // eles, sons do Mac e os desenhos daqui.
 // Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
-// traz o VS Code. Botão direito: "Fechar".
+// traz o VS Code. Botão direito: Clawd (liga/desliga), Opacidade, Volume e Fechar.
 // Saiu versão nova (a extensão consulta o GitHub): linha roxa embaixo; o clique baixa o zip.
 // A extensão compila isto (xcrun swiftc -swift-version 5 -O -o ClaudeMonitor
 // overlay.swift) e abre; a trava em overlay.lock deixa uma só. Quando o binário
@@ -31,6 +31,22 @@ let pasta = argumento("--pasta") ?? home + "/.claude-monitor"
 let dirSessoes = pasta + "/sessions"
 
 try? FileManager.default.createDirectory(atPath: pasta, withIntermediateDirectories: true)
+
+// botão direito: Clawd, opacidade e volume, gravados em config.json (o Windows lê o mesmo).
+// Sem o arquivo, tudo como antes do menu existir: Clawd ligado, opaco, volume cheio
+let arquivoConfig = pasta + "/config.json"
+var config = (opacidade: 1.0, clawd: true, volume: 1.0)
+if let dados = FileManager.default.contents(atPath: arquivoConfig),
+   let o = (try? JSONSerialization.jsonObject(with: dados)) as? [String: Any] {
+    if let v = (o["opacidade"] as? NSNumber)?.doubleValue { config.opacidade = min(1, max(0.2, v)) }
+    if let v = o["clawd"] as? Bool { config.clawd = v }
+    if let v = (o["volume"] as? NSNumber)?.doubleValue { config.volume = min(1, max(0, v)) }
+}
+func salvarConfig() {
+    let o: [String: Any] = ["opacidade": config.opacidade, "clawd": config.clawd, "volume": config.volume]
+    if let d = try? JSONSerialization.data(withJSONObject: o) { try? d.write(to: URL(fileURLWithPath: arquivoConfig)) }
+}
+
 if arquivoFoto == nil {
     // O_CLOEXEC: no execv da versão nova a trava solta junto
     let trava = open(pasta + "/overlay.lock", O_CREAT | O_RDWR | O_CLOEXEC, 0o644)
@@ -74,6 +90,7 @@ let levelup = sonsDoMinecraft(["levelup"])
 let nomeDoSom = ["permission": "aldeao", "question": "aldeao", "finished": "xp", "tudo": "levelup"]  // pro .txt do --foto
 var tocando: NSSound?  // segura o som até acabar de tocar
 func tocar(_ situacao: String) {
+    guard config.volume > 0 else { return }  // volume no 0 (botão direito): mudo
     // sem Minecraft, sons do Mac
     let (arquivos, doMac) = situacao == "tudo" ? (levelup, "Hero") : situacao == "finished" ? (xp, "Glass") : (aldeao, "Ping")
     var som: NSSound?
@@ -81,6 +98,7 @@ func tocar(_ situacao: String) {
     if som == nil { som = NSSound(named: NSSound.Name(doMac)) }
     tocando?.stop()
     tocando = som
+    som?.volume = Float(config.volume)
     som?.play()
 }
 
@@ -393,6 +411,49 @@ func opacidadeDoPulso() -> CGFloat {
     return CGFloat(0.65 + 0.35 * cos(2 * Double.pi * fase))
 }
 
+// botão direito: os itens que mexem no config.json (o Fechar fica no Cartao)
+final class Preferencias: NSObject {
+    @objc func alternarClawd(_ item: NSMenuItem) {
+        config.clawd.toggle()
+        salvarConfig()
+        aplicarConfig()
+    }
+    @objc func mudouOpacidade(_ s: NSSlider) {
+        config.opacidade = s.doubleValue.rounded() / 100
+        rotular(s)
+        salvarConfig()
+        aplicarConfig()
+    }
+    @objc func mudouVolume(_ s: NSSlider) {
+        config.volume = s.doubleValue.rounded() / 100
+        rotular(s)
+        salvarConfig()
+    }
+    func rotular(_ s: NSSlider) { (s.superview?.viewWithTag(1) as? NSTextField)?.stringValue = "\(Int(s.doubleValue.rounded()))%" }
+    // "Opacidade ——o—— 90%": item de menu com um slider dentro
+    func itemComSlider(_ nome: String, _ minimo: Double, _ valor: Double, _ acao: Selector) -> NSMenuItem {
+        let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
+        let rotulo = NSTextField(labelWithString: nome)
+        rotulo.font = NSFont.menuFont(ofSize: 0)
+        rotulo.frame = NSRect(x: 20, y: 4, width: 72, height: 18)
+        let slider = NSSlider(value: valor, minValue: minimo, maxValue: 100, target: self, action: acao)
+        slider.controlSize = .small
+        slider.isContinuous = true
+        slider.frame = NSRect(x: 92, y: 3, width: 94, height: 20)
+        let pct = NSTextField(labelWithString: "\(Int(valor.rounded()))%")
+        pct.font = NSFont.menuFont(ofSize: 12)
+        pct.textColor = .secondaryLabelColor
+        pct.alignment = .right
+        pct.tag = 1
+        pct.frame = NSRect(x: 186, y: 4, width: 36, height: 18)
+        for v in [rotulo, slider, pct] as [NSView] { caixa.addSubview(v) }
+        let item = NSMenuItem()
+        item.view = caixa
+        return item
+    }
+}
+let preferencias = Preferencias()
+
 final class Cartao: NSView {
     var linhas: [(id: String, cor: NSColor, nome: String, tempo: String, rotulo: String, pulsa: Bool)] = []
     var dicas: [NSString] = []  // o tooltip não segura o dono
@@ -420,6 +481,16 @@ final class Cartao: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        // opacidade do botão direito: o cartão inteiro numa camada só (como o Opacity do
+        // Windows); opaco, desenha direto como sempre
+        let camada = config.opacidade < 1 ? NSGraphicsContext.current?.cgContext : nil
+        camada?.saveGState()
+        camada?.setAlpha(CGFloat(config.opacidade))
+        camada?.beginTransparencyLayer(auxiliaryInfo: nil)
+        defer {
+            camada?.endTransparencyLayer()
+            camada?.restoreGState()
+        }
         hex("#E6181818").setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8).fill()
         let x: CGFloat = 10
@@ -498,6 +569,13 @@ final class Cartao: NSView {
     }
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
+        let clawd = NSMenuItem(title: "Clawd", action: #selector(Preferencias.alternarClawd(_:)), keyEquivalent: "")
+        clawd.target = preferencias
+        clawd.state = config.clawd ? .on : .off
+        menu.addItem(clawd)
+        menu.addItem(preferencias.itemComSlider("Opacidade", 20, config.opacidade * 100, #selector(Preferencias.mudouOpacidade(_:))))
+        menu.addItem(preferencias.itemComSlider("Volume", 0, config.volume * 100, #selector(Preferencias.mudouVolume(_:))))
+        menu.addItem(.separator())
         let fechar = NSMenuItem(title: "Fechar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         fechar.target = NSApp
         menu.addItem(fechar)
@@ -894,6 +972,12 @@ palco.cartao = cartao
 raiz.addSubview(cartao)
 raiz.addSubview(palco)
 janela.contentView = raiz
+// o que o botão direito mudou: Clawd desligado = o palco some; a opacidade o Cartao.draw lê
+func aplicarConfig() {
+    palco.isHidden = !config.clawd
+    cartao.needsDisplay = true
+}
+aplicarConfig()
 // nasce no canto de baixo à direita (a margem M já afasta o cartão da borda)
 if let tela = NSScreen.main?.visibleFrame { janela.setFrameOrigin(NSPoint(x: tela.maxX - L, y: tela.minY)) }
 
@@ -929,8 +1013,9 @@ func atualizar() {
             let y: CGFloat? = alvo == "baixar" ? cartao.yAviso + 10 : cartao.linhas.firstIndex(where: { $0.id == alvo }).map { 6 + CGFloat($0) * 20 + 10 }
             if let y = y, let achou = cartao.alvoNoPonto(NSPoint(x: cartao.bounds.midX, y: y)) { clicar(achou) }
         }
+        let clawd = config.clawd ? palco.modo + (palco.luta.map { " (\($0))" } ?? "") : "desligado"
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
-            + ["clawd: \(palco.modo)\(palco.luta.map { " (\($0))" } ?? "")", "usage: \(uso == nil ? "indisponivel" : "ok")",
+            + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")",
                "som: \(somDaVez.flatMap { nomeDoSom[$0] } ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
                "atualizacao: \(cartao.aviso ?? "nenhuma")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)

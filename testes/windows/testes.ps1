@@ -72,6 +72,18 @@ public static class Pixels {
             return n;
         }
     }
+    // quantos pixels têm a transparência entre aMin e aMax (0-255), de qualquer cor
+    public static int ContarAlfa(string arquivo, int aMin, int aMax) {
+        using (var bmp = new System.Drawing.Bitmap(arquivo)) {
+            int n = 0;
+            for (int y = 0; y < bmp.Height; y++)
+                for (int x = 0; x < bmp.Width; x++) {
+                    int a = bmp.GetPixel(x, y).A;
+                    if (a >= aMin && a <= aMax) n++;
+                }
+            return n;
+        }
+    }
 }
 '@
 Add-Type -AssemblyName System.IO.Compression.FileSystem, System.Drawing, System.Windows.Forms
@@ -150,7 +162,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
@@ -167,6 +179,15 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         Verdade ($r.codigo -eq 0 -and (Test-Path "$foto.txt")) "a janelinha não terminou direito: $($r.saida)"
         Igual (Ler "$pasta\esperado.txt") (Ler "$foto.txt") 'o que a janelinha mostrou'
         Verdade ((Get-Item $foto).Length -gt 2000) 'print vazio'
+        if ($cenario -eq 'preferencias') {
+            # config.json do botão direito: sem Clawd (nem ferramenta) e o cartão a 50% (fundo 90% x 50% = alfa ~115)
+            Verdade ([Pixels]::Contar($foto, 215, 119, 87, 12) -lt 5) 'o Clawd apareceu desligado'
+            Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'a ferramenta apareceu com o Clawd desligado'
+            Verdade ([Pixels]::Contar($foto, 24, 24, 24, 6) -lt 100) 'o cartão ficou opaco com opacidade 50%'
+            Verdade ([Pixels]::ContarAlfa($foto, 77, 153) -gt 5000) 'cadê o cartão meio transparente?'
+            Verdade (-not (Test-Path "$pasta\janelinha.log")) 'o -Foto anotou no diário'
+            return
+        }
         Verdade ([Pixels]::Contar($foto, 24, 24, 24, 6) -gt 5000) 'cadê o cartão escuro?'
         Verdade ([Pixels]::Contar($foto, 215, 119, 87, 12) -gt 30) 'cadê o Clawd (laranja)?'
         if ($cenario -eq 'andando') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'não usou a picareta.png' }
@@ -268,6 +289,8 @@ if ([Threading.Mutex]::TryOpenExisting('ClaudeMonitorOverlay', [ref]$mutexAberto
                              "\[$novaId\] abriu: arquivo de ", "\[$($primeira.Id)\] fechou \(\d+ erros") {
             Verdade ($texto -match $esperado) "faltou no diário: $esperado`n$texto"
         }
+        # sem config.json (quem nunca mexeu no botão direito) não é erro: o "fechou (1 erros)" falso
+        Verdade ($texto -notmatch 'config\.json') "o diário reclamou do config.json que não existe:`n$texto"
     }
 }
 

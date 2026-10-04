@@ -162,6 +162,14 @@ t_cenario() {
   com_prazo 60 env HOME="$CASA" "$MONITOR/ClaudeMonitor" --foto "$foto" --pasta "$pasta" "${extra[@]}" \
     || falha "a janelinha não terminou direito" || return 1
   diff <(cat "$pasta/esperado.txt") <(cat "$foto.txt") || falha "o que a janelinha mostrou é diferente do esperado (acima)" || return 1
+  if [ "$c" = preferencias ]; then
+    # config.json do botão direito: sem Clawd (nem ferramenta) e o cartão a 50% (fundo 90% x 50% = alfa ~0,45)
+    [ "$(pixels "$foto" 215 119 87 30)" -lt 5 ] || falha "o Clawd apareceu desligado" || return 1
+    [ "$(pixels "$foto" 74 237 217 40)" -lt 5 ] || falha "a ferramenta apareceu com o Clawd desligado" || return 1
+    [ "$(pixels "$foto" 24 24 24 10)" -lt 100 ] || falha "o cartão ficou opaco com opacidade 50%" || return 1
+    [ "$(pixels "$foto" 0 0 0 255 0.3 0.6)" -gt 5000 ] || falha "cadê o cartão meio transparente? $(pixels "$foto" 0 0 0 255 lista)" || return 1
+    return 0
+  fi
   [ "$(pixels "$foto" 24 24 24 10)" -gt 5000 ] || falha "cadê o cartão escuro?" || return 1
   [ "$(pixels "$foto" 215 119 87 30)" -gt 30 ] || falha "cadê o Clawd (laranja)?" || return 1
   if [ "$c" = andando ]; then
@@ -183,7 +191,7 @@ t_cenario() {
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique pedra bug atualizar; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique pedra bug atualizar preferencias; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 t_cores() {

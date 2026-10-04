@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -230,6 +230,10 @@ if (cenario === "misto") {
     atualizacao = "0.5.10";
     clique = "https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip";
     clawd = "parado";
+} else if (cenario === "preferencias") {  // botão direito (config.json): Clawd desligado, cartão a 50%, volume 0
+    sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ opacidade: 0.5, clawd: false, volume: 0 }));
+    clawd = "desligado";
 } else {
     console.error(`cenário desconhecido: ${cenario}`);
     process.exit(2);
