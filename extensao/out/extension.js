@@ -322,18 +322,80 @@ async function conferirNode() {
     if (escolha)
         vscode.env.openExternal(vscode.Uri.parse("https://nodejs.org/"));
 }
+/** Volume do botão direito da janelinha (config.json, de 0 a 1); sem o arquivo, cheio. */
+function lerVolume() {
+    try {
+        const v = JSON.parse(fs.readFileSync(path.join(sessions_1.MONITOR_DIR, "config.json"), "utf8").replace(/^\uFEFF/, "")).volume;
+        return typeof v === "number" ? Math.min(1, Math.max(0, v)) : 1;
+    }
+    catch {
+        return 1;
+    }
+}
+/**
+ * Cópia do .wav com o volume aplicado (o SoundPlayer do Windows não tem volume), uma
+ * por volume. Só PCM de 8 ou 16 bits (os do Windows são); outro formato ou erro = null.
+ */
+function wavComVolume(origem, volume) {
+    const destino = path.join(sessions_1.MONITOR_DIR, `som-volume-${Math.round(volume * 100)}.wav`);
+    if (fs.existsSync(destino))
+        return destino;
+    try {
+        const b = fs.readFileSync(origem);
+        if (b.toString("ascii", 0, 4) !== "RIFF" || b.toString("ascii", 8, 12) !== "WAVE")
+            return null;
+        let formato = 0, bits = 0;
+        for (let p = 12; p + 8 <= b.length;) {
+            const id = b.toString("ascii", p, p + 4), tamanho = b.readUInt32LE(p + 4), ini = p + 8;
+            if (id === "fmt ") {
+                formato = b.readUInt16LE(ini);
+                bits = b.readUInt16LE(ini + 14);
+                if (formato === 0xfffe && tamanho >= 26)
+                    formato = b.readUInt16LE(ini + 24); // WAVE_FORMAT_EXTENSIBLE: o formato de verdade vem no SubFormat
+            }
+            if (id === "data") {
+                if (formato !== 1 || (bits !== 16 && bits !== 8))
+                    return null;
+                const fim = Math.min(ini + tamanho, b.length);
+                if (bits === 16)
+                    for (let i = ini; i + 1 < fim; i += 2)
+                        b.writeInt16LE(Math.round(b.readInt16LE(i) * volume), i);
+                else
+                    for (let i = ini; i < fim; i++)
+                        b[i] = Math.round((b[i] - 128) * volume) + 128; // 8 bits: sem sinal, silêncio = 128
+                // grava ao lado e renomeia: outra janela do VS Code nunca toca um arquivo pela metade
+                const temporario = `${destino}.${process.pid}`;
+                fs.writeFileSync(temporario, b);
+                fs.renameSync(temporario, destino);
+                return destino;
+            }
+            p = ini + tamanho + (tamanho % 2);
+        }
+    }
+    catch {
+        // toca o original
+    }
+    return null;
+}
+/** Som com a janelinha fechada (aberta, quem toca é ela), no volume do botão direito dela. */
 function playSound() {
     const ignore = () => {
         /* som não é crítico */
     };
+    const volume = lerVolume();
+    if (volume <= 0)
+        return;
     if (process.platform === "darwin") {
-        (0, child_process_1.execFile)("afplay", ["/System/Library/Sounds/Glass.aiff"], ignore);
+        (0, child_process_1.execFile)("afplay", ["-v", String(volume), "/System/Library/Sounds/Glass.aiff"], ignore);
     }
     else if (process.platform === "win32") {
-        (0, child_process_1.execFile)("powershell", ["-NoProfile", "-Command", "(New-Object Media.SoundPlayer 'C:\\Windows\\Media\\Windows Notify.wav').PlaySync()"], { windowsHide: true }, ignore);
+        const original = path.join(process.env.WINDIR || "C:\\Windows", "Media", "Windows Notify.wav");
+        // formato que não sei abaixar: toca o original, cheio
+        const arquivo = (volume < 1 && wavComVolume(original, volume)) || original;
+        (0, child_process_1.execFile)("powershell", ["-NoProfile", "-Command", `(New-Object Media.SoundPlayer '${arquivo.replace(/'/g, "''")}').PlaySync()`], { windowsHide: true }, ignore);
     }
     else {
-        (0, child_process_1.execFile)("paplay", ["/usr/share/sounds/freedesktop/stereo/complete.oga"], ignore);
+        (0, child_process_1.execFile)("paplay", [`--volume=${Math.round(volume * 65536)}`, "/usr/share/sounds/freedesktop/stereo/complete.oga"], ignore);
     }
 }
 /** Sessão rodando no Terminal.app — só ativa o app se achar a aba. */

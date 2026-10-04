@@ -447,4 +447,82 @@ test("som: com a janelinha aberta quem toca é ela; sem janelinha, a extensão t
     }
 });
 
+// --- volume do botão direito da janelinha (config.json) também no som da extensão ---
+const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
+/** WAV PCM mono com essas amostras (16 bits, ou 24 = formato que a extensão não sabe abaixar). */
+function wav(amostras, bits = 16) {
+    const largura = bits / 8;
+    const dados = Buffer.alloc(amostras.length * largura);
+    amostras.forEach((a, i) => dados.writeIntLE(a, i * largura, largura));
+    const fmt = Buffer.alloc(16);
+    fmt.writeUInt16LE(1, 0); fmt.writeUInt16LE(1, 2); fmt.writeUInt32LE(8000, 4);
+    fmt.writeUInt32LE(8000 * largura, 8); fmt.writeUInt16LE(largura, 12); fmt.writeUInt16LE(bits, 14);
+    const corpo = Buffer.concat([Buffer.from("WAVE"), Buffer.from("fmt "), u32(16), fmt, Buffer.from("data"), u32(dados.length), dados]);
+    return Buffer.concat([Buffer.from("RIFF"), u32(corpo.length), corpo]);
+}
+/**
+ * Janelinha fechada, uma sessão termina: os sons que a extensão mandou tocar.
+ * `config` = o config.json da janelinha (null = não existe); `notify` = o "Windows Notify.wav".
+ */
+async function somDaExtensao({ plataforma = "win32", config = null, notify = wav([1000, -2000, 32767]) } = {}) {
+    const windirReal = process.env.WINDIR;
+    process.env.WINDIR = fs.mkdtempSync(path.join(os.tmpdir(), "cm-windir-"));
+    fs.mkdirSync(path.join(process.env.WINDIR, "Media"));
+    fs.writeFileSync(path.join(process.env.WINDIR, "Media", "Windows Notify.wav"), notify);
+    try {
+        const { r, pasta } = await ativar({ plataforma, config: { overlay: false } });
+        if (config !== null) fs.writeFileSync(path.join(pasta, "config.json"), config);
+        const arquivo = path.join(pasta, "sessions", "s.json");
+        const gravar = (state) => fs.writeFileSync(arquivo, JSON.stringify({ name: "s", cwd: "", state, pid: process.pid, since: Date.now() / 1000, updated: Date.now() / 1000 }));
+        gravar("working");
+        await r.comandos.get("claudeMonitor.refresh")();
+        gravar("waiting");
+        await r.comandos.get("claudeMonitor.refresh")();
+        const sons = processos.filter((p) => p.tipo === "execFile" && ["powershell", "afplay", "paplay"].includes(p.cmd));
+        return { pasta, sons, linha: sons.map((p) => [p.cmd, ...p.args].join(" ")).join("\n"), original: path.join(process.env.WINDIR, "Media", "Windows Notify.wav") };
+    } finally {
+        desativar();
+        process.env.WINDIR = windirReal;
+    }
+}
+
+test("volume do botão direito no som da extensão: Windows toca uma cópia do .wav mais baixa", async () => {
+    const { pasta, sons, linha } = await somDaExtensao({ config: JSON.stringify({ opacidade: 1, clawd: true, volume: 0.5 }) });
+    const copia = path.join(pasta, "som-volume-50.wav");
+    assert.strictEqual(sons.length, 1, linha);
+    assert.ok(linha.includes(`'${copia}'`), linha);
+    const b = fs.readFileSync(copia);
+    assert.deepStrictEqual([b.readInt16LE(44), b.readInt16LE(46), b.readInt16LE(48)], [500, -1000, 16384], "as amostras não caíram pela metade");
+    assert.deepStrictEqual(fs.readdirSync(pasta).filter((f) => f.startsWith("som-volume-50.wav.")), [], "sobrou o temporário");
+});
+
+test("som da extensão no Windows: sem config.json, volume cheio ou formato desconhecido, toca o original", async () => {
+    for (const [caso, opcoes] of [
+        ["sem config.json", {}],
+        ["volume 100%", { config: JSON.stringify({ volume: 1 }) }],
+        ["config.json quebrado", { config: "{quebrado" }],
+        ["24 bits", { config: JSON.stringify({ volume: 0.5 }), notify: wav([1000, -2000], 24) }],
+        ["não é WAV", { config: JSON.stringify({ volume: 0.5 }), notify: Buffer.from("não sou wav") }],
+    ]) {
+        const { pasta, sons, linha, original } = await somDaExtensao(opcoes);
+        assert.strictEqual(sons.length, 1, `${caso}: ${linha}`);
+        assert.ok(linha.includes(`'${original}'`), `${caso}: ${linha}`);
+        assert.deepStrictEqual(fs.readdirSync(pasta).filter((f) => f.startsWith("som-volume")), [], `${caso}: criou cópia`);
+    }
+});
+
+test("som da extensão: volume 0 não toca; no Mac e no Linux o volume vai pro afplay/paplay", async () => {
+    for (const plataforma of ["win32", "darwin", "linux"]) {
+        const { sons, linha } = await somDaExtensao({ plataforma, config: JSON.stringify({ volume: 0 }) });
+        assert.strictEqual(sons.length, 0, `${plataforma} tocou com volume 0: ${linha}`);
+    }
+    // com BOM (gravado por outro programa) também vale
+    let r = await somDaExtensao({ plataforma: "darwin", config: "﻿" + JSON.stringify({ volume: 0.3 }) });
+    assert.deepStrictEqual(r.sons.map((p) => p.args.slice(0, 2)), [["-v", "0.3"]], r.linha);
+    r = await somDaExtensao({ plataforma: "darwin" });
+    assert.deepStrictEqual(r.sons.map((p) => p.args.slice(0, 2)), [["-v", "1"]], r.linha);
+    r = await somDaExtensao({ plataforma: "linux", config: JSON.stringify({ volume: 0.5 }) });
+    assert.deepStrictEqual(r.sons.map((p) => p.args[0]), ["--volume=32768"], r.linha);
+});
+
 process.on("exit", () => { cp.spawn = spawnReal; cp.execFile = execFileReal; });
