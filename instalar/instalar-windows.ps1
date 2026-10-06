@@ -48,8 +48,11 @@ New-Item -ItemType Directory -Force $pasta | Out-Null
 if (-not (Test-Path (Join-Path $pasta 'versao-janelinha')) -and -not (Test-Path (Join-Path $pasta 'config.json'))) {
     [IO.File]::WriteAllText((Join-Path $pasta 'config.json'), '{"tema":"padrao"}')
 }
-$temp = Join-Path ([IO.Path]::GetTempPath()) "claude-monitor-$PID"
+$temp = Join-Path ([IO.Path]::GetTempPath()) "claude-monitor-$PID-$([Guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force $temp | Out-Null
+# restringe o diretório temporário ao usuário atual: evita que outro usuário local troque
+# o install.js entre a extração e a execução (TOCTOU num caminho previsível)
+icacls $temp /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F" | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead($vsix.FullName)
 try {
