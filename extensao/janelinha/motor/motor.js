@@ -12,11 +12,16 @@
 //   Q quadro: W,H (tamanho da tela), x,y,w,h (uint16 LE cada) + w*h*4 bytes BGRA pré-multiplicado
 //   L uma linha pro diário da janelinha (utf8)
 //   P pronto: JSON com a versão e o layout de cada tema
+//   S som de cena épica: {"tocar": <.wav na pasta>, "cena": nome} (do começo, com o volume
+//     do botão direito) ou {"parar": true} (a cena foi cortada). No --foto também vem: a
+//     janelinha anota no .txt em vez de tocar.
 // Teste: --foto <s> espera a mensagem "foto", desenha um quadro nesse instante (com --cena
 // <nome>, o instante da cena), manda e sai; --semente fixa o sorteio; --hora HH fixa o
 // relógio (noite). A janelinha só pede a foto depois de montar o cartão com o layout da P.
+const fs = require('fs');
 const path = require('path');
 const { Tela } = require('./raster');
+const { mixar } = require('./som');
 const { carregarTexturas, layoutDe } = require('./comum');
 const { Mundo } = require('./mundo');
 
@@ -59,12 +64,29 @@ if (faltando.size && !args.foto) anotar(`motor: sem as texturas ${[...faltando].
 const relogio = args.hora != null ? () => { const d = new Date(); d.setHours(Number(args.hora), 0, 0, 0); return d; } : null;
 let mundo = null;
 let host = null;
+// -- som das cenas épicas: a trilha vira um .wav na pasta e a janelinha toca (S) --
+// Dois nomes revezando: o tocador do Windows pode ainda estar segurando o da vez passada.
+let somDaVez = 0;
+function tocarSom(cena) {
+  if (!cena) { enviar('S', Buffer.from('{"parar":true}', 'utf8')); return; }
+  try {
+    const faltando = [];
+    const wav = mixar(cena.sons, arquivo => fs.readFileSync(path.join(PASTA, arquivo)), faltando);
+    if (faltando.length) anotar(`motor: sem os sons ${faltando.join(', ')} (a cena ${cena.nome} toca sem eles)`);
+    if (!wav) return;
+    const arquivo = path.join(PASTA, `som-cena-${somDaVez++ % 2}.wav`);
+    fs.writeFileSync(arquivo, wav);
+    enviar('S', Buffer.from(JSON.stringify({ tocar: arquivo, cena: cena.nome }), 'utf8'));
+  } catch (e) { anotar(`motor: som da cena ${cena.nome}: ${e.message}`); }
+}
 function trocarTema(nome) {
+  if (mundo && mundo.cena && mundo.cena.sons) tocarSom(null);  // a cena do tema velho acaba aqui
   const salvoAntes = mundo && { dist: mundo.dist, T: mundo.T };
   mundo = new Mundo({ tema: tema(nome), semente: args.semente != null ? Number(args.semente) : Date.now(), pasta: args.foto ? null : PASTA, relogio });
   if (salvoAntes) { mundo.dist = salvoAntes.dist; mundo.T = salvoAntes.T; }
   mundo.nomeTema = nome;
   mundo.aoErro = texto => anotar(`motor: ${texto}`);
+  mundo.aoSom = tocarSom;
 }
 function receber(m) {
   if (m.msg === 'estado') {

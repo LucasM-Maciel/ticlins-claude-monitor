@@ -40,7 +40,7 @@ test("baixa os sons (XP em 3 tons) e as texturas da versão mais nova, e cutuca 
         fs.writeFileSync(overlay, "");
         fs.utimesSync(overlay, new Date(2020, 0, 1), new Date(2020, 0, 1));
         const r = await baixarTudo({ destino });
-        assert.deepStrictEqual(r, { versao: "1.99", sons: 12, texturas: TEXTURAS.length });
+        assert.deepStrictEqual(r, { versao: "1.99", sons: WAVS.length, texturas: TEXTURAS.length });
         assert.deepStrictEqual(fs.readdirSync(path.join(destino, "sons")).sort(), WAVS, "sobrou .novo ou faltou som");
         for (const f of WAVS) {
             const w = lerWav(path.join(destino, "sons", f));
@@ -81,7 +81,7 @@ test("som que não está no índice só avisa; os outros baixam", async () => {
         const destino = pastaNova();
         const log = [];
         const r = await baixarTudo({ destino, log: (t) => log.push(t) });
-        assert.strictEqual(r.sons, 11);
+        assert.strictEqual(r.sons, WAVS.length - 1);
         assert.ok(!fs.existsSync(path.join(destino, "sons", "levelup.wav")));
         assert.ok(log.some((l) => /aviso: levelup \(random\/levelup\) não está no Minecraft 1\.99/.test(l)), log.join("\n"));
     });
@@ -92,7 +92,7 @@ test("servidor que ignora Range: sons sim, texturas não (nem lê o jar inteiro)
         const destino = pastaNova();
         const log = [];
         const r = await baixarTudo({ destino, log: (t) => log.push(t) });
-        assert.strictEqual(r.sons, 12);
+        assert.strictEqual(r.sons, WAVS.length);
         assert.strictEqual(r.texturas, 0);
         assert.ok(log.some((l) => /aviso: texturas: .*HTTP 200/.test(l)), log.join("\n"));
         for (const t of TEXTURAS) assert.ok(!fs.existsSync(path.join(destino, `${t}.png`)), t);

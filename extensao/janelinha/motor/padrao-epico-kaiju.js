@@ -873,10 +873,31 @@ function desenhar(g, t, m, semente) {
   g.restore();
 }
 
+// a trilha (som.js, 8-bit): o baixo do tubarão chegando, os passos, o rugido, o ácido, a luta e
+// a vitória. O pulo e o prédio caindo dependem de onde o Clawd está (o palco)
+const S = n => `sons-padrao/kaiju-${n}.wav`, VOLUME = 0.45;  // VOLUME: o nível dos avisos (−17 dB)
+function sons(P) {
+  return [
+    [0.5, S('baixo1'), 0.6], [1.05, S('baixo2'), 0.6], [1.5, S('baixo1'), 0.65], [1.8, S('baixo2'), 0.65],
+    ...[2.3, 2.9].map((t, i) => [t, S(`baixo${i + 1}`), 0.6]),
+    ...PASSOS.map(t => [t, S('passo'), 0.9]),
+    ...[3.5, 4.1, 4.75].map(t => [t, S('tranco'), 0.6]),
+    [OLHOS, S('olhos'), 0.45], [RUGE, S('ruge'), 0.85], [CARGA, S('carga'), 0.45],
+    [RAIO, S('raio'), 0.45, 1, Math.max(0.3, P.tApaga - RAIO + 0.1)], [P.tPulo, S('pulo'), 0.4], [P.tHit, S('desaba'), 0.65],
+    [PODER, S('poder'), 0.5], ...CRESCE.map(([a], i) => [a, S('cresce'), 0.45, [1, 1.19, 1.41][i]]),
+    [MORDE, S('morde'), 0.65], [BATE, S('soco'), 0.55], ...SOCOS.map(t => [t, S('soco'), 0.85]), [SOCOS[1] + 0.35, S('tonto'), 0.35],
+    [SALTA, S('pulo'), 0.5, 0.8], [PISA, S('pisa'), 1], [EXPLODE, S('boom'), 0.8], [15.9, S('vitoria'), 0.55],
+    ...ENCOLHE.map(([a], i) => [a, S('encolhe'), 0.4, [1, 1.12, 1.26][i]]), [DESCE, S('desce'), 0.55], [PULINHO[0], S('pulo'), 0.3, 1.4],
+  ].map(([t, a, g, ...r]) => [t, a, g * VOLUME, ...r]);
+}
+
 module.exports = {
   linhaDoTempo,
   cena(m) {
     const semente = Math.floor(m.sorteio() * 4294967296);
-    return { nome: 'epico', dur: DUR, espaco: { frente: 0, tras: 0 }, modos: ['andando'], quadro(g, t, mundo) { desenhar(g, t, mundo || m, semente); } };
+    return {
+      nome: 'epico', dur: DUR, espaco: { frente: 0, tras: 0 }, modos: ['andando'], sons: sons(palcoDe(m, semente)),
+      quadro(g, t, mundo) { desenhar(g, t, mundo || m, semente); },
+    };
   },
 };

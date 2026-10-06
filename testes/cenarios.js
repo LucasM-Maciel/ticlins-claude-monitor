@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao|epico> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -134,6 +134,7 @@ function texturasDoMinecraft() {
 let clawd;
 let temUso = false;
 let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup (no Padrão: sino-terminou, sino-esperando, sino-tudo)
+let somDaCena = "nenhum";  // a cena épica cuja trilha o motor mandou tocar (mensagem S)
 let clique = "nenhum";  // o link que o clique abriria (a sessão a clicar vai em clicar.txt)
 let atualizacao = "nenhuma";  // a versão nova que o aviso roxo mostra
 // consulta-versao: a última publicada no GitHub (a extensão grava); versao-janelinha: a instalada
@@ -291,6 +292,15 @@ if (cenario === "misto") {
     som = "sino-terminou";
     uso(38, 85);
     temUso = true;
+} else if (cenario === "epico") {  // o Kaiju do Padrão no meio: o motor mixa a trilha e manda a janelinha tocar
+    sessao("a", { estado: "working", antes: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao" }));
+    fs.writeFileSync(path.join(pasta, "cena.txt"), "epico-kaiju 1.0");
+    const sons = path.join(__dirname, "..", "extensao", "janelinha", "sons-padrao");
+    fs.mkdirSync(path.join(pasta, "sons-padrao"));
+    for (const f of fs.readdirSync(sons).filter((f) => f.startsWith("kaiju-"))) fs.copyFileSync(path.join(sons, f), path.join(pasta, "sons-padrao", f));
+    clawd = "andando";
+    somDaCena = "epico-kaiju";
 } else {
     console.error(`cenário desconhecido: ${cenario}`);
     process.exit(2);
@@ -298,6 +308,6 @@ if (cenario === "misto") {
 
 if (Object.keys(antes).length) fs.writeFileSync(path.join(pasta, "antes.json"), JSON.stringify(antes));
 const linhas = esperado.sort((a, b) => b.updated - a.updated).map((e) => e.linha);
-linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`, `som: ${som}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);
+linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`, `som: ${som}`, `som da cena: ${somDaCena}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);
 fs.writeFileSync(path.join(pasta, "esperado.txt"), linhas.join("\n") + "\n");
 console.log(linhas.join("\n"));

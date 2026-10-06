@@ -162,7 +162,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'padrao') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'padrao', 'epico') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
@@ -195,7 +195,7 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         Verdade ([Pixels]::Contar($foto, 215, 119, 87, 12) -gt 30) 'cadê o Clawd (laranja)?'
         if ($cenario -eq 'andando') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'não usou a picareta.png' }
         elseif ($cenario -eq 'pedra') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'cadê o diamante (diamante.png) subindo?' }
-        elseif ($cenario -eq 'padrao') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
+        elseif ($cenario -in 'padrao', 'epico') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
         else { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -gt 5) 'cadê a ferramenta desenhada (ciano)?' }
         # tema Minecraft com as texturas de mentira do cenarios.js; o Padrão tem elas na pasta e não usa
         if ($cenario -in 'minecraft', 'padrao') {
@@ -233,7 +233,10 @@ Teste "cores das bolinhas e das barras no cenário 'misto'" {
 }
 # trabalhando pulsa (quem não distingue verde de vermelho vê o movimento); terminou não
 Teste "bolinha verde pulsa e a vermelha não (cenário 'xp-rodando', fase 0 e 0.5)" {
-    $pasta = "$tmp\cenario xp-rodando ção"  # o do laço acima: uma terminou, outra trabalhando
+    $pasta = "$tmp\cenario xp-rodando ção"  # uma terminou, outra trabalhando
+    # de novo agora: a do laço acima já pode ter passado de 1 min ("agora" vira "1m" e o vermelho do texto muda)
+    $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, 'xp-rodando', "$PID")
+    Verdade ($r.codigo -eq 0) $r.saida
     $fotos = foreach ($fase in '0', '0.5') {
         $foto = "$Saida\windows-pulso-$fase.png"
         Remove-Item "$foto*" -ErrorAction SilentlyContinue

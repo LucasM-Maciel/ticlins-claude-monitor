@@ -748,6 +748,26 @@ function desenharClawd(g, t, J, T0) {
   g.restore();
 }
 
+// a trilha (som.js, 8-bit): tudo sai do plano, então cada tiro, baixa e passo da marcha soa na
+// hora certa. A marcha são as 4 notas em roda; no último bug os passos encostam: um a cada 0,06 s
+const S = n => `sons-padrao/epico-${n}.wav`, VOLUME = 0.33;  // VOLUME: o nível dos avisos (−17 dB)
+function sons(J) {
+  const L = [[0, S('liga'), 0.55], [CAI[0], S('cai'), 0.4], [CAI[1], S('encaixa'), 0.6]];
+  [...J.bugs].sort((a, b) => a.surge - b.surge).forEach((b, i) => L.push([b.surge, S('surge'), 0.2, 1 + 0.035 * i]));
+  let antes = -1, nota = 0;
+  for (const t of J.M.ts.slice(1)) if (t < J.tFinal && t - antes >= 0.06) { L.push([t, S(`marcha${nota++ % 4 + 1}`), 0.75]); antes = t; }
+  for (const a of J.acoes) {
+    L.push([a.t, S('tiro'), 0.35]);
+    if (a.tipo === 'bug') L.push([a.tH, S('explode'), 0.45]);
+    else if (a.tipo === 'cava') L.push([a.tH, S('escudo'), 0.45]);
+    else if (a.tipo === 'chefe') L.push([a.tH, S('nave-explode'), 0.6], [a.tH + 0.2, S('pontos'), 0.35]);
+    else if (a.tipo === 'final') L.push([a.tH, S('nave-explode'), 0.7]);
+  }
+  L.push([CHEFE.ida, S('nave'), 0.3, 1, Math.min(CHEFE.dur, J.chefe.morte - CHEFE.ida)]);  // o apito da nave até ela explodir
+  L.push([J.tVisto, S('clear'), 0.5], [J.tOff, S('desliga'), 0.5]);
+  return L.map(([t, a, g, ...r]) => [t, a, g * VOLUME, ...r]);
+}
+
 function cena(m) {
   const semente = Math.floor(m.sorteio() * 4294967296);
   let J;
@@ -761,6 +781,7 @@ function cena(m) {
   return {
     nome: 'epico', dur: J.dur, espaco: { frente: 0, tras: 0 }, modos: ['andando'],
     plano: J,  // pros testes
+    sons: sons(J),
     quadro(g, t, mundo) { desenhar(g, t, mundo || m, J); },
   };
 }

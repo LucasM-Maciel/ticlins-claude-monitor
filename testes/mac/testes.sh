@@ -198,7 +198,7 @@ t_cenario() {
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png; perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
   elif [ "$c" = pedra ]; then
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "cadê o diamante (diamante.png) subindo? perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
-  elif [ "$c" = padrao ]; then
+  elif [ "$c" = padrao ] || [ "$c" = epico ]; then
     # picareta, pedra e bug são do Minecraft
     [ "$(pixels "$foto" 74 237 217 40)" -lt 5 ] || falha "o Clawd do Padrão apareceu com a ferramenta" || return 1
   else
@@ -243,7 +243,7 @@ enfeites_mc() {
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 # Sem o motor: o Clawd daqui (Swift), o de quando falta o node. As lutas antigas (pedra, bug)
@@ -261,7 +261,9 @@ t_cores() {
 teste "cores das bolinhas e das barras no cenário 'misto'" t_cores
 # trabalhando pulsa (quem não distingue verde de vermelho vê o movimento); terminou não
 t_pulso() {
-  local pasta="$TMP/cenario xp-rodando ção" f extra=()  # o do laço acima: uma terminou, outra trabalhando
+  local pasta="$TMP/cenario xp-rodando ção" f extra=()  # uma terminou, outra trabalhando
+  # de novo agora: a do laço acima já pode ter passado de 1 min ("agora" vira "1m" e o vermelho do texto muda)
+  node "$RAIZ/testes/cenarios.js" "$pasta" xp-rodando $$ >/dev/null || falha "cenarios.js falhou" || return 1
   [ -f "$pasta/uso.json" ] && extra=(--uso "$pasta/uso.json")
   for f in 0 0.5; do
     rm -f "$SAIDA/mac-pulso-$f.png"

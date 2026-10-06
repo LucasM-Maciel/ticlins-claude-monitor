@@ -17,7 +17,14 @@ enfeites dela (no Windows, os do Minecraft em WPF; o resto, como o Padrão).
   do Canvas 2D sem suavização) e manda pela saída padrão só o retângulo que mudou:
   `"CM"` + tipo + 0 + tamanho (uint32 LE) + dados. Tipos: `Q` quadro (W,H,x,y,w,h em
   uint16 + BGRA pré-multiplicado), `L` linha pro diário, `P` pronto (`{pronto, temas:
-  {nome: layout}}`).
+  {nome: layout}}`), `S` som da cena épica (`{tocar: <.wav na pasta>, cena}` ou
+  `{parar: true}`, quando ela é cortada).
+- Som: só os épicos têm (Invaders/Kaiju no Padrão, Ender Dragon, Shenlong). A cena diz o que
+  toca e quando (`sons`, abaixo); quando ela começa, o motor junta tudo num .wav só
+  (`som.js`: mono, 16 bits, 44100, gravado como `som-cena-0.wav`/`som-cena-1.wav`, revezando)
+  e a janelinha toca do começo com o volume do botão direito. No `-Foto`/`--foto` ela não
+  toca: escreve `som da cena: <nome>` no .txt. Os sons dos avisos (terminou, pergunta) são
+  da janelinha, como antes.
 - Windows: `motor/Motor.cs` (compilado pelo overlay.ps1 e guardado em
   `~/.claude-monitor/motor-<hash>.dll`) lê numa thread própria e cola num WriteableBitmap
   por cima da janela inteira.
@@ -82,6 +89,7 @@ layout: {
 | `clawd.js` | o Clawd (roupas, `desenhaClawd`, `andando`, `pulando`, `golpe`) e a `trilha` |
 | `mundo.js` | a simulação: onde o Clawd está, paradas, sorteio de cena, modos, `motor-estado.json` |
 | `motor.js` | entrada/saída e o relógio |
+| `som.js` | a trilha das cenas épicas: `lerWav` (PCM 8/16/24/32, float) e `mixar` (pistas -> um .wav) |
 | `tema-*.js` | um por tema (com os arquivos `<tema>-*.js` dele, se precisar) |
 
 O que o `raster.js` **não** tem (dá erro ou é ignorado): `fillText`/`measureText`/`font`
@@ -117,6 +125,13 @@ pular quadros. Coordenadas: origem entre os pés do Clawd, x+ pra frente, y- pra
 cartão. Cena que precisa da janela inteira (o dragão): `g.save(); g.setTransform(e, 0, 0,
 e, 0, 0)` com `e = m.host.escala || 1`, desenha em DIPs da janela, `g.restore()`.
 Pergunta/permissão (modo `pulando`) corta qualquer cena.
+
+Cena épica com som: `sons: [[t, arquivo, ganho = 1, tom = 1, dur], ...]`, `t` em s desde o
+começo da cena, `arquivo` relativo à pasta (`sons-padrao/...`, `sons-dragonball/...` ou
+`sons/...`, os da Mojang), `tom` > 1 = mais agudo e mais curto, `dur` = corta ali (some em até
+0,25 s). Arquivo que falta fica de fora (uma linha no diário) e o resto toca. Cada épico tem um
+`VOLUME` que deixa a trilha no nível dos avisos (−17 dB); os .wav do Padrão e do Shenlong saem
+do `sons-epicos.py`.
 
 Dentro do `fundo`, `frente` e `atras` as coordenadas já são as da janela (DIPs).
 

@@ -40,6 +40,7 @@ namespace ClaudeMonitor
         public event Action<int> Saiu;       // código de saída (na thread da janela)
         public event Action Primeiro;        // chegou o 1º quadro (na thread da janela)
         public event Action ChegouPronto;    // chegou a mensagem P: o layout de cada tema (na thread da janela)
+        public event Action<string> Som;     // mensagem S: o JSON do som da cena épica (na thread da janela)
 
         public Motor(Image alvo) { this.alvo = alvo; ui = alvo.Dispatcher; }
 
@@ -130,6 +131,11 @@ namespace ClaudeMonitor
                     {
                         Pronto = Encoding.UTF8.GetString(dados, 0, n);
                         ui.BeginInvoke(new Action(() => { if (ChegouPronto != null) ChegouPronto(); }));
+                    }
+                    else if (tipo == 'S')
+                    {
+                        string som = Encoding.UTF8.GetString(dados, 0, n);
+                        ui.BeginInvoke(new Action(() => { if (Som != null) Som(som); }));
                     }
                 }
             }

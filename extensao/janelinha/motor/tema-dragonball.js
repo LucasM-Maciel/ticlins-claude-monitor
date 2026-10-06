@@ -45,9 +45,21 @@ function cenaTransf(id) {
 }
 // o dragão: as esferas brilham, ele sai delas, dá a volta no cartão e some num brilho; o Clawd
 // pula de alegria. Precisa da janela inteira: desenha em DIPs (setTransform) por cima de tudo.
+// A trilha (som.js): o brilho, o trovão e ele saindo com um rugido, o vento da volta (o tamanho
+// do cartão muda quanto ela dura), o rugido de novo subindo e as esferas se espalhando.
+const SD = n => `sons-dragonball/${n}.wav`, VOLUME = 0.5;  // VOLUME: o nível dos avisos (−17 dB)
+function sonsDoDragao(dur) {
+  const T1 = dur - K.DRAG.fim;
+  return [
+    [0, SD('shenlong-brilho'), 0.55], [K.DRAG.luz - 0.1, SD('tudo'), 0.7], [K.DRAG.luz, SD('shenlong-sobe'), 0.55], [K.DRAG.luz + 0.05, SD('shenlong-ruge'), 0.8],
+    [K.DRAG.luz + 0.3, SD('shenlong-voo'), 0.45, 1, Math.max(0.5, T1 - K.DRAG.luz - 0.2)],
+    [T1, SD('shenlong-ruge'), 0.6, 1.15], [T1, SD('terminou'), 0.6], [T1 + 0.2, SD('shenlong-espalha'), 0.55],
+  ].map(([t, a, g, ...r]) => [t, a, g * VOLUME, ...r]);
+}
 function cenaDragao(m) {
+  const dur = K.duracaoDragao(geoCartao(m));
   return {
-    nome: 'dragao', dur: K.duracaoDragao(geoCartao(m)), espaco: { frente: 0, tras: 0 }, modos: ['andando', 'parado', 'pulando'],
+    nome: 'dragao', dur, espaco: { frente: 0, tras: 0 }, modos: ['andando', 'parado', 'pulando'], sons: sonsDoDragao(dur),
     quadro(g, t, mm) {
       const e = mm.host.escala || 1, c = mm.host.cartao, G = geoCartao(mm);
       g.save(); g.setTransform(e, 0, 0, e, 0, 0); K.desenhaEsferas(g, c[0], c[1], G, 7, [], mm.T, t); g.restore();

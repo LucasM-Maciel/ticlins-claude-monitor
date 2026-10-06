@@ -408,7 +408,7 @@ test("'Usar sons do Minecraft' sem internet: avisa, sem quebrar", async () => {
 test("sem os sons do Minecraft: a extensão baixa sozinha, calada, e anota no diário", async () => {
     await comMojang(async () => {
         const { r, pasta } = await ativar({ semSons: true });
-        await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha \(12 sons, \d+ texturas\)/);
+        await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha \(\d+ sons, \d+ texturas\)/);
         assert.ok(fs.existsSync(path.join(pasta, "sons", "levelup.wav")));
         assert.ok(!r.mensagens.some((m) => /Minecraft/.test(m.texto)), "não era pra mostrar nada");
     });

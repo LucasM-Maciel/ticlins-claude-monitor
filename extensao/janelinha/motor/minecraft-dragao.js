@@ -958,10 +958,31 @@ function desenhar(g, t, m) {
   g.restore();
 }
 
+// a trilha (som.js): os sons do próprio jogo, que o minecraft.js baixou da Mojang (sem eles, muda).
+// O bater das asas enquanto voa, o sopro, as flechas nos cristais, os críticos, a morte (18 s no
+// jogo: corta quando ele some), cada orbe que chega e o levelup a cada 5 níveis, como no jogo
+const S = n => `sons/${n}.wav`, VOLUME = 0.42;  // VOLUME: o nível dos avisos (−17 dB)
+function sons(P, nivel0) {
+  const tCai = P.tSopro + 0.45, L = [
+    [CHEGA, S('dragao_rugido1'), 0.45], [P.tSopro - 0.15, S('dragao_rugido2'), 0.6], [P.tSopro, S('sopro'), 0.8], [tCai, S('explosao1'), 0.45],
+    [5.9, S('arco'), 0.8], [QUEBRA_R, S('explosao2'), 0.6], [6.9, S('arco'), 0.8], [QUEBRA_L, S('explosao1'), 0.6], [8.0, S('dragao_rugido3'), 0.6],
+    ...HITS.flatMap((t, i) => [[t, S(`critico${i % 2 + 1}`), 0.9], [t + 0.04, S(`dragao_dano${i + 1}`), 0.7]]),
+    [MORTE, S('dragao_morte'), 0.75, 1, SOME + 1.5 - MORTE],
+    [TELE, S('teleporte'), 0.6], [PEGA, S('pop'), 0.8],
+  ];
+  for (let t = CHEGA + 0.35, i = 0; t < 8.2; t += 0.72, i++) L.push([t, S(`dragao_asa${i % 4 + 1}`), 0.4]);
+  CHEGADAS.forEach((t, i) => { if (i % 2 === 0) L.push([t, S(`xp${(i / 2) % 3 + 1}`), 0.22]); });
+  SUBIDAS.forEach((t, i) => { if ((nivel0 + i + 1) % 5 === 0) L.push([t, S('levelup'), 0.6]); });
+  if (P.ida === 'teleporte') L.push([0.25, S('teleporte'), 0.5]);
+  if (P.volta === 'teleporte') L.push([18.6, S('teleporte'), 0.5]);
+  return L.map(([t, a, g, ...r]) => [t, a, g * VOLUME, ...r]);
+}
+
 // a cena (o tema checa temTexturas(...texturas) antes de chamar)
 function cena(m) {
   return {
     nome: 'dragao', dur: DUR, espaco: { frente: 0, tras: 0 }, modos: ['andando'],
+    sons: sons(palcoDe(m), typeof m.tema.nivel === 'function' ? m.tema.nivel(m) : 12),
     subidas: SUBIDAS,  // quando cada nível sobe: o tema guarda os que já subiram (dono 06/10)
     quadro(g, t, mundo) { desenhar(g, t, mundo || m); },
     // pros testes: a caixa (DIPs) dos pixels do dragão no instante t, desenhado sozinho numa

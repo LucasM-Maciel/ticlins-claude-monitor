@@ -41,7 +41,7 @@ function abrir(argumentos = []) {
     });
   }
   return {
-    p, chegou, saiu, proxima,
+    p, pasta, chegou, saiu, proxima,
     enviar: o => p.stdin.write((typeof o === 'string' ? o : JSON.stringify(o)) + '\n'),
     fechar: () => { p.kill(); fs.rmSync(pasta, { recursive: true, force: true }); },
   };
@@ -119,6 +119,44 @@ test('--foto: só fotografa quando a janelinha pede, manda 1 quadro e sai', asyn
     assert.deepStrictEqual([q.x, q.y, q.w, q.h], [0, 0, 380, 440]);
     assert.strictEqual(await m.saiu, 0);
   } finally { m.fechar(); }
+});
+
+// o épico do Padrão no --foto: a trilha vira um .wav na pasta e vai na mensagem S
+async function fotoDoKaiju(comSons) {
+  const m = abrir(['--foto', '1', '--semente', '7', '--hora', '12', '--cena', 'epico-kaiju']);
+  try {
+    if (comSons) {
+      const sons = path.join(path.dirname(MOTOR), '..', 'sons-padrao');
+      fs.mkdirSync(path.join(m.pasta, 'sons-padrao'));
+      for (const f of fs.readdirSync(sons).filter(f => f.startsWith('kaiju-'))) fs.copyFileSync(path.join(sons, f), path.join(m.pasta, 'sons-padrao', f));
+    }
+    m.enviar(estadoDeMentira('padrao', 'andando'));
+    m.enviar({ msg: 'foto' });
+    assert.strictEqual(await m.saiu, 0);
+    const S = m.chegou.filter(x => x.tipo === 'S').map(x => JSON.parse(x.dados.toString('utf8')));
+    const L = m.chegou.filter(x => x.tipo === 'L').map(x => x.dados.toString('utf8'));
+    const wav = S.length && fs.existsSync(S[0].tocar) ? fs.readFileSync(S[0].tocar) : null;
+    return { S, L, wav };
+  } finally { m.fechar(); }
+}
+
+test('--foto --cena epico-kaiju: manda S com o .wav da trilha (mono, 44100, a cena inteira)', async () => {
+  const { S, L, wav } = await fotoDoKaiju(true);
+  assert.deepStrictEqual(L, []);
+  assert.strictEqual(S.length, 1);
+  assert.strictEqual(S[0].cena, 'epico-kaiju');
+  assert.strictEqual(path.basename(S[0].tocar), 'som-cena-0.wav');
+  assert.ok(wav, 'o .wav não ficou na pasta');
+  assert.deepStrictEqual([wav.toString('latin1', 0, 4), wav.readUInt16LE(22), wav.readUInt32LE(24)], ['RIFF', 1, 44100]);
+  const s = (wav.length - 44) / 2 / 44100;
+  assert.ok(s > 15 && s < 23, `${s} s`);
+});
+
+test('--foto --cena epico-kaiju sem os sons na pasta: sem S, uma linha no diário dizendo quais faltam', async () => {
+  const { S, L } = await fotoDoKaiju(false);
+  assert.deepStrictEqual(S, []);
+  assert.strictEqual(L.length, 1, L.join('\n'));
+  assert.match(L[0], /^motor: sem os sons sons-padrao\/kaiju-.*\(a cena epico-kaiju toca sem eles\)$/);
 });
 
 test('a janelinha fechou (entrada acabou): o motor sai', async () => {

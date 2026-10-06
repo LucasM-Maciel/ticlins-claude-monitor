@@ -7,7 +7,7 @@
 // espaco: {frente, tras} (px de reta livre que ela precisa), modos: em quais modos ela
 // continua (padrão ['andando']; 'parado' = em pé em cima do cartão, ex. festa, dormir),
 // quadro(g, t, mundo) desenhando no referencial do Clawd (x+ pra frente, y- pra fora do
-// cartão, o próprio Clawd incluído) }.
+// cartão, o próprio Clawd incluído), sons (opcional, só os épicos: a trilha, ver som.js) }.
 // Modos: andando (algo rodando), pulando (pergunta/permissão: interrompe qualquer cena,
 // a pergunta tem que aparecer), parado (nada rodando), oculto (Clawd desligado).
 const fs = require('fs');
@@ -38,6 +38,7 @@ class Mundo {
     this.estado = {};            // livre pro tema (transformação, pet...)
     this.ruins = new Set();      // cenas que quebraram: não sorteia mais até reabrir
     this.aoErro = null;          // (texto) => anota no diário
+    this.aoSom = null;           // (cena com sons | null = para) => a janelinha toca (motor.js)
     if (tema.iniciar) tema.iniciar(this);
   }
 
@@ -88,10 +89,12 @@ class Mundo {
     if (!(cena.modos || ['andando']).includes(this.modo)) return;
     this.cena = { ...cena, t0: this.T };
     if (this.tema.aoComecarCena) this.tema.aoComecarCena(this, this.cena);
+    if (this.cena && this.cena.sons && this.aoSom) this.aoSom(this.cena);  // a trilha (som.js) começa junto
   }
   fimCena(cortada) {
     const cena = this.cena;
     this.cena = null;
+    if (cortada && cena && cena.sons && this.aoSom) this.aoSom(null);  // cortada: o som para junto
     if (this.tema.aoFimCena) this.tema.aoFimCena(this, cena, cortada);
     this.proxima = this.T + this.entre(...PARADA);
   }

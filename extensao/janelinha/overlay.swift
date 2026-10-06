@@ -172,6 +172,31 @@ func tocar(_ situacao: String) {
     som?.volume = Float(config.volume)
     anotar(som?.play() == true ? "tocou \(nome) (\(qual))" : "não toquei \(nome) (\(qual))")
 }
+// o som das cenas épicas: o motor manda pronto (mensagem S, um .wav ou parar). Outro NSSound,
+// pra não cortar nem ser cortado pelos avisos.
+var somDaCena: NSSound?
+var somDaCenaVisto: String?  // o último que o motor mandou (o --foto grava no .txt em vez de tocar)
+func tocarSomDaCena(_ json: String) {
+    guard let o = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] else {
+        anotar("motor: mensagem S com defeito: \(json)")
+        return
+    }
+    if o["parar"] as? Bool == true {
+        somDaCena?.stop()
+        somDaCena = nil
+        if arquivoFoto != nil { somDaCenaVisto = "parou" }
+        return
+    }
+    guard let arquivo = o["tocar"] as? String else { return }
+    let cena = o["cena"] as? String ?? "?"
+    somDaCenaVisto = cena
+    if arquivoFoto != nil { return }
+    guard config.volume > 0 else { anotar("não toquei o som de \(cena): volume no 0 (botão direito > Volume)"); return }
+    somDaCena?.stop()
+    somDaCena = NSSound(contentsOfFile: arquivo, byReference: false)  // na memória: o motor regrava o arquivo depois
+    somDaCena?.volume = Float(config.volume)
+    anotar(somDaCena?.play() == true ? "tocou o som de \(cena)" : "não toquei o som de \(cena) (\(arquivo))")
+}
 
 // --- sessões (mesma regra da extensão e do overlay.ps1) ---
 struct Sessao {
@@ -561,6 +586,7 @@ final class Preferencias: NSObject {
     }
     @objc func mudouVolume(_ s: NSSlider) {
         config.volume = s.doubleValue.rounded() / 100
+        somDaCena?.volume = Float(config.volume)
         rotular(s)
         salvarConfig()
     }
@@ -1223,6 +1249,7 @@ final class Motor {
     var aoPronto: (() -> Void)?        // chegou a mensagem P: o layout de cada tema
     var aoPrimeiro: (() -> Void)?      // chegou o 1º quadro
     var aoSair: ((Int32) -> Void)?     // o processo saiu (depois de tudo que ele mandou)
+    var aoSom: ((String) -> Void)?     // mensagem S: o JSON do som da cena épica
 
     init(alvo: PalcoDoMotor) { self.alvo = alvo }
 
@@ -1340,6 +1367,9 @@ final class Motor {
                     self.pronto = texto
                     self.aoPronto?()
                 }
+            case 83:  // S: o som da cena épica (tocar um .wav ou parar)
+                let texto = String(decoding: dados[0..<n], as: UTF8.self)
+                DispatchQueue.main.async { self.aoSom?(texto) }
             default:
                 break
             }
@@ -1542,6 +1572,10 @@ func ligarMotor() {
     }
     let m = Motor(alvo: palcoDoMotor)
     m.aoLinha = { anotar($0) }
+    m.aoSom = { [weak m] json in
+        guard let m = m, motor === m else { return }
+        tocarSomDaCena(json)
+    }
     // o layout de cada tema; no --foto, monta o cartão com ele e só então pede a foto (motorEstado)
     m.aoPronto = { [weak m] in
         guard let m = m, motor === m else { return }
@@ -1581,6 +1615,7 @@ func ligarMotor() {
         }
         motor = nil
         motorVivo = false
+        somDaCena?.stop()  // a cena morreu junto
         enviadoAoMotor = ""
         palcoDoMotor.motor = nil
         tentativasDoMotor += 1
@@ -1680,7 +1715,7 @@ func atualizar() {
         let som = somDaVez.flatMap { avisoDaSituacao[$0] }.flatMap { nomeDoSom[config.tema]?[$0] } ?? "nenhum"
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
             + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")",
-               "som: \(som)", "clique: \(cliqueDaVez ?? "nenhum")",
+               "som: \(som)", "som da cena: \(somDaCenaVisto ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
                "atualizacao: \(cartao.aviso ?? "nenhuma")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)
     }

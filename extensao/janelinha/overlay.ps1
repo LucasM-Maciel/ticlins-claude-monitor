@@ -128,6 +128,31 @@ $tocador.Add_MediaFailed({
     try { $tocadorSemVolume.SoundLocation = $somQueFalhou; $tocadorSemVolume.Play(); Anotar "toquei $(Split-Path $somQueFalhou -Leaf) sem volume (o player com volume falhou: $motivoDaFalha)" }
     catch { Anotar "não toquei $($somQueFalhou): $motivoDaFalha / $($_.Exception.Message)" }
 })
+# o som das cenas épicas: o motor manda pronto (mensagem S, um .wav ou parar). Outro tocador,
+# pra não cortar nem ser cortado pelos avisos; acabou, solta o arquivo (o motor regrava depois).
+$tocadorDaCena = New-Object Windows.Media.MediaPlayer
+$tocadorDaCena.Add_MediaOpened({ $tocadorDaCena.Volume = $config.volume; $tocadorDaCena.Play() })
+$tocadorDaCena.Add_MediaEnded({ $tocadorDaCena.Close() })
+$tocadorDaCenaSemVolume = New-Object Media.SoundPlayer
+$tocadorDaCena.Add_MediaFailed({
+    $motivoDaFalhaDaCena = $_.ErrorException.Message
+    try { $tocadorDaCenaSemVolume.SoundLocation = $tocadorDaCena.Source.LocalPath; $tocadorDaCenaSemVolume.Play(); Anotar "toquei o som da cena sem volume (o player com volume falhou: $motivoDaFalhaDaCena)" }
+    catch { Anotar "não toquei o som da cena: $motivoDaFalhaDaCena / $($_.Exception.Message)" }
+})
+$somDaCena = $null  # o último som de cena que o motor mandou (o -Foto grava no .txt em vez de tocar)
+function SomDaCena($jsonDoSom) {
+    try { $pedidoDeSom = $jsonDoSom | ConvertFrom-Json -ErrorAction Stop } catch { Anotar "motor: mensagem S com defeito: $jsonDoSom"; return }
+    if ($pedidoDeSom.parar) {
+        $tocadorDaCena.Stop(); $tocadorDaCena.Close(); $tocadorDaCenaSemVolume.Stop()
+        if ($Foto) { $script:somDaCena = 'parou' }
+        return
+    }
+    $script:somDaCena = $pedidoDeSom.cena
+    if ($Foto) { return }
+    if ($config.volume -le 0) { Anotar "não toquei o som de $($pedidoDeSom.cena): volume no 0 (botão direito > Volume)"; return }
+    try { $tocadorDaCena.Open([Uri]::new($pedidoDeSom.tocar)); Anotar "tocou o som de $($pedidoDeSom.cena)" }
+    catch { Anotar "não toquei o som de $($pedidoDeSom.cena): $($_.Exception.Message)" }
+}
 $ultimo = @{}  # id da sessão -> última situação vista
 # teste: o -Foto parte da situação anterior em antes.json, pra ver qual som tocaria
 if ($Foto -and (Test-Path -LiteralPath "$Pasta\antes.json")) {
@@ -1144,6 +1169,7 @@ function LigarMotor {
     }
     $motorNovo = New-Object ClaudeMonitor.Motor $palco
     $motorNovo.add_Linha({ param($textoDoMotor) Anotar $textoDoMotor })
+    $motorNovo.add_Som({ param($jsonDoSomDoMotor) SomDaCena $jsonDoSomDoMotor })
     # o layout de cada tema; no -Foto, monta o cartão com ele e só então pede a foto (MotorEstado)
     $motorNovo.add_ChegouPronto({
         try {
@@ -1167,6 +1193,7 @@ function LigarMotor {
         if ($Foto) { if (-not $motor.vivo) { $motor.tentativas = 99 }; return }  # o -Foto sai depois do quadro: fica o quadro
         $motor.vivo = $false
         $motor.enviado = ''
+        $tocadorDaCena.Stop()  # a cena morreu junto
         $palco.Visibility = 'Hidden'
         $motor.tentativas++
         if ($passeio.modo) { $modoAntes = $passeio.modo; $passeio.modo = $null; Clawd $modoAntes }  # o Clawd daqui volta
@@ -1416,7 +1443,7 @@ $lblVol.TextAlignment = 'Right'
 $slVol.Add_ValueChanged({
     $v = $slVol.Value / 100
     $lblVol.Text = '{0}%' -f [int]($slVol.Value)
-    $config.volume = [math]::Round($v, 2); $tocador.Volume = $v; SalvarConfig
+    $config.volume = [math]::Round($v, 2); $tocador.Volume = $v; $tocadorDaCena.Volume = $v; SalvarConfig
 })
 [void]$painelVol.Children.Add($slVol)
 [void]$painelVol.Children.Add($lblVol)
@@ -1525,6 +1552,7 @@ if ($Foto) {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"
         }) + "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
             "som: $(if ($somDaVez) { $nomeDoSom[$config.tema][$avisoDaSituacao[$somDaVez]] } else { 'nenhum' })" +
+            "som da cena: $(if ($somDaCena) { $somDaCena } else { 'nenhum' })" +
             "clique: $(if ($cliqueDaVez) { $cliqueDaVez } else { 'nenhum' })" +
             "atualizacao: $(if ($n = VersaoNova) { $n } else { 'nenhuma' })"
         [IO.File]::WriteAllLines("$Foto.txt", [string[]]$visto, [Text.UTF8Encoding]::new($false))

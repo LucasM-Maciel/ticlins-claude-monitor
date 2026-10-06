@@ -31,6 +31,26 @@ const SONS = {
     sino: "note/bell",
     bigorna: "random/anvil_land",
     gato: "mob/cat/meow1",
+    // o Ender Dragon (minecraft-dragao.js: a trilha da cena)
+    dragao_rugido1: "mob/enderdragon/growl1",
+    dragao_rugido2: "mob/enderdragon/growl2",
+    dragao_rugido3: "mob/enderdragon/growl3",
+    dragao_asa1: "mob/enderdragon/wings1",
+    dragao_asa2: "mob/enderdragon/wings2",
+    dragao_asa3: "mob/enderdragon/wings3",
+    dragao_asa4: "mob/enderdragon/wings4",
+    dragao_dano1: "mob/enderdragon/hit1",
+    dragao_dano2: "mob/enderdragon/hit2",
+    dragao_dano3: "mob/enderdragon/hit3",
+    dragao_morte: "mob/enderdragon/end",
+    sopro: "mob/ghast/fireball4", // o dragão cospe
+    explosao1: "random/explode1",
+    explosao2: "random/explode2",
+    arco: "random/bow",
+    flecha: "random/bowhit1",
+    critico1: "entity/player/attack/crit1",
+    critico2: "entity/player/attack/crit2",
+    teleporte: "mob/endermen/portal",
 };
 const TONS = { xp: [0.8, 1.0, 1.25] }; // como o jogo, o XP muda de tom a cada vez: xp1, xp2, xp3
 const TEXTURAS = {
@@ -253,4 +273,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { baixarTudo, wav, SONS, TEXTURAS };
+module.exports = { baixarTudo, wav, SONS, TONS, TEXTURAS };

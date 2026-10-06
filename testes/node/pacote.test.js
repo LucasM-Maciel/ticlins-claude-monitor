@@ -131,5 +131,5 @@ test(".vsix leva a janelinha, os scripts e nada de sobra", { skip: !temDist && "
     }
     // nada da Mojang no pacote: sons e texturas vêm do servidor dela na instalação (os .wav do
     // Padrão e do Dragon Ball são nossos / CC0)
-    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n) && !/^extension\/janelinha\/sons-(padrao|dragonball)\/\w+\.wav$/.test(n)), nomes.join(", "));
+    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n) && !/^extension\/janelinha\/sons-(padrao|dragonball)\/[\w-]+\.wav$/.test(n)), nomes.join(", "));
 });
