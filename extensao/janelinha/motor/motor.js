@@ -171,17 +171,22 @@ function foto() {
   process.stdout.write('', () => process.exit(0));
 }
 
-// -- o relógio: 30 quadros/s; parado e sem nada mexendo, 5 --
+// -- o relógio: 32 quadros/s; parado e sem nada mexendo, 5 --
+// O relógio do Windows anda de 15,625 em 15,625 ms: pedir 33 ms dava quadros de 31 ou de
+// 47 ms (13% atrasados, o andar engasgava; medido 06/10). 31,25 ms são 2 tiques certinhos:
+// pede meio tique antes e, se acordar cedo (relógio fino, como no Mac), espera o resto.
 if (!args.foto) {
+  const INTERVALO = 1 / 32, MEIO_TIQUE = 0.008;
   const t0 = process.hrtime.bigint();
   const agora = () => Number(process.hrtime.bigint() - t0) / 1e9;
   let proximo = 0;
   const tique = () => {
     const T = agora();
+    if (proximo - T > 0.004) { setTimeout(tique, (proximo - T) * 1000); return; }
     if (mundo && host) quadro(T);
     const animado = mundo && (mundo.andando || mundo.cena || (mundo.tema.animado ? mundo.tema.animado(mundo) : mundo.host.modo !== 'parado'));
-    proximo = Math.max(proximo + 1 / (animado ? QPS : 5), T);
-    setTimeout(tique, Math.max(0, (proximo - agora()) * 1000));
+    proximo = T + (animado ? INTERVALO : 1 / 5);
+    setTimeout(tique, Math.max(0, (proximo - agora() - MEIO_TIQUE) * 1000));
   };
   tique();
 }

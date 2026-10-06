@@ -298,16 +298,22 @@ test('raros mais raros (comum 4 : incomum 2 : raro 1), nunca o anterior, e de no
   try { assert.ok(!('galinha' in tema.pesosDosEventos(m))); } finally { IMG.galinha = galinha; }
 });
 
-test('roupa sorteada a cada vez que começa a andar: Steve, Alex ~1 em 10, Herobrine ~1 em 50', () => {
+test('roupa sorteada a cada volta no cartão: Steve, Alex ~1 em 10, Herobrine ~1 em 50', () => {
   const m = novoMundo({ semente: 21 }), conta = { mc_steve: 0, mc_alex: 0, mc_herobrine: 0 }, N = 20000;
-  for (let i = 0; i < N; i++) { tema.aoComecarAndar(m); conta[m.roupa]++; }
+  for (let i = 0; i < N; i++) { tema.aoDarVolta(m); conta[m.roupa]++; }
   assert.ok(Math.abs(conta.mc_herobrine / N - 0.02) < 0.005, `Herobrine ${conta.mc_herobrine} de ${N}`);
   assert.ok(Math.abs(conta.mc_alex / N - 0.098) < 0.012, `Alex ${conta.mc_alex} de ${N}`);
-  // de verdade: parado -> andando sorteia; o Herobrine tem os olhos brancos que brilham
+  // de verdade: começar a andar não sorteia; a 1ª volta inteira andada (com as paradas no meio), sim
   const r = novoMundo({ modo: 'parado', semente: 1 });
   r.roupa = null;
   r.receber({ modo: 'andando' });
-  assert.ok(['mc_steve', 'mc_alex', 'mc_herobrine'].includes(r.roupa));
+  assert.strictEqual(r.roupa, null, 'começar a andar não sorteia');
+  let T = 0;
+  for (; T < 300 && r.roupa === null; T += 1 / 30) r.passo(T);
+  assert.ok(['mc_steve', 'mc_alex', 'mc_herobrine'].includes(r.roupa), `roupa ${r.roupa} em ${T.toFixed(1)} s`);
+  assert.ok(T >= r.perimetro() / 50, `sorteou em ${T.toFixed(1)} s, antes de uma volta (${(r.perimetro() / 50).toFixed(1)} s)`);
+  assert.deepStrictEqual(r.erros, []);
+  // o Herobrine tem os olhos brancos que brilham
   assert.ok(tema.roupas.mc_herobrine.brilho && tema.roupas.mc_herobrine.linhas.some(l => l.includes('g')));
 });
 

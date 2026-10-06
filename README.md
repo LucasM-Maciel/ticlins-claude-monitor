@@ -135,7 +135,8 @@ pacote. Instalou sem internet? A extensão baixa sozinha depois, ou, no VS Code:
 abertas depois da instalação). Se continuar, confira se o Node.js está
 instalado: abra um terminal e rode `node -v`.
 
-**"usage indisponível".** Espere 2 minutos, que ela tenta de novo. Se não
+**"usage indisponível".** Só aparece se ela nunca conseguiu ler o usage
+(depois da 1ª vez, mostra o último que viu). Espere 2 minutos, que ela tenta de novo. Se não
 voltar, confira se o Claude Code está logado com a conta do Claude (`/login`),
 e não com chave de API.
 

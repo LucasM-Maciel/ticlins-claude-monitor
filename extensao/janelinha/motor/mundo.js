@@ -27,7 +27,8 @@ class Mundo {
     this.T = 0;                  // relógio do motor (s)
     this.host = { modo: 'parado', clawd: true, cartao: null, raio: 8, linhas: [], uso: [], opacidade: 1 };
     this.dist = 0;               // onde o Clawd está na trilha (px desde o canto de cima à esquerda)
-    this.cena = null;            // { nome, t0, ...o que o tema devolveu }
+    this.naVolta = 0;            // px andados desde a última volta inteira (tema.aoDarVolta)
+    this.cena = null;           // { nome, t0, ...o que o tema devolveu }
     this.proxima = Infinity;     // T da próxima parada
     this.andando = false;
     this.modo = 'oculto';
@@ -81,7 +82,16 @@ class Mundo {
       else if (cena) this.proxima = T + 0.5;                   // sem espaço aqui: anda mais um pouco
       else this.proxima = T + this.entre(...PARADA);           // o sorteio deu "nada"
     }
-    if (!this.cena && !this.bloqueado()) this.dist += VELOCIDADE * dt;
+    if (!this.cena && !this.bloqueado()) {
+      this.dist += VELOCIDADE * dt;
+      // a cada volta inteira andada no cartão, o tema sorteia (roupa, transformação): parado,
+      // em cena ou pulando no meio da trilha não conta
+      this.naVolta += VELOCIDADE * dt;
+      if (this.naVolta >= this.perimetro()) {
+        this.naVolta -= this.perimetro();
+        if (this.tema.aoDarVolta) this.tema.aoDarVolta(this);
+      }
+    }
   }
   bloqueado() { return this.tema.bloqueia ? this.tema.bloqueia(this) : false; }  // o tema segura o Clawd (dragão passando...)
   comecarCena(cena) {

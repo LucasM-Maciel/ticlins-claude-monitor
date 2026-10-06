@@ -1,6 +1,6 @@
 'use strict';
 // Tema Minecraft (o que o dono escolheu nas prévias): o Clawd com a roupa do Steve (Alex
-// 1 em 10, Herobrine 1 em 50, sorteados cada vez que ele começa a andar); nas paradas da
+// 1 em 10, Herobrine 1 em 50, sorteados a cada volta que ele dá no cartão); nas paradas da
 // caminhada, 1 em 2 vira um evento do jogo (minecraft-eventos.js), raros mais raros e, de
 // noite, mais hostis; vida, nível a cada 5 mortes + os do dragão (sobrevive a reabrir), o lobo pet e, a
 // cada 20 mortes, o Ender Dragon (minecraft-dragao.js, se existir). Os enfeites do cartão
@@ -150,7 +150,8 @@ module.exports = {
     const id = sortearPeso(pesosDosEventos(m), m.sorteio);
     return id ? (e.pendente = cenaDoEvento(m, EV[id])) : null;
   },
-  aoComecarAndar(m) { m.roupa = sortearRoupa(m); m.estado.pendente = null; },
+  aoComecarAndar(m) { m.estado.pendente = null; },
+  aoDarVolta(m) { m.roupa = sortearRoupa(m); },
   aoComecarCena(m, cena) {
     m.estado.pendente = null;
     if (cena.dragao) { m.salvo.dragao = false; m.salvar(); }

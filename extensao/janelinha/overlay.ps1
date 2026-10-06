@@ -160,7 +160,10 @@ if ($Foto -and (Test-Path -LiteralPath "$Pasta\antes.json")) {
 }
 $somDaVez = $null  # o último som decidido (o -Foto grava no .txt em vez de tocar)
 $cliqueDaVez = $null  # o link do último clique numa sessão (o -Foto grava no .txt em vez de abrir)
-$uso = @{ proxima = [DateTime]::MinValue; dados = $null }  # usage é buscado a cada 2 min
+$uso = @{ proxima = [DateTime]::MinValue; dados = $null; pedido = $null; http = $null; url = 'https://api.anthropic.com/api/oauth/usage' }  # usage é buscado a cada 2 min (BuscarUso)
+# o último usage que veio fica em ultimo-uso.json: reabrir com 429 ou token vencido mostra ele, não "indisponível"
+$usoGuardado = Join-Path $Pasta 'ultimo-uso.json'
+if (-not $Foto -and [IO.File]::Exists($usoGuardado)) { try { $uso.dados = [IO.File]::ReadAllText($usoGuardado) | ConvertFrom-Json } catch {} }
 if ($Foto) { $uso = @{ proxima = [DateTime]::MaxValue; dados = $(if ($ArquivoUso) { Get-Content $ArquivoUso -Raw | ConvertFrom-Json }) } }
 $margem = 34  # espaço em volta do cartão, por onde o Clawd anda e pula com a picareta
 
@@ -403,6 +406,12 @@ function Rotulo($texto, $hex, $largura, $alinhar, $larguraMC) {
     $caixa.Child = $letreiro
     $caixa
 }
+# troca o texto de um Rotulo sem refazer a linha (o tempo "12m" e o "falta" andam a cada minuto)
+function TrocarTexto($elemento, $texto, $hex) {
+    if ($elemento -is [Windows.Controls.TextBlock]) { $elemento.Text = $texto; return }
+    $elemento.Child.Source = TextoMC $texto $hex
+    $elemento.Child.Width = [math]::Round($elemento.Child.Source.PixelWidth * 11 / 9)
+}
 
 function Tempo($min) {
     $m = [math]::Max(0, [int][math]::Floor($min))
@@ -412,12 +421,32 @@ function Tempo($min) {
     return '{0}d{1}h' -f [math]::Floor($m / 1440), [math]::Floor(($m % 1440) / 60)
 }
 
+# pid vivo sem o Get-Process: ele varre os processos todos da máquina a cada chamada (6
+# sessões = 30-57 ms a cada 2 s no thread da janela, e os quadros do motor travavam junto;
+# medido 06/10). Sem compilar, fica o Get-Process.
+try {
+    Add-Type -Namespace ClaudeMonitor -Name Processo -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint acesso, bool herda, int id);
+[DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(IntPtr h, out uint codigo);
+[DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+public static bool Vivo(int id) {
+    IntPtr h = OpenProcess(0x1000, false, id);  // 0x1000 = só consultar
+    if (h == IntPtr.Zero) return Marshal.GetLastWin32Error() == 5;  // 5 = sem permissão: existe
+    try { uint codigo; return GetExitCodeProcess(h, out codigo) && codigo == 259; } finally { CloseHandle(h); }  // 259 = rodando
+}
+'@
+} catch { Anotar "sem o teste rápido de pid vivo (fica o Get-Process): $_" }
+function PidVivo($id) {
+    if ('ClaudeMonitor.Processo' -as [type]) { return [ClaudeMonitor.Processo]::Vivo($id) }
+    [bool](Get-Process -Id $id -ErrorAction Ignore)  # Ignore: sessão morta não conta nos erros do "fechou"
+}
+
 function Sessoes($agora) {
     $vistas = @{}
     Get-ChildItem $dir -Filter *.json -ErrorAction Ignore | ForEach-Object {
         try { $s = Get-Content $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return }
         # mesma regra da extensão: pid vivo; sem pid, atualizada nas últimas 6h
-        if ($s.pid) { if (-not (Get-Process -Id $s.pid -ErrorAction Ignore)) { return } }  # Ignore: sessão morta não conta nos erros do "fechou"
+        if ($s.pid) { if (-not (PidVivo $s.pid)) { return } }
         elseif ($agora - $s.updated -gt 6 * 3600) { return }
         $s | Add-Member -NotePropertyName id -NotePropertyValue $_.BaseName
         $titulo = Titulo $s.transcript
@@ -546,13 +575,20 @@ function Avisar($sessoes) {
     }
 }
 
-function Medidor($rotulo, $dado) {
+function DadosDoMedidor($rotulo, $dado) {
     $pct = [double]$dado.utilization
+    # já renovou e ainda não veio o novo (o guardado de ontem, ou a busca falhando): zerou
+    if ($dado.resets_at -and [DateTimeOffset]$dado.resets_at -le [DateTimeOffset]::Now) { $dado = $null; $pct = 0 }
     $nivel = $(if ($pct -ge 95) { 2 } elseif ($pct -ge 80) { 1 } else { 0 })
-    $cor = $coresDoUso[$config.tema][$nivel]
-    $pctTexto = '{0:0}%' -f $pct
-    # quanto falta pra renovar
-    $falta = if ($dado.resets_at) { Tempo ([DateTimeOffset]$dado.resets_at - [DateTimeOffset]::Now).TotalMinutes } else { '' }
+    @{
+        rotulo = $rotulo; pct = $pct; nivel = $nivel; cor = $coresDoUso[$config.tema][$nivel]; pctTexto = '{0:0}%' -f $pct
+        # quanto falta pra renovar
+        falta = $(if ($dado.resets_at) { Tempo ([DateTimeOffset]$dado.resets_at - [DateTimeOffset]::Now).TotalMinutes } else { '' })
+    }
+}
+# a linha de um medidor (DadosDoMedidor); guarda em lugares onde ficou cada parte, pro motor
+function Medidor($medidor) {
+    $rotulo, $pct, $nivel, $cor, $pctTexto, $falta = $medidor.rotulo, $medidor.pct, $medidor.nivel, $medidor.cor, $medidor.pctTexto, $medidor.falta
     $layoutDoTema = LayoutDoMotor
     if ($layoutDoTema.enfeites) {
         # quem desenha é o motor: aqui só o lugar de cada coisa
@@ -594,7 +630,7 @@ function Medidor($rotulo, $dado) {
         $f = Rotulo $falta '#6B7280' 48 'Right' 56
         $lugarDoRotulo = Rotulo $rotulo '#9CA3AF' 18 $null 18
     }
-    [void]$caixasDoMotor.uso.Add(@{ rotulo = @($rotulo, '#9CA3AF', $lugarDoRotulo); barra = $trilho; pct = $pct; nivel = $nivel; pctTxt = @($pctTexto, $cor, $p); falta = @($falta, '#6B7280', $f) })
+    $medidor.lugares = @($lugarDoRotulo, $trilho, $p, $f, $falta)  # e o "falta" que está na tela
     Linha $lugarDoRotulo $trilho $p $f
 }
 
@@ -609,42 +645,99 @@ function VersaoNova {
     if ([version]::TryParse($publicada, [ref]$p) -and [version]::TryParse($instalada, [ref]$i) -and $p -gt $i) { $publicada }
 }
 
+# Usage a cada 2 min, sem esperar a resposta: o Invoke-RestMethod parava a janela inteira
+# (~0,4 s; até 5 s sem rede) e os quadros do motor junto. Cada tick vê se o pedido voltou.
+function BuscarUso {
+    if ($uso.pedido) {
+        if (-not $uso.pedido.IsCompleted) { return }
+        $pedidoFeito = $uso.pedido
+        $uso.pedido = $null
+        if ($pedidoFeito.Status -ne 'RanToCompletion') { return }  # sem rede ou demorou: tenta de novo em 20 s
+        $resposta = $pedidoFeito.Result
+        try {
+            if ($resposta.IsSuccessStatusCode) {
+                $textoDoUso = $resposta.Content.ReadAsStringAsync().Result
+                $uso.dados = $textoDoUso | ConvertFrom-Json
+                $uso.proxima = [DateTime]::Now.AddMinutes(2)
+                [IO.File]::WriteAllText($usoGuardado, $textoDoUso)
+            } elseif ([int]$resposta.StatusCode -eq 429) {
+                $uso.proxima = [DateTime]::Now.AddMinutes(5)  # limite de requisições: espera mais
+            }  # outra falha: fica o último valor e tenta de novo em 20 s
+        } catch {} finally { $resposta.Dispose() }
+        return
+    }
+    if ([DateTime]::Now -lt $uso.proxima) { return }
+    $uso.proxima = [DateTime]::Now.AddSeconds(20)
+    try {
+        if (-not $uso.http) {
+            Add-Type -AssemblyName System.Net.Http
+            $uso.http = [Net.Http.HttpClient]::new()
+            $uso.http.Timeout = [TimeSpan]::FromSeconds(5)
+        }
+        $token = (Get-Content $cred -Raw | ConvertFrom-Json).claudeAiOauth.accessToken
+        $pergunta = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $uso.url)
+        $pergunta.Headers.Authorization = [Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $token)
+        [void]$pergunta.Headers.TryAddWithoutValidation('anthropic-beta', 'oauth-2025-04-20')
+        [void]$pergunta.Headers.TryAddWithoutValidation('User-Agent', 'ClaudeMonitor')
+        $uso.pedido = $uso.http.SendAsync($pergunta)
+    } catch {}
+}
+
+# A lista só é refeita quando muda o que o WPF desenha nela: TextBlock novo sai em branco
+# no 1º quadro, e refazer a cada 2 s piscava os nomes (filmado 06/10). A chave de cada
+# painel é o que ele mostra; os lugares são onde ficou cada coisa que o motor desenha.
+$listaFeita = @{ sessoes = $null; uso = $null; aviso = $null; lugaresDasSessoes = @(); lugaresDoUso = @() }
 function Atualizar {
     $agora = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000
     $sessoes = @(Sessoes $agora)
     Avisar $sessoes
-    $painelSessoes.Children.Clear()
     $script:caixasDoMotor = @{ linhas = [Collections.ArrayList]::new(); uso = [Collections.ArrayList]::new() }
     $layoutDoTema = LayoutDoMotor
-    if (-not $sessoes) { [void]$painelSessoes.Children.Add((Texto 'nenhuma sessão aberta' '#9CA3AF')) }
-    foreach ($s in $sessoes) {
+    $doMotor = [bool]$layoutDoTema.enfeites  # o motor desenha bolinha, tempo e barra
+    $linhasDaLista = @(foreach ($s in $sessoes) {
         $cor, $rotulo = $estados[$s.situacao]
         if (-not $cor) { $cor, $rotulo = '#9CA3AF', $s.situacao }
-        if ($layoutDoTema.enfeites) {
-            $bola = Lugar 8 8  # o motor desenha a bolinha
-        } elseif ($config.tema -eq 'minecraft' -and $orbes) {
-            $bola = New-Object Windows.Shapes.Rectangle
-            $bola.Fill = $(if ($s.situacao -eq 'working') { $orbeVerde } elseif ($orbes[$s.situacao]) { $orbes[$s.situacao] } else { $orbes.outro })
-            [Windows.Media.RenderOptions]::SetBitmapScalingMode($bola, 'NearestNeighbor')
-            $bola.UseLayoutRounding = $true
-        } else {
-            $bola = New-Object Windows.Shapes.Ellipse
-            $bola.Fill = $(if ($s.situacao -eq 'working') { $bolaVerde } else { Cor $cor })
+        @{ s = $s; cor = $cor; rotulo = $rotulo; tempo = Tempo (($agora - $s.since) / 60) }
+    })
+    # o tempo não entra: cada sessão vira o minuto num segundo diferente (TrocarTexto, abaixo)
+    $chaveDaLista = "$($config.tema) $doMotor`n" + (@($linhasDaLista | ForEach-Object { "$($_.s.id) $($_.s.situacao) $($_.s.name)" }) -join "`n")
+    if ($chaveDaLista -ne $listaFeita.sessoes) {
+        $listaFeita.sessoes = $chaveDaLista
+        $listaFeita.lugaresDasSessoes = @()
+        $painelSessoes.Children.Clear()
+        if (-not $sessoes) { [void]$painelSessoes.Children.Add((Texto 'nenhuma sessão aberta' '#9CA3AF')) }
+        foreach ($linhaDaLista in $linhasDaLista) {
+            $s, $cor, $rotulo, $tempoTexto = $linhaDaLista.s, $linhaDaLista.cor, $linhaDaLista.rotulo, $linhaDaLista.tempo
+            if ($doMotor) {
+                $bola = Lugar 8 8  # o motor desenha a bolinha
+            } elseif ($config.tema -eq 'minecraft' -and $orbes) {
+                $bola = New-Object Windows.Shapes.Rectangle
+                $bola.Fill = $(if ($s.situacao -eq 'working') { $orbeVerde } elseif ($orbes[$s.situacao]) { $orbes[$s.situacao] } else { $orbes.outro })
+                [Windows.Media.RenderOptions]::SetBitmapScalingMode($bola, 'NearestNeighbor')
+                $bola.UseLayoutRounding = $true
+            } else {
+                $bola = New-Object Windows.Shapes.Ellipse
+                $bola.Fill = $(if ($s.situacao -eq 'working') { $bolaVerde } else { Cor $cor })
+            }
+            $bola.Width = 8; $bola.Height = 8
+            $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
+            $bola.VerticalAlignment = 'Center'
+            $nomeSessao = Texto $s.name '#E5E7EB' 170
+            $nomeSessao.TextTrimming = 'CharacterEllipsis'
+            $tempo = $(if ($doMotor) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
+            $listaFeita.lugaresDasSessoes += , @($bola, $tempo, $tempoTexto)
+            $linha = Linha $bola $nomeSessao $tempo
+            $linha.Background = [Windows.Media.Brushes]::Transparent
+            $linha.ToolTip = $rotulo
+            $linha.Tag = "sessao:$($s.id)"  # o clique acha a sessão por aqui
+            $linha.Cursor = [Windows.Input.Cursors]::Hand
+            [void]$painelSessoes.Children.Add($linha)
         }
-        $bola.Width = 8; $bola.Height = 8
-        $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
-        $bola.VerticalAlignment = 'Center'
-        $nomeSessao = Texto $s.name '#E5E7EB' 170
-        $nomeSessao.TextTrimming = 'CharacterEllipsis'
-        $tempoTexto = Tempo (($agora - $s.since) / 60)
-        $tempo = $(if ($layoutDoTema.enfeites) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
-        [void]$caixasDoMotor.linhas.Add(@{ id = $s.id; sit = $s.situacao; cor = $cor; bola = $bola; tempo = @($tempoTexto, $cor, $tempo) })
-        $linha = Linha $bola $nomeSessao $tempo
-        $linha.Background = [Windows.Media.Brushes]::Transparent
-        $linha.ToolTip = $rotulo
-        $linha.Tag = "sessao:$($s.id)"  # o clique acha a sessão por aqui
-        $linha.Cursor = [Windows.Input.Cursors]::Hand
-        [void]$painelSessoes.Children.Add($linha)
+    }
+    for ($iLinha = 0; $iLinha -lt $linhasDaLista.Count; $iLinha++) {
+        $linhaDaLista, $lugares = $linhasDaLista[$iLinha], $listaFeita.lugaresDasSessoes[$iLinha]
+        if (-not $doMotor -and $lugares[2] -ne $linhaDaLista.tempo) { TrocarTexto $lugares[1] $linhaDaLista.tempo $linhaDaLista.cor; $lugares[2] = $linhaDaLista.tempo }
+        [void]$caixasDoMotor.linhas.Add(@{ id = $linhaDaLista.s.id; sit = $linhaDaLista.s.situacao; cor = $linhaDaLista.cor; bola = $lugares[0]; tempo = @($linhaDaLista.tempo, $linhaDaLista.cor, $lugares[1]) })
     }
     # pedindo algo (pergunta/permissão) ganha de trabalhando, que ganha de parado
     $situacoes = @($sessoes | ForEach-Object { $_.situacao })
@@ -654,42 +747,42 @@ function Atualizar {
         ComecarCena $(if ($luta.ferramenta -eq 'espada') { 'bug' } else { 'pedra' })
     }
 
-    if ([DateTime]::Now -ge $uso.proxima) {
-        $uso.proxima = [DateTime]::Now.AddSeconds(20)  # se falhar, tenta de novo logo
-        try {
-            $token = (Get-Content $cred -Raw | ConvertFrom-Json).claudeAiOauth.accessToken
-            $uso.dados = Invoke-RestMethod 'https://api.anthropic.com/api/oauth/usage' -TimeoutSec 5 -Headers @{
-                Authorization    = "Bearer $token"
-                'anthropic-beta' = 'oauth-2025-04-20'
-            }
-            $uso.proxima = [DateTime]::Now.AddMinutes(2)
-        } catch {
-            # falha passageira: fica o último valor; se for limite de requisições, espera mais
-            if ($_.Exception.Response.StatusCode.value__ -eq 429) { $uso.proxima = [DateTime]::Now.AddMinutes(5) }
+    BuscarUso
+    $medidores = @(if ($uso.dados) { DadosDoMedidor '5h' $uso.dados.five_hour; DadosDoMedidor '7d' $uso.dados.seven_day })
+    # sem o motor, a barra muda com a %; o "falta" anda a cada minuto e é trocado no lugar
+    $chaveDoUso = "$($config.tema) $doMotor $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct)" }) }) -join '')
+    if ($chaveDoUso -ne $listaFeita.uso) {
+        $listaFeita.uso = $chaveDoUso
+        $listaFeita.lugaresDoUso = @()
+        $painelUso.Children.Clear()
+        foreach ($medidor in $medidores) {
+            [void]$painelUso.Children.Add((Medidor $medidor))
+            $listaFeita.lugaresDoUso += , $medidor.lugares
         }
+        if (-not $medidores) { [void]$painelUso.Children.Add((Texto 'usage indisponível' '#6B7280')) }
     }
-    # redesenha a cada 2 s pra contagem de "falta" andar entre as buscas
-    $painelUso.Children.Clear()
-    if ($uso.dados) {
-        [void]$painelUso.Children.Add((Medidor '5h' $uso.dados.five_hour))
-        [void]$painelUso.Children.Add((Medidor '7d' $uso.dados.seven_day))
-    } else {
-        [void]$painelUso.Children.Add((Texto 'usage indisponível' '#6B7280'))
+    for ($iMedidor = 0; $iMedidor -lt $medidores.Count; $iMedidor++) {
+        $medidor, $lugares = $medidores[$iMedidor], $listaFeita.lugaresDoUso[$iMedidor]
+        if (-not $doMotor -and $lugares[4] -ne $medidor.falta) { TrocarTexto $lugares[3] $medidor.falta '#6B7280'; $lugares[4] = $medidor.falta }
+        [void]$caixasDoMotor.uso.Add(@{ rotulo = @($medidor.rotulo, '#9CA3AF', $lugares[0]); barra = $lugares[1]; pct = $medidor.pct; nivel = $medidor.nivel; pctTxt = @($medidor.pctTexto, $medidor.cor, $lugares[2]); falta = @($medidor.falta, '#6B7280', $lugares[3]) })
     }
-    $painelAviso.Children.Clear()
     $nova = VersaoNova
-    if ($nova) {
-        $traco = New-Object Windows.Controls.Border
-        $traco.Height = 1; $traco.Background = Cor '#33FFFFFF'; $traco.Margin = [Windows.Thickness]::new(0, 5, 0, 4)
-        $texto = Texto "↑ versão $nova disponível · baixar" '#A78BFA' 222
-        $texto.TextTrimming = 'CharacterEllipsis'
-        $aviso = Linha $texto
-        $aviso.Background = [Windows.Media.Brushes]::Transparent
-        $aviso.ToolTip = 'Baixa o zip: extraia e siga o COMO ATUALIZAR.txt'
-        $aviso.Tag = 'baixar'
-        $aviso.Cursor = [Windows.Input.Cursors]::Hand
-        [void]$painelAviso.Children.Add($traco)
-        [void]$painelAviso.Children.Add($aviso)
+    if ("$nova" -ne $listaFeita.aviso) {
+        $listaFeita.aviso = "$nova"
+        $painelAviso.Children.Clear()
+        if ($nova) {
+            $traco = New-Object Windows.Controls.Border
+            $traco.Height = 1; $traco.Background = Cor '#33FFFFFF'; $traco.Margin = [Windows.Thickness]::new(0, 5, 0, 4)
+            $texto = Texto "↑ versão $nova disponível · baixar" '#A78BFA' 222
+            $texto.TextTrimming = 'CharacterEllipsis'
+            $aviso = Linha $texto
+            $aviso.Background = [Windows.Media.Brushes]::Transparent
+            $aviso.ToolTip = 'Baixa o zip: extraia e siga o COMO ATUALIZAR.txt'
+            $aviso.Tag = 'baixar'
+            $aviso.Cursor = [Windows.Input.Cursors]::Hand
+            [void]$painelAviso.Children.Add($traco)
+            [void]$painelAviso.Children.Add($aviso)
+        }
     }
     if ($motor.obj) { $win.UpdateLayout() }  # o motor precisa de onde a lista nova ficou
     MotorEstado

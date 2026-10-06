@@ -2,8 +2,8 @@
 // Tema Dragon Ball (prévia 3, escolhas do dono). O cartão de cantos redondos em cima de uma
 // nuvem amarela que respira; a bolinha é uma esfera com halo da cor da situação; a barra do
 // usage é de ki; os números, na fonte do visor. O Clawd de gi e cabelo luta com ki nas paradas
-// (onda de energia, teletransporte, nuvem, esfera gigante, rastreador) e, 1 em 10 vezes que
-// começa a andar, se transforma por 30 s. Cada sessão que termina dá uma esfera; na 7ª, o
+// (onda de energia, teletransporte, nuvem, esfera gigante, rastreador) e, 1 em 10 voltas que
+// dá no cartão, se transforma por 30 s. Cada sessão que termina dá uma esfera; na 7ª, o
 // dragão serpente dá a volta no cartão. Os desenhos estão em dragonball-*.js.
 const { lim, sortearPeso } = require('./comum');
 const { registrarRoupas } = require('./clawd');
@@ -12,7 +12,7 @@ const K = require('./dragonball-cartao');
 const { CENAS } = require('./dragonball-cenas');
 
 const LUTAS = ['onda', 'teleporte', 'nuvem', 'genki', 'rastreador'];
-const TRANSF = { chance: 1 / 10, dura: 30 };  // 1 em 10 ao começar a andar; fica 30 s (+ a entrada)
+const TRANSF = { chance: 1 / 10, dura: 30 };  // 1 em 10 a cada volta no cartão; fica 30 s (+ a entrada)
 const PESOS = Object.fromEntries(A.VARIACOES.map(v => [v.id, 8 - v.forca]));  // as mais fortes mais raras
 const ESPERA_DRAGAO = 0.6;  // s entre a 7ª esfera chegar e o dragão sair
 const COR = { rotulo: '#86EFAC', falta: '#5E8F6E' };  // verdes de visor
@@ -109,7 +109,7 @@ module.exports = {
   },
 
   // -- regras --
-  aoComecarAndar(m) {
+  aoDarVolta(m) {
     if (m.estado.tr || m.cena || !m.chance(TRANSF.chance)) return;
     m.comecarCena(cenaTransf(sortearPeso(PESOS, m.sorteio)));
   },

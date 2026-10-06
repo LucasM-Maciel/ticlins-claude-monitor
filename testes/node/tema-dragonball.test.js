@@ -1,6 +1,6 @@
 'use strict';
 // motor/tema-dragonball.js: toda cena quadro a quadro nas 3 escalas, o quadro como função do
-// tempo, o custo, e as regras (transformação 1 em 10 ao começar a andar, por 30 s, as mais
+// tempo, o custo, e as regras (transformação 1 em 10 a cada volta no cartão, por 30 s, as mais
 // fortes mais raras; esferas que sobrevivem a reabrir e chamam o dragão na 7ª).
 // Custo medido (Node 24, Windows, 06/10/2026, escala 1,25, depois de aquecer): passeio com a
 // nuvem e os enfeites ~0,5 ms por quadro (mediana); pior quadro das cenas 2 a 6 ms (alvo 12).
@@ -102,12 +102,27 @@ test('custo em 1,25: passeio < 4 ms por quadro e cena < 12 ms no pior (falha só
   }
 });
 
-test('transformação: ~1 em 10 ao começar a andar, as mais fortes mais raras, 30 s e volta', () => {
-  const m = new Mundo({ tema, semente: 1234 });
-  m.receber(estadoDeMentira('dragonball', 'parado'));
+test('transformação: ~1 em 10 a cada volta no cartão, as mais fortes mais raras, 30 s e volta', () => {
+  // um sorteio por volta inteira andada, com as lutas das paradas no meio (5 min de passeio)
+  const { m: mv } = montar();
+  let sorteios = 0, andou = 0, antes = mv.dist;
+  mv.chance = () => { sorteios++; return false; };
+  for (let T = 0; T < 300; T += 1 / 30) {
+    mv.passo(T);
+    const d = mv.dist - antes; antes = mv.dist;
+    if (d > 0 && d < 50) andou += d;
+  }
+  assert.ok(mv.ruins.size === 0 && andou > 5 * mv.perimetro(), `andou ${andou.toFixed(0)} px, volta ${mv.perimetro().toFixed(0)}`);
+  assert.strictEqual(sorteios, Math.floor(andou / mv.perimetro()), 'um sorteio por volta');
+  // começar a andar não sorteia mais
+  for (let i = 0; i < 50; i++) { mv.receber({ modo: 'parado' }); mv.receber({ modo: 'andando' }); }
+  assert.strictEqual(sorteios, Math.floor(andou / mv.perimetro()));
+
+  // 20000 voltas: ~1 em 10, e as mais fortes mais raras
+  const { m } = montar({ semente: 1234 });
   const conta = {}, N = 20000;
   for (let i = 0; i < N; i++) {
-    m.receber({ modo: 'parado' }); m.receber({ modo: 'andando' });
+    tema.aoDarVolta(m);
     const tr = m.estado.tr;
     if (tr) {
       conta[tr.v.id] = (conta[tr.v.id] || 0) + 1;
@@ -124,16 +139,18 @@ test('transformação: ~1 em 10 ao começar a andar, as mais fortes mais raras, 
   }
   assert.ok(conta.kaioken > conta.ssj2 && conta.ssj2 > conta.deus && conta.deus > conta.instinto, JSON.stringify(conta));
 
-  // já transformado: começar a andar de novo não sorteia outra
+  // já transformado: dar a volta não sorteia outra
   const { m: m2, quadro } = montar();
+  m2.chance = () => true;
   m2.comecarCena(tema.cenaPorNome(m2, 'blue'));
   const ent = m2.estado.tr.v.entrada, dist0 = m2.dist;
   quadro(ent / 2);
   assert.strictEqual(m2.dist, dist0, 'parado durante a entrada');
   for (let s = ent / 2; s < ent + 1; s += 1 / 30) quadro(s);
   assert.ok(m2.dist > dist0, 'anda transformado depois da entrada');
-  for (let i = 0; i < 50; i++) { m2.receber({ modo: 'parado' }); m2.receber({ modo: 'andando' }); }
+  for (let i = 0; i < 3; i++) tema.aoDarVolta(m2);
   assert.strictEqual(m2.estado.tr.v.id, 'blue');
+  assert.strictEqual(m2.cena, null, 'nem começou outra entrada');
   if (m2.cena) m2.fimCena(true);
   for (let s = ent + 1; s < ent + 29.9; s += 0.1) m2.passo(s);
   assert.ok(m2.estado.tr && m2.estado.tr.tv0 == null, 'ainda transformado aos 29,9 s');

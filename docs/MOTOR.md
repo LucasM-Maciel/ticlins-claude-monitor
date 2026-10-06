@@ -13,7 +13,7 @@ enfeites dela (no Windows, os do Minecraft em WPF; o resto, como o Padrão).
   padrão, uma linha JSON por mensagem:
   - `{"msg":"estado", ...}` (abaixo): só quando algo muda.
   - `{"msg":"evento","tipo":"terminou"|"tudo"}`: uma sessão terminou / acabou tudo.
-- O motor desenha 30 quadros/s (5 quando nada mexe) em software (`raster.js`, um pedaço
+- O motor desenha 32 quadros/s (5 quando nada mexe; 31,25 ms = 2 tiques do relógio do Windows) em software (`raster.js`, um pedaço
   do Canvas 2D sem suavização) e manda pela saída padrão só o retângulo que mudou:
   `"CM"` + tipo + 0 + tamanho (uint32 LE) + dados. Tipos: `Q` quadro (W,H,x,y,w,h em
   uint16 + BGRA pré-multiplicado), `L` linha pro diário, `P` pronto (`{pronto, temas:
@@ -110,6 +110,7 @@ module.exports = {
   atras(g, m), frente(g, m),      // o que fica atrás/na frente do Clawd (pet, nuvem, dragão), coordenadas da janela
   clawd(g, m),                    // o Clawd fora de cena, já no lugar dele (m.modo: andando|pulando|parado)
   naParada(m),                    // andando, a cada 20-45 s: devolve uma cena, null (nada) ou undefined (tenta já já)
+  aoDarVolta(m),                  // a cada volta inteira andada no cartão (sorteio da roupa, da transformação)
   aoComecarAndar(m), aoMudarModo(m, antes, agora), aoEvento(m, tipo),
   aoComecarCena(m, cena), aoFimCena(m, cena, cortada), bloqueia(m),
   cenaPorNome(m, nome),           // pros testes e pro -Foto -Cena

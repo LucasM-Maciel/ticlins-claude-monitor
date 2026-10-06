@@ -377,8 +377,12 @@ func dataISO(_ texto: String?) -> Date? {
 }
 func medida(_ v: Any?) -> Medida? {
     guard let o = v as? [String: Any], let pct = numero(o["utilization"]) else { return nil }
-    return Medida(pct: pct, renova: dataISO(o["resets_at"] as? String))
+    let renova = dataISO(o["resets_at"] as? String)
+    if let r = renova, r <= Date() { return Medida(pct: 0, renova: nil) }  // o guardado já renovou: zerou
+    return Medida(pct: pct, renova: renova)
 }
+// o último usage que veio fica em ultimo-uso.json: reabrir com 429 ou token vencido mostra ele, não "indisponível"
+let usoGuardado = pasta + "/ultimo-uso.json"
 // Login do Claude Code: no Mac fica no Keychain (item "Claude Code-credentials");
 // em alguns casos, no arquivo ~/.claude/.credentials.json.
 func token() -> String? {
@@ -412,6 +416,8 @@ func buscarUso() {
            let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] { uso = usoDe(o) }
         return
     }
+    if proximaBusca == .distantPast, let d = FileManager.default.contents(atPath: usoGuardado),
+       let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] { uso = usoDe(o) }
     if buscando || Date() < proximaBusca { return }
     buscando = true
     proximaBusca = Date().addingTimeInterval(20)  // se falhar, tenta de novo logo
@@ -435,6 +441,7 @@ func buscarUso() {
                 if let n = novo {
                     uso = n
                     proximaBusca = Date().addingTimeInterval(120)
+                    try? dados?.write(to: URL(fileURLWithPath: usoGuardado))
                 } else if status == 429 {
                     proximaBusca = Date().addingTimeInterval(300)  // limite de requisições: espera mais
                 }
