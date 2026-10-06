@@ -16,7 +16,7 @@ olhando aba por aba pra saber quem terminou.
 - **Som** quando uma sessão termina ou precisa de você.
 - No VS Code: aba **Claude Monitor** na barra lateral, com clique pra ir direto na sessão, e um contador na barra de status.
 
-Arrastar move a janelinha. Duplo clique traz o VS Code. Botão direito: Clawd (liga/desliga), Opacidade, Volume e Fechar.
+Arrastar move a janelinha. Duplo clique traz o VS Code. Botão direito: Temas (Padrão, Minecraft, Dragon Ball), Clawd (liga/desliga), Opacidade, Volume e Fechar.
 Pra reabrir: `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) > **Claude Monitor: Abrir janelinha flutuante**.
 
 Instalação e tutorial: https://github.com/LucasM-Maciel/ticlins-claude-monitor

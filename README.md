@@ -9,8 +9,8 @@ você, ela avisa com um som.
 
 **[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows e Mac no mesmo arquivo)
 
-> Projeto pessoal e não oficial, sem ligação com a Anthropic (Claude) nem com a
-> Mojang (Minecraft).
+> Projeto pessoal e não oficial, sem ligação com a Anthropic (Claude), com a
+> Mojang (Minecraft) nem com os donos de Dragon Ball.
 
 ## O que ela mostra
 
@@ -25,12 +25,12 @@ você, ela avisa com um som.
 - **5h e 7d**: o mesmo que o `/usage` do Claude Code mostra (o limite de 5
   horas e o da semana), com quanto falta pra renovar. Fica laranja em 80% e
   vermelho em 95%.
-- **O Clawd** (o bichinho laranja): anda em volta minerando quando alguma
+- **O Clawd** (o bichinho laranja): anda em volta do cartão quando alguma
   sessão está rodando, pula quando alguém está esperando você e fica parado
-  quando está tudo quieto. Andando, de vez em quando ele para e luta: com a
-  picareta, quebra uma pedra e sobe um diamante; com a espada, mata um bug.
+  quando está tudo quieto. Andando, de vez em quando ele para e apronta alguma
+  coisa, que depende do [tema](#temas).
 - **Som**: quando uma sessão termina ou precisa de você, e um som especial
-  quando termina a última (tudo pronto).
+  quando termina a última (tudo pronto). Cada tema tem os seus.
 - **Dentro do VS Code**: uma aba "Claude Monitor" na barra lateral com as
   sessões (clique numa pra ir direto nela) e um contador na barra de status.
 
@@ -86,8 +86,9 @@ estiver trabalhando nele.
   perguntar de novo. Funciona com o VS Code (com o Cursor, não).
 - **Mover**: clique e arraste.
 - **Ir pro VS Code**: duplo clique na janelinha.
-- **Preferências**: botão direito na janelinha liga/desliga o **Clawd** e muda a
-  **Opacidade** e o **Volume** dos sons. Ficam gravadas pra próxima vez.
+- **Preferências**: botão direito na janelinha troca o **Tema** (◀ ▶), liga/desliga
+  o **Clawd** e muda a **Opacidade** e o **Volume** dos sons. Ficam gravadas pra
+  próxima vez.
 - **Fechar**: botão direito > Fechar.
 - **Reabrir**: no VS Code, `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) >
   **Claude Monitor: Abrir janelinha flutuante**. No Windows também tem o
@@ -95,12 +96,33 @@ estiver trabalhando nele.
 - **Desligar a janelinha** e ficar só com a barra lateral: nas configurações
   do VS Code, desmarque **Claude Monitor: Overlay**.
 
-### Sons do Minecraft
+## Temas
 
-Os sons são os do **Minecraft**: o "hmm" do aldeão quando alguém espera você, o
-som de XP quando uma sessão termina e o de **subir de nível** quando termina a
-última (nada mais rodando nem esperando você). A picareta, a espada, a pedra e o
-diamante do Clawd também são os do jogo.
+Botão direito > **Temas ◀ ▶**. Instalação nova começa no Padrão; quem já usava
+a janelinha antes dos temas continua no Minecraft.
+
+- **Padrão**: o Clawd sem ferramenta. Pisa num bug, abre o notebook, toma café,
+  pensa, risca a lista de tarefas, dorme quando está tudo quieto e faz festa
+  quando acaba tudo. A cada 25 bugs pisados vem um evento especial, com som:
+  **Space Invaders** e **Bug Kaiju**, um de cada vez. Os avisos são um sino.
+- **Minecraft**: o Clawd de Steve (às vezes de Alex; bem raro, de Herobrine),
+  borda de terra com grama, bolinhas de orbe de XP e o usage na barra de XP.
+  Andando, ele enfrenta zumbi, esqueleto, creeper, aranha e outros mobs, ou
+  minera; sobe de nível a cada 5 mortes e, a cada 20, enfrenta o **Ender
+  Dragon**, com os sons do jogo.
+- **Dragon Ball**: o Clawd de quimono, que às vezes se transforma; a nuvem
+  voadora, as esferas no lugar das bolinhas e a barra de ki ("MAIS DE 8000!").
+  Cada sessão que termina dá uma esfera; na 7ª, o dragão aparece.
+
+As animações precisam do Node.js (que a instalação já pede); sem ele a
+janelinha mostra o Clawd simples, sem as cenas.
+
+### Sons e texturas do Minecraft
+
+No tema Minecraft os sons são os do **jogo**: o "hmm" do aldeão quando alguém
+espera você, o som de XP quando uma sessão termina e o de **subir de nível**
+quando termina a última (nada mais rodando nem esperando você). Os mobs, os
+blocos e o dragão também são os do jogo.
 
 O instalador baixa tudo do servidor da Mojang, o mesmo que o launcher do jogo
 usa: **não precisa ter o Minecraft nem o ffmpeg**, e nada da Mojang vai no
@@ -155,7 +177,9 @@ bash testes/mac/testes.sh                                            # Mac
 ```
 
 - `extensao/`: a extensão do VS Code, com a janelinha em `extensao/janelinha/`
-  (Windows: `overlay.ps1`; Mac: `overlay.swift`).
+  (Windows: `overlay.ps1`; Mac: `overlay.swift`) e as animações dos temas em
+  `extensao/janelinha/motor/` (um programa em Node, igual nos dois:
+  [docs/MOTOR.md](docs/MOTOR.md)).
 - `instalar/`: os instaladores.
 - `testes/cenarios.js`: as situações que a janelinha tem que acertar nos dois
   sistemas.

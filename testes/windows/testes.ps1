@@ -194,7 +194,8 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         Verdade ([Pixels]::Contar($foto, 24, 24, 24, 6) -gt 5000) 'cadê o cartão escuro?'
         Verdade ([Pixels]::Contar($foto, 215, 119, 87, 12) -gt 30) 'cadê o Clawd (laranja)?'
         if ($cenario -eq 'andando') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'não usou a picareta.png' }
-        elseif ($cenario -eq 'pedra') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'cadê o diamante (diamante.png) subindo?' }
+        # o diamante tem 11 px e sai suavizado: só 5-7 pixels ficam magenta puro (0 sem o diamante.png)
+        elseif ($cenario -eq 'pedra') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 2) 'cadê o diamante (diamante.png) subindo?' }
         elseif ($cenario -in 'padrao', 'epico') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
         else { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -gt 5) 'cadê a ferramenta desenhada (ciano)?' }
         # tema Minecraft com as texturas de mentira do cenarios.js; o Padrão tem elas na pasta e não usa
