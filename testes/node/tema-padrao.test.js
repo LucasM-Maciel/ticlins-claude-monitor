@@ -216,12 +216,18 @@ test('paradas da caminhada: metade sem cena, a outra metade entre as 5 sorteadas
     aoComecarCena(m, c) { tema.aoComecarCena(m, c); comecadas.push(c.nome); },
   };
   const m = novoMundo('andando', { semente: 2026, t: espiao });
-  andar(m, 0, 4 * 3600, 0.1);  // 4 h andando
+  andar(m, 0, 10 * 3600, 0.1);  // 10 h andando (dá uns 4 épicos)
   const total = nulos + comecadas.length, conta = Object.fromEntries(SORTEADAS.map(n => [n, comecadas.filter(c => c === n).length]));
-  t.diagnostic(`4 h andando: ${total} paradas, ${nulos} sem cena; ${JSON.stringify(conta)}`);
-  assert.ok(total > 300, `só ${total} paradas`);
+  t.diagnostic(`10 h andando: ${total} paradas, ${nulos} sem cena; ${JSON.stringify(conta)}`);
+  assert.ok(total > 750, `só ${total} paradas`);
   assert.ok(Math.abs(nulos / total - 0.5) < 0.08, `${nulos} de ${total} paradas sem cena`);
-  assert.deepStrictEqual(comecadas.filter(n => !SORTEADAS.includes(n)), [], 'dorme e festa não saem no sorteio');
+  // os épicos de verdade: um a cada 25 bugs pisados, revezando
+  const epicos = comecadas.filter(n => n.startsWith('epico-')), pisadas = conta.pisa;
+  t.diagnostic(`${pisadas} bugs pisados, épicos: ${epicos.join(' ')}`);
+  assert.strictEqual(epicos.length, Math.floor(pisadas / 25) - (m.salvo.epico ? 1 : 0), 'um épico a cada 25 bugs');
+  assert.ok(epicos.length >= 2, `só ${epicos.length} épicos em 10 h`);
+  epicos.forEach((n, i) => assert.strictEqual(n, `epico-${tema.epicos[i % 2]}`, 'invaders e kaiju se revezam'));
+  assert.deepStrictEqual(comecadas.filter(n => !SORTEADAS.includes(n) && !n.startsWith('epico-')), [], 'dorme e festa não saem no sorteio');
   for (const n of SORTEADAS) assert.ok(conta[n] > comecadas.length / 10, `${n} saiu ${conta[n]} de ${comecadas.length}`);
   assert.deepStrictEqual(m.erros, []);
   // cena que quebrou não sai mais; sem nenhuma boa, toda parada fica sem cena
@@ -230,4 +236,75 @@ test('paradas da caminhada: metade sem cena, a outra metade entre as 5 sorteadas
   for (let i = 0; i < 40; i++) { const c = tema.naParada(q); assert.ok(c === null || c.nome === 'pisa'); if (c) tema.aoComecarCena(q, c); }
   q.ruins.add('pisa');
   for (let i = 0; i < 10; i++) assert.strictEqual(tema.naParada(q), null);
+});
+
+test('épico: a cada 25 bugs pisados, na próxima parada na reta de cima; invaders e kaiju se revezam', () => {
+  const falso = nome => ({ cena: () => ({ nome: 'epico', dur: 2, espaco: { frente: 0, tras: 0 }, modos: ['andando'], quadro() { if (nome === 'quebra') throw new Error('x'); } }) });
+  const pisar = (m, ate = Infinity) => {
+    m.comecarCena(tema.cenaPorNome(m, 'pisa'));
+    const T0 = m.T;
+    for (let T = T0 + 0.1; m.cena && T - T0 < ate; T += 0.1) { m.proxima = Infinity; m.passo(T); }
+    if (m.cena) m.receber({ modo: 'pulando' });  // cortada
+    m.receber({ modo: 'andando' });
+  };
+  const naReta = (m, lado) => { const g = m.geometria(); m.dist = lado === 'cima' ? (g.w - 2 * g.r) / 2 : (g.w - 2 * g.r) + Math.PI * g.r / 2 + 10; };
+  // pede o épico (25 bugs a mais) e devolve a cena que sai na reta de cima
+  const proximo = m => {
+    for (let i = 0; i < 25; i++) pisar(m);
+    assert.strictEqual(m.salvo.epico, true);
+    naReta(m, 'cima');
+    return tema.naParada(m);
+  };
+  try {
+    tema.trocarEpicos({ invaders: falso(), kaiju: falso() });
+    const m = novoMundo('andando');
+    m.salvo.bugs = 23;
+    pisar(m, 1.0);
+    assert.strictEqual(m.salvo.bugs, 23, 'cortada antes da pisada: não conta');
+    pisar(m);
+    assert.strictEqual(m.salvo.bugs, 24);
+    assert.ok(!m.salvo.epico);
+    pisar(m);
+    assert.strictEqual(m.salvo.bugs, 25);
+    assert.strictEqual(m.salvo.epico, true, 'o 25º bug pede o épico');
+    naReta(m, 'lado');
+    assert.strictEqual(tema.naParada(m), undefined, 'no lado do cartão: espera chegar na reta de cima');
+    naReta(m, 'cima');
+    let c = tema.naParada(m);
+    assert.ok(c && c.nome === 'epico-invaders' && c.epico === 'invaders', 'na reta de cima: o 1º é o invaders, sem o cara-ou-coroa');
+    m.comecarCena(c);
+    assert.strictEqual(m.salvo.epico, false);
+    m.fimCena(true);
+    // revezam: kaiju, invaders, kaiju
+    for (const id of ['kaiju', 'invaders', 'kaiju']) {
+      c = proximo(m);
+      assert.strictEqual(c.nome, `epico-${id}`);
+      m.comecarCena(c); m.fimCena(true);
+    }
+    assert.strictEqual(tema.cenaPorNome(m, 'epico').nome, 'epico-invaders', 'motor-foto --cena epico: o da vez');
+    assert.strictEqual(tema.cenaPorNome(m, 'epico-kaiju').nome, 'epico-kaiju', 'motor-foto --cena epico-kaiju');
+    // o que quebrou fica de fora até reabrir: o outro faz as duas vezes
+    m.ruins.add('epico-invaders');
+    for (let i = 0; i < 2; i++) { c = proximo(m); assert.strictEqual(c.nome, 'epico-kaiju'); m.comecarCena(c); m.fimCena(true); }
+    // só um arquivo: ele sempre
+    tema.trocarEpicos({ kaiju: falso() });
+    m.ruins.clear();
+    for (let i = 0; i < 2; i++) { c = proximo(m); assert.strictEqual(c.nome, 'epico-kaiju'); m.comecarCena(c); m.fimCena(true); }
+    // sem nenhum: a parada segue normal e o pedido some
+    tema.trocarEpicos(null);
+    m.salvo.epico = true;
+    const d = tema.naParada(m);
+    assert.ok(!d || !d.nome.startsWith('epico'));
+    assert.strictEqual(m.salvo.epico, false);
+    assert.strictEqual(tema.cenaPorNome(m, 'epico'), null);
+    assert.deepStrictEqual(m.erros, []);
+  } finally { tema.trocarEpicos(undefined); }
+});
+
+test('os épicos de verdade existem e começam pelo tema', () => {
+  const m = novoMundo('andando');
+  for (const id of tema.epicos) {
+    const c = tema.cenaPorNome(m, `epico-${id}`);
+    assert.ok(c && c.nome === `epico-${id}` && c.dur > 15 && c.dur < 25, `${id}: ${c && c.dur}`);
+  }
 });

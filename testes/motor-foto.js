@@ -135,4 +135,4 @@ if (require.main === module) {
   console.log(`${saida}: ${instantes.length} quadro(s)`);
 }
 
-module.exports = { fotografar, estadoDeMentira, png, tira };
+module.exports = { fotografar, estadoDeMentira, cartaoDeMentira, png, tira };

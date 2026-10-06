@@ -5,7 +5,9 @@
 // - pisa no bug, notebook, café, pensando ✻ e lista de tarefas: metade das paradas
 //   da caminhada (a cada 20-45 s andando), sorteada entre as 5;
 // - dorme: parado (nada rodando) há DORME s; dorme até algo rodar e acorda no lugar;
-// - festa: acabou tudo (evento 'tudo').
+// - festa: acabou tudo (evento 'tudo');
+// - épico: a cada 25 bugs pisados, na próxima parada na reta de cima; Space Invaders e Bug
+//   Kaiju se revezam (padrao-epico-<id>.js, se existir).
 // Texto (✻, z z z, a lista) é pixel art: o raster não escreve.
 const { DEG, sai, arte, rng } = require('./comum');
 const { desenhaClawd, andando, pulando } = require('./clawd');
@@ -14,6 +16,8 @@ const DORME = 60;          // s parado até dormir (a prévia não diz)
 const ACORDA = 0.6;        // s acordando antes de andar: espreguiça 0,3 e fica em pé 0,3 (o fim da cena da prévia)
 const ESPERA_FESTA = 2;    // s: o overlay.ps1 manda o 'tudo' antes do estado 'parado' (Avisar vem antes do Clawd)
 const SORTEADAS = ['pisa', 'notebook', 'cafe', 'pensando', 'tarefas'];
+const PISOU = 1.6;         // s: quando o Clawd pisa no bug (a cena 'pisa')
+const EPICO = 25;          // bugs pisados por evento épico (dono 06/10)
 
 // ---------- desenhos ----------
 // o bug de hoje, igual ao overlay.ps1 ($desenhos.bug / $coresBug), 1,6 px por pixel
@@ -64,7 +68,7 @@ const FABRICAS = {
   // bug chega 0–1,0 (de 22 px adiante) · agacha 1,0–1,15 · pulo 1,15–1,6 (sobe 16 px) · pisa em 1,6:
   // achata em 0,06 s (vermelho 0,15 s) · quica de volta 1,7–2,15 · fumaça 1,85–2,45 · fim 2,9
   pisa: () => {
-    const C = 1.0, PX = 1.6, bw = 13 * PX, bh = 8 * PX, bx0 = 24, alvo = bx0 + 8 * PX, pisou = 1.6;
+    const C = 1.0, PX = 1.6, bw = 13 * PX, bh = 8 * PX, bx0 = 24, alvo = bx0 + 8 * PX, pisou = PISOU;
     const bugs = { p: bugArte('p', false), q: bugArte('q', false), pv: bugArte('p', true), qv: bugArte('q', true) };
     return {
       dur: 2.9, espaco: { frente: 70, tras: 15 },
@@ -252,7 +256,39 @@ const FABRICAS = {
   },
 };
 
+// cada épico mora num arquivo padrao-epico-<id>.js, que pode não existir: carrega na 1ª vez
+// que precisa. Eles se revezam na ordem de EPICOS (dono 06/10); o que falta ou quebrou é pulado.
+const EPICOS = ['invaders', 'kaiju'];
+let epicoModulos = {}, epicoErros = [];
+function epico(id) {
+  if (!(id in epicoModulos)) {
+    const arq = `padrao-epico-${id}`;
+    try { epicoModulos[id] = require(`./${arq}`); } catch (e) {
+      epicoModulos[id] = null;
+      if (!(e.code === 'MODULE_NOT_FOUND' && String(e.message).split('\n')[0].includes(arq))) epicoErros.push(`${arq}.js com defeito: ${e.message}`);
+    }
+  }
+  const d = epicoModulos[id];
+  return d && typeof d.cena === 'function' ? d : null;
+}
+// o da vez: a partir de salvo.epicos (quantos já começaram), o 1º que existe e não quebrou
+function epicoDaVez(m) {
+  const n = m.salvo.epicos || 0;
+  for (let i = 0; i < EPICOS.length; i++) {
+    const id = EPICOS[(n + i) % EPICOS.length];
+    if (epico(id) && !m.ruins.has(`epico-${id}`)) return id;  // quebrou antes: não volta até reabrir
+  }
+  return null;
+}
+function cenaDoEpico(m, id) {
+  if (!id || !epico(id)) return null;
+  const c = epico(id).cena(m);
+  return c ? { ...c, nome: `epico-${id}`, epico: id } : null;
+}
+
 function cenaPorNome(m, nome) {
+  if (nome === 'epico') return cenaDoEpico(m, epicoDaVez(m));
+  if (nome.startsWith('epico-')) return cenaDoEpico(m, nome.slice(6));
   const fazer = FABRICAS[nome];
   return fazer ? { nome, ...fazer(Math.floor(m.sorteio() * 4294967296)) } : null;
 }
@@ -284,6 +320,18 @@ module.exports = {
   // "nada" mais comum que a metade.
   naParada(m) {
     const e = m.estado;
+    // o épico, sem o cara-ou-coroa, só na reta de cima (a cena conta com o Clawd ali)
+    if (m.salvo.epico) {
+      const id = epicoDaVez(m);
+      for (const e of epicoErros.splice(0)) if (m.aoErro) m.aoErro(e);
+      if (id) {
+        const p = m.pose();
+        if (!(p.reta && Math.cos(p.a) > 0.99)) return undefined;
+        const c = cenaDoEpico(m, id);
+        if (c) return c;
+      }
+      m.salvo.epico = false; m.salvar();
+    }
     if (e.escolhida && m.ruins.has(e.escolhida)) e.escolhida = undefined;
     if (e.escolhida === undefined) {
       const boas = SORTEADAS.filter(n => !m.ruins.has(n));
@@ -292,8 +340,19 @@ module.exports = {
     if (e.escolhida === null) { e.escolhida = undefined; return null; }
     return cenaPorNome(m, e.escolhida);
   },
-  aoComecarCena(m, cena) { if (cena.nome === m.estado.escolhida) m.estado.escolhida = undefined; },
+  aoComecarCena(m, cena) {
+    if (cena.nome === m.estado.escolhida) m.estado.escolhida = undefined;
+    // o próximo é o seguinte a este na roda
+    if (cena.epico) { m.salvo.epico = false; m.salvo.epicos = EPICOS.indexOf(cena.epico) + 1; m.salvar(); }
+  },
   aoFimCena(m, cena) {
+    // bug pisado (cortada antes da pisada não conta); o 25º pede o épico
+    if (cena.nome === 'pisa' && m.T - cena.t0 >= PISOU) {
+      const antes = m.salvo.bugs || 0;
+      m.salvo.bugs = antes + 1;
+      if (Math.floor(m.salvo.bugs / EPICO) > Math.floor(antes / EPICO)) m.salvo.epico = true;
+      m.salvar();
+    }
     // acordou porque algo começou a rodar: acorda no lugar (meio de cima) e sai andando dali
     if (cena.nome === 'dorme' && m.modo === 'andando') {
       const g = m.geometria();
@@ -313,4 +372,11 @@ module.exports = {
     if (agora === 'parado' && f != null && m.T - f <= ESPERA_FESTA) festejar(m);
   },
   animado(m) { return m.modo === 'pulando' || !!m.cena; },
+  epicos: EPICOS,
+  // pros testes: troca os padrao-epico-<id>.js ({id: módulo}; o que faltar = não existe;
+  // undefined = os de verdade)
+  trocarEpicos(mapa) {
+    epicoModulos = mapa === undefined ? {} : Object.fromEntries(EPICOS.map(id => [id, (mapa || {})[id] || null]));
+    epicoErros = [];
+  },
 };
