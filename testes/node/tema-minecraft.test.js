@@ -408,6 +408,28 @@ test('Ender Dragon: a cada 20 mortes, na próxima parada, só se o minecraft-dra
   } finally { tema.trocarDragao(undefined); }
 });
 
+test('Ender Dragon: os níveis que a cena mostra subindo ficam (dono 06/10); cortada, só os que já subiram', () => {
+  const falso = { texturas: ['espada'], cena: () => ({ nome: 'dragao', dur: 4, espaco: { frente: 0, tras: 0 }, subidas: [1, 2, 3], quadro() {} }) };
+  try {
+    tema.trocarDragao(falso);
+    const m = novoMundo();
+    m.salvo.mortes = 10;
+    m.comecarCena(tema.cenaPorNome(m, 'dragao'));
+    for (let T = m.T + 0.1; m.cena; T += 0.1) {
+      m.passo(T);
+      if (m.cena) assert.strictEqual(tema.nivel(m), 2, 'durante a cena o nível de partida não muda (a cena soma por cima)');
+    }
+    assert.strictEqual(tema.nivel(m), 5, '2 (10 mortes) + 3 do dragão');
+    assert.strictEqual(tema.cenaPorNome(m, 'galinha').ctx.nivel, 5, 'os eventos mostram o nível com o do dragão');
+    m.comecarCena(tema.cenaPorNome(m, 'dragao'));
+    const T0 = m.T;
+    for (let T = T0 + 0.1; T < T0 + 2.5; T += 0.1) m.passo(T);
+    m.receber({ modo: 'pulando' });
+    assert.strictEqual(m.cena, null);
+    assert.strictEqual(tema.nivel(m), 7, 'cortada em 2,5 s: só as 2 subidas que já tinham acontecido');
+  } finally { tema.trocarDragao(undefined); }
+});
+
 test('mineração: o minério é sorteado com os pesos da prévia (diamante 4%)', () => {
   const m = novoMundo({ semente: 9 }), conta = {}, N = 5000;
   for (let i = 0; i < N; i++) { const id = tema.cenaPorNome(m, 'mineracao').evento.minerio.id; conta[id] = (conta[id] || 0) + 1; }

@@ -2,7 +2,7 @@
 // Tema Minecraft (o que o dono escolheu nas prévias): o Clawd com a roupa do Steve (Alex
 // 1 em 10, Herobrine 1 em 50, sorteados cada vez que ele começa a andar); nas paradas da
 // caminhada, 1 em 2 vira um evento do jogo (minecraft-eventos.js), raros mais raros e, de
-// noite, mais hostis; vida, nível a cada 5 mortes (sobrevive a reabrir), o lobo pet e, a
+// noite, mais hostis; vida, nível a cada 5 mortes + os do dragão (sobrevive a reabrir), o lobo pet e, a
 // cada 20 mortes, o Ender Dragon (minecraft-dragao.js, se existir). Os enfeites do cartão
 // são os mesmos da janelinha WPF (minecraft-enfeites.js).
 const { IMG, arte, temTexturas, sortearPeso, rng } = require('./comum');
@@ -15,6 +15,8 @@ const NIVEL = 5;      // mortes por nível
 const DRAGAO = 20;    // mortes por Ender Dragon (o dono mudou de 30 pra 20 em 06/10)
 const PET = 25;       // s que o lobo manso segue o Clawd
 const PESO = { comum: 4, incomum: 2, raro: 1 };
+// 1 nível a cada 5 mortes + os que o Ender Dragon deu (o dono quis que o +28 da cena ficasse)
+const nivelDe = (m, mortes = m.salvo.mortes || 0) => Math.floor(mortes / NIVEL) + (m.salvo.niveisDoDragao || 0);
 
 // sem as texturas da Mojang: os 16x16 desenhados no overlay.ps1, com o cabo no mesmo pixel
 const CORES16 = { d: '#1B6E73', c: '#4AEDD9', b: '#C9FFF6', k: '#3B2A14', h: '#8A5A2B' };
@@ -79,9 +81,9 @@ function pesosDosEventos(m) {
 }
 // a cena de um evento: vida, nível e sorteios ficam presos na hora (o quadro é função do tempo)
 function cenaDoEvento(m, ev, minerio) {
-  const mortes = m.salvo.mortes || 0, nivel = Math.floor(mortes / NIVEL), r = rng(Math.floor(m.sorteio() * 4294967296));
+  const mortes = m.salvo.mortes || 0, nivel = nivelDe(m, mortes), r = rng(Math.floor(m.sorteio() * 4294967296));
   const ctx = { vida: Math.max(1, Math.round(m.estado.vida)), nivel, sobe: false, semente: Math.floor(r() * 999), minerio: minerio || sorteiaMinerio(r()) };
-  if (ev.mortes) { ctx.nivel = Math.floor((mortes + ev.mortes) / NIVEL); ctx.sobe = ctx.nivel > nivel; }
+  if (ev.mortes) { ctx.nivel = nivelDe(m, mortes + ev.mortes); ctx.sobe = ctx.nivel > nivel; }
   const c = ev.fazer(ctx);
   return {
     nome: ev.id, dur: c.dur, espaco: ev.espaco, evento: c, ctx,
@@ -156,6 +158,11 @@ module.exports = {
   },
   // cortada (pergunta/permissão): só conta o que já aconteceu
   aoFimCena(m, cena) {
+    if (cena && cena.dragao) {
+      const n = (cena.subidas || []).filter(s => m.T - cena.t0 >= s).length;
+      if (n) { m.salvo.niveisDoDragao = (m.salvo.niveisDoDragao || 0) + n; m.salvar(); }
+      return;
+    }
     const c = cena && cena.evento;
     if (!c) return;
     const e = m.estado, foi = m.T - cena.t0;
@@ -181,6 +188,6 @@ module.exports = {
 
   // pros testes: troca o minecraft-dragao.js por outro (null = não existe)
   trocarDragao(modulo) { dragaoModulo = modulo; },
-  nivel: m => Math.floor((m.salvo.mortes || 0) / NIVEL),
+  nivel: m => nivelDe(m),
   pesosDosEventos,
 };

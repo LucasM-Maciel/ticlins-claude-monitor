@@ -962,6 +962,7 @@ function desenhar(g, t, m) {
 function cena(m) {
   return {
     nome: 'dragao', dur: DUR, espaco: { frente: 0, tras: 0 }, modos: ['andando'],
+    subidas: SUBIDAS,  // quando cada nível sobe: o tema guarda os que já subiram (dono 06/10)
     quadro(g, t, mundo) { desenhar(g, t, mundo || m); },
     // pros testes: a caixa (DIPs) dos pixels do dragão no instante t, desenhado sozinho numa
     // tela com folga em volta (o que sairia da janela aparece), e a caixa medida; null sem dragão
