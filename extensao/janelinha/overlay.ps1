@@ -1,13 +1,15 @@
 ﻿# Claude Monitor fora do VS Code: janelinha sempre por cima com as sessões do
 # Claude Code (arquivos do hook em ~/.claude-monitor/sessions) e o usage
 # (mesmo endpoint do /usage, com o login do Claude Code; não renova o token).
-# Toca som quando uma sessão passa a esperar você. O Clawd, com a picareta de
-# diamante, anda pela borda enquanto algo roda, pula parado em cima quando há
-# pergunta/permissão e fica parado em cima quando nada roda.
-# Sons e texturas do Minecraft vêm do servidor da Mojang (minecraft.js);
-# sem eles, sons do Windows e os desenhos daqui.
+# Toca som quando uma sessão passa a esperar você. O Clawd anda pela borda enquanto
+# algo roda, pula parado em cima quando há pergunta/permissão e fica parado em cima
+# quando nada roda.
+# Dois temas: Padrão (sons de sino, Clawd sem ferramenta) e Minecraft (picareta de
+# diamante e lutas, sons do jogo, orbe de XP nas bolinhas, borda de terra com grama,
+# barra de XP no usage e a letra do jogo). Sons e texturas do Minecraft vêm do
+# servidor da Mojang (minecraft.js); sem eles, sons do Windows e os desenhos daqui.
 # Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
-# traz o VS Code. Botão direito: Clawd (liga/desliga), Opacidade, Volume e Fechar.
+# traz o VS Code. Botão direito: Temas, Clawd (liga/desliga), Opacidade, Volume e Fechar.
 # Passar o mouse numa sessão: o estado dela.
 # Saiu versão nova (a extensão consulta o GitHub): linha roxa embaixo; o clique baixa o zip.
 # A extensão abre isto a cada janela do VS Code; o mutex deixa uma só. Quando a
@@ -16,8 +18,9 @@
 # arquivo.json, se passar); -Pasta troca a ~/.claude-monitor por outra; -Clicar id
 # clica na linha dessa sessão (o .txt diz o link que abriria); -Cena "pedra 2.1"
 # fotografa esse instante da cena (pedra ou bug), em segundos; -Pulso 0.5 fotografa a
-# bolinha verde nesse ponto do pulso (0 = acesa, 0.5 = o mais apagada).
-param([string]$Foto, [string]$Pasta, [string]$ArquivoUso, [string]$Clicar, [string]$Cena, [string]$Pulso)
+# bolinha verde nesse ponto do pulso (0 = acesa, 0.5 = o mais apagada); -SemMotor desenha
+# o Clawd daqui (o de antes do motor), como quando falta o node.
+param([string]$Foto, [string]$Pasta, [string]$ArquivoUso, [string]$Clicar, [string]$Cena, [string]$Pulso, [switch]$SemMotor)
 Add-Type -AssemblyName PresentationFramework
 if (-not $Pasta) { $Pasta = Join-Path $HOME '.claude-monitor' }
 # quem me abre de dentro do VS Code me passa ELECTRON_RUN_AS_NODE=1; com ele, o Code.exe
@@ -61,25 +64,43 @@ $estados = @{
     question   = @('#60A5FA', 'pergunta pra você')
     permission = @('#FACC15', 'pedindo permissão')
 }
-# com mais de um, sorteia. Outros na pasta sons\: pop, aldeao_sim, pling, sino,
-# bigorna, gato. Com a janelinha aberta a extensão não toca som.
-$aldeao = @(1..2 | ForEach-Object { "$Pasta\sons\aldeao_hmm$_.wav" } | Where-Object { Test-Path $_ })
-$xp = @(1..3 | ForEach-Object { "$Pasta\sons\xp$_.wav" } | Where-Object { Test-Path $_ })
-$levelup = @("$Pasta\sons\levelup.wav") | Where-Object { Test-Path $_ }
-if (-not $aldeao) { $aldeao = @("$env:WINDIR\Media\Windows Notify Messaging.wav") }
-if (-not $xp) { $xp = @("$env:WINDIR\Media\Windows Notify System Generic.wav") }
-if (-not $levelup) { $levelup = @("$env:WINDIR\Media\tada.wav") }
-$sons = @{
-    permission = $aldeao   # "hmm" do aldeão
-    question   = $aldeao
-    finished   = $xp       # pegar XP
-    tudo       = $levelup  # subir de nível: a última terminou e não sobrou nada rodando nem esperando
+# Som de cada aviso por tema; com mais de um, sorteia. Sem o arquivo, o do Windows.
+# Outros na pasta sons\: pop, aldeao_sim, pling, sino, bigorna, gato. Os do Padrão
+# (sons-padrao\) são feitos pelo sons-padrao.py. Com a janelinha aberta a extensão não toca som.
+function SonsOuWindows($arquivos, $doWindows) {
+    $achados = @($arquivos | Where-Object { Test-Path -LiteralPath $_ })
+    if ($achados) { $achados } else { @("$env:WINDIR\Media\$doWindows") }
 }
-$nomeDoSom = @{ permission = 'aldeao'; question = 'aldeao'; finished = 'xp'; tudo = 'levelup' }  # pro .txt do -Foto
-# botão direito: Clawd, opacidade e volume, gravados em config.json (o Mac lê o mesmo).
-# Sem o arquivo, tudo como antes do menu existir: Clawd ligado, opaca, volume cheio
+$sonsDoTema = @{
+    minecraft = @{
+        esperando = SonsOuWindows (1..2 | ForEach-Object { "$Pasta\sons\aldeao_hmm$_.wav" }) 'Windows Notify Messaging.wav'  # "hmm" do aldeão
+        terminou  = SonsOuWindows (1..3 | ForEach-Object { "$Pasta\sons\xp$_.wav" }) 'Windows Notify System Generic.wav'  # pegar XP
+        tudo      = SonsOuWindows "$Pasta\sons\levelup.wav" 'tada.wav'  # subir de nível
+    }
+    padrao = @{
+        esperando = SonsOuWindows "$Pasta\sons-padrao\esperando.wav" 'Windows Notify Messaging.wav'
+        terminou  = SonsOuWindows "$Pasta\sons-padrao\terminou.wav" 'Windows Notify System Generic.wav'
+        tudo      = SonsOuWindows "$Pasta\sons-padrao\tudo.wav" 'tada.wav'
+    }
+    dragonball = @{  # tilins de vidro e cristal; o trovão do dragão quando acaba tudo (sons-dragonball\LICENCAS.txt)
+        esperando = SonsOuWindows "$Pasta\sons-dragonball\esperando.wav" 'Windows Notify Messaging.wav'
+        terminou  = SonsOuWindows "$Pasta\sons-dragonball\terminou.wav" 'Windows Notify System Generic.wav'
+        tudo      = SonsOuWindows "$Pasta\sons-dragonball\tudo.wav" 'tada.wav'
+    }
+}
+# tudo = a última terminou e não sobrou nada rodando nem esperando
+$avisoDaSituacao = @{ permission = 'esperando'; question = 'esperando'; finished = 'terminou'; tudo = 'tudo' }
+$nomeDoSom = @{  # pro diário e pro .txt do -Foto
+    minecraft = @{ esperando = 'aldeao'; terminou = 'xp'; tudo = 'levelup' }
+    padrao    = @{ esperando = 'sino-esperando'; terminou = 'sino-terminou'; tudo = 'sino-tudo' }
+    dragonball = @{ esperando = 'esferas-esperando'; terminou = 'esferas-terminou'; tudo = 'esferas-tudo' }
+}
+# botão direito: tema, Clawd, opacidade e volume, gravados em config.json (o Mac lê o mesmo).
+# Sem o arquivo, tudo como antes do menu existir: Minecraft, Clawd ligado, opaca, volume
+# cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
+$temas = [ordered]@{ padrao = 'Padrão'; minecraft = 'Minecraft'; dragonball = 'Dragon Ball' }
 $configArquivo = Join-Path $Pasta 'config.json'
-$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0 }
+$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft' }
 # Exists antes: arquivo que não existe soma no $Error mesmo pego no try (o "fechou (1 erros)" do diário)
 if ([IO.File]::Exists($configArquivo)) {
     try {
@@ -88,6 +109,7 @@ if ([IO.File]::Exists($configArquivo)) {
         if ($null -ne $configLido.opacidade) { $config.opacidade = [math]::Min(1.0, [math]::Max(0.2, [double]$configLido.opacidade)) }
         if ($null -ne $configLido.clawd) { $config.clawd = [bool]$configLido.clawd }
         if ($null -ne $configLido.volume) { $config.volume = [math]::Min(1.0, [math]::Max(0.0, [double]$configLido.volume)) }
+        if ($temas.Contains("$($configLido.tema)")) { $config.tema = "$($configLido.tema)" }
     } catch { Anotar "config.json com defeito, fiquei com o padrão: $_" }
 }
 function SalvarConfig {
@@ -125,20 +147,27 @@ $margem = 34  # espaço em volta do cartão, por onde o Clawd anda e pula com a 
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
-        Width="320" Height="440" FontFamily="Segoe UI" FontSize="12">
+        Width="380" Height="440" FontFamily="Segoe UI" FontSize="12">
   <Grid>
-    <Border Name="Cartao" Background="#E6181818" CornerRadius="8" Padding="10,6"
-            HorizontalAlignment="Right" VerticalAlignment="Bottom">
-      <StackPanel>
-        <StackPanel Name="Sessoes"/>
-        <Border Height="1" Background="#33FFFFFF" Margin="0,5,0,4"/>
-        <StackPanel Name="Uso"/>
-        <StackPanel Name="Aviso"/>
-      </StackPanel>
-    </Border>
+    <Grid Name="Moldura" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+      <Border Name="Cartao" Background="#E6181818" CornerRadius="8" Padding="10,6">
+        <StackPanel>
+          <StackPanel Name="Sessoes"/>
+          <Border Height="1" Background="#33FFFFFF" Margin="0,5,0,4"/>
+          <StackPanel Name="Uso"/>
+          <StackPanel Name="Aviso"/>
+        </StackPanel>
+      </Border>
+      <!-- tema Minecraft: grama em cima da borda de terra e uma sombrinha embaixo dela -->
+      <Rectangle Name="Grama" Height="8" VerticalAlignment="Top" IsHitTestVisible="False" Visibility="Collapsed"/>
+      <Rectangle Name="Sombra" Height="1" Margin="6,8,6,0" VerticalAlignment="Top" Fill="#59000000" IsHitTestVisible="False" Visibility="Collapsed"/>
+    </Grid>
     <Canvas Name="Mascote" IsHitTestVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top">
       <Canvas.RenderTransform><MatrixTransform/></Canvas.RenderTransform>
     </Canvas>
+    <!-- o que o motor (motor\motor.js) desenha: Clawd, cenas e enfeites do tema -->
+    <Image Name="Palco" IsHitTestVisible="False" Stretch="Fill" HorizontalAlignment="Left" VerticalAlignment="Top"
+           RenderOptions.BitmapScalingMode="NearestNeighbor"/>
   </Grid>
 </Window>
 '@
@@ -148,8 +177,11 @@ $painelSessoes = $win.FindName('Sessoes')
 $painelUso = $win.FindName('Uso')
 $painelAviso = $win.FindName('Aviso')
 $mascote = $win.FindName('Mascote')
-$cartao.Margin = [Windows.Thickness]::new($margem)
-$cartao.Opacity = $config.opacidade
+$moldura = $win.FindName('Moldura')
+$grama = $win.FindName('Grama')
+$sombra = $win.FindName('Sombra')
+$moldura.Margin = [Windows.Thickness]::new($margem)
+$moldura.Opacity = $config.opacidade
 if (-not $config.clawd) { $mascote.Visibility = 'Hidden' }
 
 function Cor($hex) { [Windows.Media.BrushConverter]::new().ConvertFromString($hex) }
@@ -185,6 +217,166 @@ function Linha {
     $l.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
     foreach ($e in $args) { [void]$l.Children.Add($e) }
     $l
+}
+
+# --- Tema Minecraft: texturas do jogo (minecraft.js) na borda, nas bolinhas, na barra
+# do usage e nos números. Faltando alguma (sem internet na instalação), aquela parte
+# fica com o desenho do Padrão.
+function PNG($nome) {
+    $arquivo = "$Pasta\$nome.png"
+    if (-not [IO.File]::Exists($arquivo)) { return $null }
+    try {
+        $imagemPng = New-Object Windows.Media.Imaging.BitmapImage
+        $imagemPng.BeginInit(); $imagemPng.UriSource = [Uri]$arquivo; $imagemPng.CacheOption = 'OnLoad'; $imagemPng.EndInit()
+        [Windows.Media.Imaging.FormatConvertedBitmap]::new($imagemPng, [Windows.Media.PixelFormats]::Bgra32, $null, 0)
+    } catch { Anotar "textura $nome.png com defeito: $_"; $null }
+}
+# os pixels (BGRA) de um pedaço da textura, e de volta pra imagem
+function PedacoDe($bitmap, $x, $y, $largura, $altura) {
+    $bytes = New-Object byte[] ($largura * $altura * 4)
+    $bitmap.CopyPixels([Windows.Int32Rect]::new($x, $y, $largura, $altura), $bytes, $largura * 4, 0)
+    return , $bytes  # a vírgula: senão o PowerShell desmonta o byte[] num object[]
+}
+function Bitmap($bytes, $largura, $altura) {
+    [Windows.Media.Imaging.BitmapSource]::Create($largura, $altura, 96, 96, [Windows.Media.PixelFormats]::Bgra32, $null, $bytes, $largura * 4)
+}
+function Rgb($hex) { $c = [Windows.Media.ColorConverter]::ConvertFromString($hex); ($c.R / 255), ($c.G / 255), ($c.B / 255) }
+
+# bolinhas = o menor quadro do orbe de XP (8x8 no canto 4,4 da textura), que é cinza:
+# o jogo pinta por cima, e aqui também. Trabalhando: vermelho e azul oscilam com o verde
+# no máximo, como no jogo (fica entre verde e amarelo); um pincel só, que um relógio
+# troca de quadro, pra lista se refazer a cada 2 s sem reiniciar.
+$orbe = PNG 'orbe'
+$orbes = $null
+function OrbePintado($r, $g, $b) {
+    $px = $orbeCinza.Clone()
+    for ($k = 0; $k -lt $px.Length; $k += 4) { $px[$k] = $px[$k] * $b; $px[$k + 1] = $px[$k + 1] * $g; $px[$k + 2] = $px[$k + 2] * $r }
+    Bitmap $px 8 8
+}
+function PincelPixelado($imagemDoPincel) {
+    $pincel = [Windows.Media.ImageBrush]::new($imagemDoPincel)
+    [Windows.Media.RenderOptions]::SetBitmapScalingMode($pincel, 'NearestNeighbor')
+    $pincel
+}
+if ($orbe -and $orbe.PixelWidth -ge 12 -and $orbe.PixelHeight -ge 12) {
+    $orbeCinza = PedacoDe $orbe 4 4 8 8
+    $orbes = @{ outro = PincelPixelado (OrbePintado 0.61 0.64 0.69) }
+    foreach ($situacaoDoOrbe in $estados.Keys) {
+        $r, $g, $b = Rgb $estados[$situacaoDoOrbe][0]
+        $orbes[$situacaoDoOrbe] = PincelPixelado (OrbePintado $r $g $b)
+    }
+    # f = ms/100 no jogo: uma volta a cada 0,63 s, em 32 quadros
+    $quadrosOrbe = foreach ($q in 0..31) {
+        $f = 2 * [math]::PI * $q / 32
+        OrbePintado (([math]::Sin($f) + 1) / 2) 1 (([math]::Sin($f + 4.18879) + 1) * 0.1)
+    }
+    $orbeVerde = PincelPixelado $quadrosOrbe[0]
+    if ($Foto) { $orbeVerde.ImageSource = $quadrosOrbe[[int][math]::Floor($fase * 32) % 32] }
+}
+$relogioOrbe = [Diagnostics.Stopwatch]::StartNew()
+$tiqueOrbe = New-Object Windows.Threading.DispatcherTimer
+$tiqueOrbe.Interval = [TimeSpan]::FromMilliseconds(50)
+$tiqueOrbe.Add_Tick({ $orbeVerde.ImageSource = $quadrosOrbe[[int][math]::Floor($relogioOrbe.Elapsed.TotalSeconds * 10 / (2 * [math]::PI) * 32) % 32] })
+
+# borda de terra com grama em cima: a textura repetida em blocos de 32 (2 px por pixel)
+function Ladrilho($nome, $semTextura) {
+    $textura = PNG $nome
+    if (-not $textura) { return Cor $semTextura }
+    $pincel = PincelPixelado $textura
+    $pincel.TileMode = 'Tile'
+    $pincel.ViewportUnits = 'Absolute'
+    $pincel.Viewport = [Windows.Rect]::new(0, 0, 32, 32)
+    $pincel
+}
+$terra = Ladrilho 'terra' '#866043'
+$grama.Fill = Ladrilho 'grama' '#5D9C36'
+
+# barra do usage = a barra de XP (182 de largura no jogo, 118 aqui): 117 colunas + a
+# ponta, que esticar entorta os gomos. Dourada e vermelha: a verde com outra cor, mesmo brilho
+$barraXP = $null
+$xpFundo = PNG 'xp_fundo'
+$xpBarra = PNG 'xp_barra'
+function Cortada($bitmap, $x, $largura) { [Windows.Media.Imaging.CroppedBitmap]::new($bitmap, [Windows.Int32Rect]::new($x, 0, $largura, 5)) }
+if ($xpFundo -and $xpBarra -and $xpFundo.PixelWidth -eq 182 -and $xpBarra.PixelWidth -eq 182) {
+    $barraXP = @{ fundo = Cortada $xpFundo 0 117; fundoPonta = Cortada $xpFundo 181 1 }
+    $xpVerde = PedacoDe $xpBarra 0 0 182 5
+    foreach ($tinta in @(@('verde', $null), @('ouro', '#FFAA00'), @('vermelho', '#FF5555'))) {
+        $px = $xpVerde.Clone()
+        if ($tinta[1]) {
+            $r, $g, $b = Rgb $tinta[1]
+            for ($k = 0; $k -lt $px.Length; $k += 4) {
+                $brilho = [math]::Max($px[$k], [math]::Max($px[$k + 1], $px[$k + 2])) / 0xF5 * 1.05
+                $px[$k] = [math]::Min(255, $b * $brilho * 255); $px[$k + 1] = [math]::Min(255, $g * $brilho * 255); $px[$k + 2] = [math]::Min(255, $r * $brilho * 255)
+            }
+        }
+        $barraXP[$tinta[0]] = Bitmap $px 182 5
+    }
+}
+$coresDoUso = @{ padrao = '#D1D5DB', '#F59E0B', '#EF4444'; minecraft = '#80FF20', '#FFAA00', '#FF5555'; dragonball = '#FDE047', '#F59E0B', '#EF4444' }  # normal, >= 80%, >= 95%
+
+# letra do Minecraft (font/ascii.png: 16x16 letras de 8x8), com a sombra do jogo (cor/4,
+# 1 px pra direita e pra baixo). Cada letra vai até a última coluna pintada, como no jogo.
+$letraMC = PNG 'fonte'
+$larguraDaLetra = $null
+if ($letraMC -and $letraMC.PixelWidth -eq 128 -and $letraMC.PixelHeight -eq 128) {
+    $letraPixels = PedacoDe $letraMC 0 0 128 128
+    $larguraDaLetra = @{ 32 = 3 }
+    for ($k = 33; $k -lt 256; $k++) {
+        $cx = ($k % 16) * 8; $cy = [math]::Floor($k / 16) * 8; $w = 0
+        for ($x = 7; $x -ge 0 -and -not $w; $x--) { for ($y = 0; $y -lt 8; $y++) { if ($letraPixels[(($cy + $y) * 128 + $cx + $x) * 4 + 3]) { $w = $x + 1; break } } }
+        $larguraDaLetra[$k] = $w
+    }
+}
+$letreiros = @{}  # "cor texto" -> imagem pronta (tempo e usage mudam pouco)
+function TextoMC($texto, $hex) {
+    $chave = "$hex $texto"
+    if ($letreiros.Contains($chave)) { return $letreiros[$chave] }
+    if ($letreiros.Count -gt 300) { $letreiros.Clear() }
+    $r, $g, $b = Rgb $hex
+    $codigos = @($texto.ToCharArray() | ForEach-Object { [int]$_ } | Where-Object { $_ -lt 256 })
+    $larguraTotal = 1
+    foreach ($k in $codigos) { $larguraTotal += $larguraDaLetra[$k] + 1 }
+    $px = New-Object byte[] ($larguraTotal * 9 * 4)
+    foreach ($camada in @(@(1, 0.25), @(0, 1))) {  # a sombra, e a letra por cima
+        $d, $brilho = $camada
+        $x0 = $d
+        foreach ($k in $codigos) {
+            $cx = ($k % 16) * 8; $cy = [math]::Floor($k / 16) * 8
+            for ($y = 0; $y -lt 8; $y++) {
+                for ($x = 0; $x -lt $larguraDaLetra[$k]; $x++) {
+                    if (-not $letraPixels[(($cy + $y) * 128 + $cx + $x) * 4 + 3]) { continue }
+                    $o = (($y + $d) * $larguraTotal + $x0 + $x) * 4
+                    $px[$o] = $b * $brilho * 255; $px[$o + 1] = $g * $brilho * 255; $px[$o + 2] = $r * $brilho * 255; $px[$o + 3] = 255
+                }
+            }
+            $x0 += $larguraDaLetra[$k] + 1
+        }
+    }
+    $letreiros[$chave] = Bitmap $px $larguraTotal 9
+    $letreiros[$chave]
+}
+# números e rótulos curtos: no Minecraft com a letra do jogo; no Padrão (ou sem a
+# textura), Segoe como o resto. $alinhar: 'Right' encosta na direita da $largura.
+# A letra do jogo vai ~22% maior (9 -> 11 px; em 1x ficava difícil de ler; 2x ficou
+# grande demais), suavizada: em tamanho quebrado o pixel duro sai torto. $larguraMC:
+# a coluna tem que caber "agora" e "15h47" (38 px)
+function Rotulo($texto, $hex, $largura, $alinhar, $larguraMC) {
+    if ($config.tema -ne 'minecraft' -or -not $larguraDaLetra) {
+        $t = Texto $texto $hex $largura
+        if ($alinhar) { $t.TextAlignment = $alinhar }
+        return $t
+    }
+    $largura = $larguraMC
+    $letreiro = New-Object Windows.Controls.Image
+    $letreiro.Source = TextoMC $texto $hex
+    $letreiro.Width = [math]::Round($letreiro.Source.PixelWidth * 11 / 9); $letreiro.Height = 11
+    $letreiro.HorizontalAlignment = $(if ($alinhar -eq 'Right') { 'Right' } else { 'Left' })
+    $letreiro.UseLayoutRounding = $true
+    [Windows.Media.RenderOptions]::SetBitmapScalingMode($letreiro, 'HighQuality')
+    $caixa = New-Object Windows.Controls.Border
+    $caixa.Width = $largura; $caixa.VerticalAlignment = 'Center'; $caixa.UseLayoutRounding = $true
+    $caixa.Child = $letreiro
+    $caixa
 }
 
 function Tempo($min) {
@@ -310,43 +502,75 @@ function Avisar($sessoes) {
     $tocar = $null
     foreach ($s in $sessoes) {
         $antes = $ultimo[$s.id]
-        if ($antes -and $antes -ne $s.situacao -and $sons[$s.situacao] -and $tocar -notin 'permission', 'question') { $tocar = $s.situacao }
+        if ($antes -and $antes -ne $s.situacao -and $avisoDaSituacao[$s.situacao] -and $tocar -notin 'permission', 'question') { $tocar = $s.situacao }
         $ultimo[$s.id] = $s.situacao
     }
     if ($tocar -eq 'finished' -and -not @($sessoes | Where-Object { $_.situacao -ne 'finished' })) { $tocar = 'tudo' }
+    if ($tocar -in 'finished', 'tudo') { MotorEvento $(if ($tocar -eq 'tudo') { 'tudo' } else { 'terminou' }) }
     if ($tocar) {
         $script:somDaVez = $tocar
         if ($Foto) { return }
-        $arquivo = $sons[$tocar] | Get-Random
+        $qualAviso = $avisoDaSituacao[$tocar]
+        $nomeDesteSom = $nomeDoSom[$config.tema][$qualAviso]
+        $arquivo = $sonsDoTema[$config.tema][$qualAviso] | Get-Random
         # no diário: amigo sem som manda o janelinha.log e dá pra ver se ela tentou tocar
-        if ($config.volume -le 0) { Anotar "não toquei $($nomeDoSom[$tocar]): volume no 0 (botão direito > Volume)"; return }
+        if ($config.volume -le 0) { Anotar "não toquei $($nomeDesteSom): volume no 0 (botão direito > Volume)"; return }
         # [Uri]::new e não "file:///" + caminho: com # no caminho (C:\Users\a#b) o resto virava âncora
-        try { $tocador.Open([Uri]::new($arquivo)); Anotar "tocou $($nomeDoSom[$tocar]) ($(Split-Path $arquivo -Leaf))" }
+        try { $tocador.Open([Uri]::new($arquivo)); Anotar "tocou $nomeDesteSom ($(Split-Path $arquivo -Leaf))" }
         catch { Anotar "não toquei $arquivo : $($_.Exception.Message)" }
     }
 }
 
 function Medidor($rotulo, $dado) {
     $pct = [double]$dado.utilization
-    $cor = if ($pct -ge 95) { '#EF4444' } elseif ($pct -ge 80) { '#F59E0B' } else { '#D1D5DB' }
-    $trilho = New-Object Windows.Controls.Border
-    $trilho.Width = 118; $trilho.Height = 4
-    $trilho.CornerRadius = [Windows.CornerRadius]::new(2)
-    $trilho.Background = Cor '#3F3F46'
-    $trilho.VerticalAlignment = 'Center'
-    $barra = New-Object Windows.Controls.Border
-    $barra.Width = 118 * [math]::Min($pct, 100) / 100
-    $barra.CornerRadius = [Windows.CornerRadius]::new(2)
-    $barra.Background = Cor $cor
-    $barra.HorizontalAlignment = 'Left'
-    $trilho.Child = $barra
-    $p = Texto ('{0:0}%' -f $pct) $cor 38
-    $p.TextAlignment = 'Right'
+    $nivel = $(if ($pct -ge 95) { 2 } elseif ($pct -ge 80) { 1 } else { 0 })
+    $cor = $coresDoUso[$config.tema][$nivel]
+    $pctTexto = '{0:0}%' -f $pct
     # quanto falta pra renovar
     $falta = if ($dado.resets_at) { Tempo ([DateTimeOffset]$dado.resets_at - [DateTimeOffset]::Now).TotalMinutes } else { '' }
-    $f = Texto $falta '#6B7280' 48
-    $f.TextAlignment = 'Right'
-    Linha (Texto $rotulo '#9CA3AF' 18) $trilho $p $f
+    $layoutDoTema = LayoutDoMotor
+    if ($layoutDoTema.enfeites) {
+        # quem desenha é o motor: aqui só o lugar de cada coisa
+        $lugarDoRotulo = Lugar $layoutDoTema.colunas.rotulo $layoutDoTema.letra
+        $trilho = Lugar $layoutDoTema.barra[0] $layoutDoTema.barra[1]
+        $p = Lugar $layoutDoTema.colunas.pct $layoutDoTema.letra
+        $f = Lugar $layoutDoTema.colunas.falta $layoutDoTema.letra
+    } elseif ($config.tema -eq 'minecraft' -and $barraXP) {
+        $trilho = New-Object Windows.Controls.Canvas
+        $trilho.Width = 118; $trilho.Height = 5
+        $trilho.VerticalAlignment = 'Center'
+        $tinta = $barraXP[@('verde', 'ouro', 'vermelho')[$nivel]]
+        $cheia = [int][math]::Round(118 * [math]::Min($pct, 100) / 100)
+        $pedacos = @(@($barraXP.fundo, 0), @($barraXP.fundoPonta, 117))
+        if ($cheia -gt 0) { $pedacos += , @((Cortada $tinta 0 ([math]::Min($cheia, 117))), 0) }
+        if ($cheia -ge 118) { $pedacos += , @((Cortada $tinta 181 1), 117) }
+        foreach ($pedaco in $pedacos) {
+            $img = New-Object Windows.Controls.Image
+            $img.Source = $pedaco[0]; $img.Width = $pedaco[0].PixelWidth; $img.Height = 5
+            [Windows.Media.RenderOptions]::SetBitmapScalingMode($img, 'NearestNeighbor')
+            [Windows.Controls.Canvas]::SetLeft($img, $pedaco[1])
+            [void]$trilho.Children.Add($img)
+        }
+    } else {
+        $trilho = New-Object Windows.Controls.Border
+        $trilho.Width = 118; $trilho.Height = 4
+        $trilho.CornerRadius = [Windows.CornerRadius]::new(2)
+        $trilho.Background = Cor '#3F3F46'
+        $trilho.VerticalAlignment = 'Center'
+        $barra = New-Object Windows.Controls.Border
+        $barra.Width = 118 * [math]::Min($pct, 100) / 100
+        $barra.CornerRadius = [Windows.CornerRadius]::new(2)
+        $barra.Background = Cor $cor
+        $barra.HorizontalAlignment = 'Left'
+        $trilho.Child = $barra
+    }
+    if (-not $layoutDoTema.enfeites) {
+        $p = Rotulo $pctTexto $cor 38 'Right' 38
+        $f = Rotulo $falta '#6B7280' 48 'Right' 56
+        $lugarDoRotulo = Rotulo $rotulo '#9CA3AF' 18 $null 18
+    }
+    [void]$caixasDoMotor.uso.Add(@{ rotulo = @($rotulo, '#9CA3AF', $lugarDoRotulo); barra = $trilho; pct = $pct; nivel = $nivel; pctTxt = @($pctTexto, $cor, $p); falta = @($falta, '#6B7280', $f) })
+    Linha $lugarDoRotulo $trilho $p $f
 }
 
 # versão nova: a extensão pergunta pro GitHub 1x por dia e grava a publicada em
@@ -365,19 +589,31 @@ function Atualizar {
     $sessoes = @(Sessoes $agora)
     Avisar $sessoes
     $painelSessoes.Children.Clear()
+    $script:caixasDoMotor = @{ linhas = [Collections.ArrayList]::new(); uso = [Collections.ArrayList]::new() }
+    $layoutDoTema = LayoutDoMotor
     if (-not $sessoes) { [void]$painelSessoes.Children.Add((Texto 'nenhuma sessão aberta' '#9CA3AF')) }
     foreach ($s in $sessoes) {
         $cor, $rotulo = $estados[$s.situacao]
         if (-not $cor) { $cor, $rotulo = '#9CA3AF', $s.situacao }
-        $bola = New-Object Windows.Shapes.Ellipse
+        if ($layoutDoTema.enfeites) {
+            $bola = Lugar 8 8  # o motor desenha a bolinha
+        } elseif ($config.tema -eq 'minecraft' -and $orbes) {
+            $bola = New-Object Windows.Shapes.Rectangle
+            $bola.Fill = $(if ($s.situacao -eq 'working') { $orbeVerde } elseif ($orbes[$s.situacao]) { $orbes[$s.situacao] } else { $orbes.outro })
+            [Windows.Media.RenderOptions]::SetBitmapScalingMode($bola, 'NearestNeighbor')
+            $bola.UseLayoutRounding = $true
+        } else {
+            $bola = New-Object Windows.Shapes.Ellipse
+            $bola.Fill = $(if ($s.situacao -eq 'working') { $bolaVerde } else { Cor $cor })
+        }
         $bola.Width = 8; $bola.Height = 8
-        $bola.Fill = $(if ($s.situacao -eq 'working') { $bolaVerde } else { Cor $cor })
         $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
         $bola.VerticalAlignment = 'Center'
         $nomeSessao = Texto $s.name '#E5E7EB' 170
         $nomeSessao.TextTrimming = 'CharacterEllipsis'
-        $tempo = Texto (Tempo (($agora - $s.since) / 60)) $cor 36
-        $tempo.TextAlignment = 'Right'
+        $tempoTexto = Tempo (($agora - $s.since) / 60)
+        $tempo = $(if ($layoutDoTema.enfeites) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
+        [void]$caixasDoMotor.linhas.Add(@{ id = $s.id; sit = $s.situacao; cor = $cor; bola = $bola; tempo = @($tempoTexto, $cor, $tempo) })
         $linha = Linha $bola $nomeSessao $tempo
         $linha.Background = [Windows.Media.Brushes]::Transparent
         $linha.ToolTip = $rotulo
@@ -389,7 +625,7 @@ function Atualizar {
     $situacoes = @($sessoes | ForEach-Object { $_.situacao })
     Clawd $(if ($situacoes -contains 'question' -or $situacoes -contains 'permission') { 'pulando' }
             elseif ($situacoes -contains 'working') { 'andando' } else { 'parado' })
-    if ($passeio.modo -eq 'andando' -and -not $luta.tipo -and -not $Foto -and [DateTime]::Now -ge $luta.proxima) {
+    if ($config.tema -eq 'minecraft' -and $passeio.modo -eq 'andando' -and -not $luta.tipo -and -not $Foto -and -not $motor.vivo -and [DateTime]::Now -ge $luta.proxima) {
         ComecarCena $(if ($luta.ferramenta -eq 'espada') { 'bug' } else { 'pedra' })
     }
 
@@ -430,6 +666,8 @@ function Atualizar {
         [void]$painelAviso.Children.Add($traco)
         [void]$painelAviso.Children.Add($aviso)
     }
+    if ($motor.obj) { $win.UpdateLayout() }  # o motor precisa de onde a lista nova ficou
+    MotorEstado
 }
 
 # --- Clawd: pixel art do mascote do Claude Code (o do banner do terminal) ---
@@ -623,6 +861,7 @@ $giro.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $balanco)
 $passeio = @{ relogio = [Diagnostics.Stopwatch]::StartNew(); duracao = 0; inicio = 0; modo = $null }
 function Trilha {
     if ($luta.tipo) { return }  # parado lutando; o fim da cena refaz a trilha
+    if ($motor.vivo) { $mascote.RenderTransform.BeginAnimation([Windows.Media.MatrixTransform]::MatrixProperty, $null); MotorEstado; return }
     $w = $cartao.ActualWidth; $h = $cartao.ActualHeight
     if (-not $w) { return }
     $o = $cartao.TranslatePoint([Windows.Point]::new(0, 0), $mascote.Parent)
@@ -632,7 +871,8 @@ function Trilha {
         $passeio.duracao = 0  # quando voltar a andar, sai daqui
         return
     }
-    $r = 8; $esq = $o.X; $dir_ = $o.X + $w; $topo = $o.Y; $base = $o.Y + $h
+    $r = $(if ($config.tema -eq 'minecraft') { 1 } else { 8 })  # o cartão do Minecraft é quadrado
+    $esq = $o.X; $dir_ = $o.X + $w; $topo = $o.Y; $base = $o.Y + $h
     $d = [string]::Format([Globalization.CultureInfo]::InvariantCulture,
         'M {0},{2} L {1},{2} A {8},{8} 0 0 1 {3},{4} L {3},{5} A {8},{8} 0 0 1 {1},{6} L {0},{6} A {8},{8} 0 0 1 {7},{5} L {7},{4} A {8},{8} 0 0 1 {0},{2} Z',
         [object[]]@(($esq + $r), ($dir_ - $r), $topo, $dir_, ($topo + $r), ($base - $r), $base, $esq, $r))
@@ -782,7 +1022,7 @@ function Clawd($modo) {
         $mascote.Visibility = 'Hidden'
         return
     }
-    $mascote.Visibility = 'Visible'
+    $mascote.Visibility = $(if ($motor.vivo) { 'Hidden' } else { 'Visible' })
     if ($passeio.modo -eq $modo) { return }
     if ($luta.tipo) { FimDaCena }  # mudou no meio da luta
     if ($modo -eq 'andando' -and -not $Foto) {  # o -Foto fica sempre na picareta
@@ -792,11 +1032,49 @@ function Clawd($modo) {
     }
     $passeio.modo = $modo
     Movimento
+    MotorEstado
+}
+# troca a cara da janelinha pro tema do config.json (ao abrir e quando o menu troca)
+function AplicarTema {
+    $mc = $config.tema -eq 'minecraft'
+    $cartao.CornerRadius = [Windows.CornerRadius]::new($(if ($mc) { 0 } else { 8 }))
+    $cartao.BorderThickness = $(if ($mc) { [Windows.Thickness]::new(6, 8, 6, 6) } else { [Windows.Thickness]::new(0) })
+    $cartao.BorderBrush = $terra
+    $cartao.Background = Cor $(if ($mc) { '#F0181818' } else { '#E6181818' })
+    # 8 e não 10 dos lados: com a borda, 10 passaria da janela
+    $cartao.Padding = $(if ($mc) { [Windows.Thickness]::new(8, 6, 8, 6) } else { [Windows.Thickness]::new(10, 6, 10, 6) })
+    $grama.Visibility = $(if ($mc) { 'Visible' } else { 'Collapsed' })
+    $sombra.Visibility = $grama.Visibility
+    # com o motor desenhando a moldura e os enfeites, o cartão segue o layout do tema
+    # (mensagem P) e fica só o fundo; os enfeites daqui voltam se o motor cair
+    $layoutDoTema = LayoutDoMotor
+    if ($layoutDoTema.enfeites) {
+        $moldura4, $padding4 = $layoutDoTema.moldura, $layoutDoTema.padding
+        $cartao.CornerRadius = [Windows.CornerRadius]::new($layoutDoTema.raio)
+        $cartao.BorderThickness = [Windows.Thickness]::new($moldura4[0], $moldura4[1], $moldura4[2], $moldura4[3])
+        $cartao.BorderBrush = [Windows.Media.Brushes]::Transparent
+        $cartao.Background = Cor $layoutDoTema.fundo
+        $cartao.Padding = [Windows.Thickness]::new($padding4[0], $padding4[1], $padding4[2], $padding4[3])
+        $grama.Visibility = 'Collapsed'; $sombra.Visibility = 'Collapsed'
+    }
+    # Padrão: Clawd sem ferramenta e sem lutas (picareta, pedra e bug são do Minecraft)
+    $ferramenta.Visibility = $(if ($mc) { 'Visible' } else { 'Collapsed' })
+    if (-not $mc -and $luta.tipo) { FimDaCena; Movimento }
+    if ($mc -and $orbes -and -not $Foto -and -not $layoutDoTema.enfeites) { $tiqueOrbe.Start() } else { $tiqueOrbe.Stop() }
+}
+function TrocarTema($direcao) {
+    $nomesDosTemas = @($temas.Keys)
+    $config.tema = $nomesDosTemas[($nomesDosTemas.IndexOf($config.tema) + $direcao + $nomesDosTemas.Count) % $nomesDosTemas.Count]
+    $nomeDoTema.Text = $temas[$config.tema]
+    SalvarConfig
+    Anotar "tema: $($config.tema)"
+    AplicarTema
+    Atualizar
 }
 function Movimento {
     $modo = $passeio.modo
-    $anda = $modo -eq 'andando'
-    $pulo.RenderTransform.BeginAnimation([Windows.Media.TranslateTransform]::YProperty, $(if ($modo -eq 'parado') { $null } else { $salto }))
+    $anda = $modo -eq 'andando' -and -not $motor.vivo  # com o motor, o Clawd daqui fica parado e escondido
+    $pulo.RenderTransform.BeginAnimation([Windows.Media.TranslateTransform]::YProperty, $(if ($modo -eq 'parado' -or $motor.vivo) { $null } else { $salto }))
     $passo.Stop()
     $pernaA.Visibility = 'Visible'
     $pernaB.Visibility = $(if ($anda) { 'Hidden' } else { 'Visible' })
@@ -804,6 +1082,139 @@ function Movimento {
     if ($giro) { $giro.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $(if ($anda) { $balanco } else { $null })) }
     Trilha
 }
+
+# --- Motor das animações (motor\motor.js, o mesmo código no Mac) ---
+# Desenha o Clawd, as cenas e os enfeites do tema em software e manda os pixels; aqui
+# só colamos (motor\Motor.cs) por cima do cartão e mandamos o estado (tema, onde está o
+# cartão, o que o Clawd faz). Sem node, ou com o motor caído, fica o Clawd daqui (o de
+# antes), sem cenas; ele tenta de novo em 5 s, 30 s e 2 min.
+$motor = @{ obj = $null; vivo = $false; tentativas = 0; enviado = ''; pasta = (Join-Path $PSScriptRoot 'motor'); layouts = $null; pediuFoto = $false }
+# Tema que desenha os próprios enfeites (layout.enfeites: bolinha, números, barra e
+# moldura): a lista monta só o lugar deles (Lugar) e o MotorEstado manda onde ficaram.
+$caixasDoMotor = @{ linhas = [Collections.ArrayList]::new(); uso = [Collections.ArrayList]::new() }
+function LayoutDoMotor {
+    if (-not $motor.layouts -or -not ($motor.vivo -or $Foto)) { return $null }
+    $motor.layouts[$config.tema]
+}
+function Lugar($largura, $altura) {
+    $lugarVazio = New-Object Windows.Controls.Border
+    $lugarVazio.Width = $largura; $lugarVazio.Height = $altura; $lugarVazio.VerticalAlignment = 'Center'
+    $lugarVazio
+}
+# [x, y, w, h] na janela (DIPs); fora da árvore (lista refeita no meio), zeros
+function CaixaNaJanela($elemento) {
+    try { $canto = $elemento.TranslatePoint([Windows.Point]::new(0, 0), $win) } catch { return @(0, 0, 0, 0) }
+    @([math]::Round($canto.X, 2), [math]::Round($canto.Y, 2), [math]::Round($elemento.ActualWidth, 2), [math]::Round($elemento.ActualHeight, 2))
+}
+function TextoNaJanela($textoCorLugar) { [ordered]@{ txt = "$($textoCorLugar[0])"; cor = $textoCorLugar[1]; caixa = @(CaixaNaJanela $textoCorLugar[2]) } }
+$religarMotor = New-Object Windows.Threading.DispatcherTimer
+$religarMotor.Add_Tick({ $religarMotor.Stop(); LigarMotor })
+# o node dos hooks (no PATH); sem ele, o do VS Code que me abriu (Electron fazendo de node)
+function AcharNode {
+    $noPath = Get-Command node.exe -ErrorAction Ignore | Select-Object -First 1
+    if ($noPath) { return @($noPath.Source, $false) }
+    if ($env:CLAUDE_MONITOR_NODE -and [IO.File]::Exists($env:CLAUDE_MONITOR_NODE)) { return @($env:CLAUDE_MONITOR_NODE, $true) }
+    $null
+}
+# Motor.cs compilado 1x e guardado (o Add-Type leva ~1 s); o nome leva o hash do .cs,
+# então versão nova compila de novo sem brigar com a dll que a janelinha velha está usando
+function CarregarMotorCs {
+    if ('ClaudeMonitor.Motor' -as [type]) { return $true }
+    $cs = Join-Path $motor.pasta 'Motor.cs'
+    if (-not [IO.File]::Exists($cs)) { return $false }
+    $fonte = [IO.File]::ReadAllText($cs)
+    $hash = [BitConverter]::ToString([Security.Cryptography.SHA1]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($fonte))).Replace('-', '').Substring(0, 12)
+    $dll = Join-Path $Pasta "motor-$hash.dll"
+    $refs = 'PresentationFramework', 'PresentationCore', 'WindowsBase', 'System.Xaml'
+    if (-not [IO.File]::Exists($dll)) {
+        try { Add-Type -TypeDefinition $fonte -ReferencedAssemblies $refs -OutputAssembly $dll -OutputType Library -ErrorAction Stop }
+        catch { Anotar "não compilei o motor (Motor.cs): $($_.Exception.Message)"; return $false }
+        Get-ChildItem $Pasta -Filter 'motor-*.dll' -ErrorAction Ignore | Where-Object { $_.FullName -ne $dll } | Remove-Item -ErrorAction Ignore
+    }
+    try { Add-Type -Path $dll -ErrorAction Stop; $true } catch { Anotar "não carreguei $dll : $($_.Exception.Message)"; $false }
+}
+function LigarMotor {
+    if ($SemMotor -or $motor.vivo) { return }
+    $script = Join-Path $motor.pasta 'motor.js'
+    $achado = AcharNode
+    if (-not $achado -or -not [IO.File]::Exists($script) -or -not (CarregarMotorCs)) {
+        if ($motor.tentativas -eq 0) { Anotar "motor desligado: $(if (-not $achado) { 'sem node' } elseif (-not [IO.File]::Exists($script)) { 'sem motor.js' } else { 'sem Motor.cs' }); fica o Clawd daqui" }
+        $motor.tentativas = 99
+        return
+    }
+    $motorNovo = New-Object ClaudeMonitor.Motor $palco
+    $motorNovo.add_Linha({ param($textoDoMotor) Anotar $textoDoMotor })
+    # o layout de cada tema; no -Foto, monta o cartão com ele e só então pede a foto (MotorEstado)
+    $motorNovo.add_ChegouPronto({
+        try {
+            $motor.layouts = @{}
+            # $motor.obj e não $motorNovo: este bloco roda depois, quando a local já sumiu
+            foreach ($temaDoMotor in ($motor.obj.Pronto | ConvertFrom-Json -ErrorAction Stop).temas.PSObject.Properties) { $motor.layouts[$temaDoMotor.Name] = $temaDoMotor.Value }
+        } catch { Anotar "motor: mensagem P com defeito: $($_.Exception.Message)"; $motor.layouts = $null }
+        if ($Foto) { AplicarTema; Atualizar }
+    })
+    $motorNovo.add_Primeiro({
+        if ($motor.tentativas -gt 0 -and $motor.tentativas -lt 99) { Anotar 'motor voltou' }
+        $motor.vivo = $true
+        $motor.tentativas = 0
+        $palco.Visibility = 'Visible'
+        Movimento  # para e esconde o Clawd daqui
+        $mascote.Visibility = 'Hidden'
+        AplicarTema; Atualizar  # os enfeites do tema passam pro motor
+    })
+    $motorNovo.add_Saiu({
+        param($codigoDeSaida)
+        if ($Foto) { if (-not $motor.vivo) { $motor.tentativas = 99 }; return }  # o -Foto sai depois do quadro: fica o quadro
+        $motor.vivo = $false
+        $motor.enviado = ''
+        $palco.Visibility = 'Hidden'
+        $motor.tentativas++
+        if ($passeio.modo) { $modoAntes = $passeio.modo; $passeio.modo = $null; Clawd $modoAntes }  # o Clawd daqui volta
+        AplicarTema; Atualizar  # e os enfeites daqui
+        $espera = @(5, 30, 120)[[math]::Min(2, $motor.tentativas - 1)]
+        if ($motor.tentativas -le 5) { Anotar "motor saiu ($codigoDeSaida); tento de novo em $espera s"; $religarMotor.Interval = [TimeSpan]::FromSeconds($espera); $religarMotor.Start() }
+        else { Anotar "motor saiu ($codigoDeSaida) de novo; desisti até reabrir" }
+    })
+    $argumentos = "--pasta `"$Pasta`""
+    if ($Foto) { $argumentos += " --foto $(if ($Cena) { ($Cena -split ' ')[1] } else { '1' }) --semente 7 --hora 12$(if ($Cena) { ' --cena ' + ($Cena -split ' ')[0] })" }
+    try { $motorNovo.Iniciar($achado[0], $achado[1], $script, $argumentos) }
+    catch { Anotar "não abri o motor ($($achado[0])): $($_.Exception.Message)"; $motor.tentativas = 99; return }
+    $motor.obj = $motorNovo
+    $motor.enviado = ''
+    MotorEstado
+}
+# o que o motor precisa saber; só manda quando mudou
+function MotorEstado {
+    if (-not $motor.obj -or -not $cartao.ActualWidth) { return }
+    $origem = $cartao.TranslatePoint([Windows.Point]::new(0, 0), $win)
+    $fonteDaTela = [Windows.PresentationSource]::FromVisual($win)
+    $escala = $(if ($Foto -or -not $fonteDaTela) { 1 } else { $fonteDaTela.CompositionTarget.TransformToDevice.M11 })
+    $estadoDoMotor = [ordered]@{
+        msg = 'estado'; tema = $config.tema; clawd = [bool]$config.clawd; modo = "$($passeio.modo)"
+        escala = $escala; janela = @($win.Width, $win.Height)
+        cartao = @([math]::Round($origem.X, 2), [math]::Round($origem.Y, 2), [math]::Round($cartao.ActualWidth, 2), [math]::Round($cartao.ActualHeight, 2))
+        raio = $(if ($config.tema -eq 'minecraft') { 1 } else { 8 }); opacidade = $config.opacidade
+        # onde ficou cada bolinha, número e barra (docs/MOTOR.md)
+        linhas = @(foreach ($umaLinha in $caixasDoMotor.linhas) {
+            [ordered]@{ id = $umaLinha.id; sit = $umaLinha.sit; cor = $umaLinha.cor; bola = @(CaixaNaJanela $umaLinha.bola); tempo = (TextoNaJanela $umaLinha.tempo) }
+        })
+        uso = @(foreach ($umUso in $caixasDoMotor.uso) {
+            [ordered]@{ rotulo = (TextoNaJanela $umUso.rotulo); barra = @(CaixaNaJanela $umUso.barra); pct = $umUso.pct; nivel = $umUso.nivel; pctTxt = (TextoNaJanela $umUso.pctTxt); falta = (TextoNaJanela $umUso.falta) }
+        })
+    }
+    $json = $estadoDoMotor | ConvertTo-Json -Compress -Depth 6
+    if ($json -ne $motor.enviado) {
+        $motor.enviado = $json
+        $motor.obj.Enviar($json)
+    }
+    # -Foto: a foto sai com o cartão já montado pelo layout do tema
+    if ($Foto -and $motor.layouts -and -not $motor.pediuFoto) { $motor.pediuFoto = $true; $motor.obj.Enviar('{"msg":"foto"}') }
+}
+function MotorEvento($tipoDoEvento) { if ($motor.vivo) { $motor.obj.Enviar("{`"msg`":`"evento`",`"tipo`":`"$tipoDoEvento`"}") } }
+$palco = $win.FindName('Palco')
+$palco.Width = $win.Width; $palco.Height = $win.Height
+$palco.Visibility = 'Hidden'
+$cartao.Add_SizeChanged({ MotorEstado })
 
 # nasce no canto de baixo à direita (a $margem já afasta o cartão da borda)
 # Só o arrasto muda o lugar dela. Às vezes, logo depois de abrir, o Windows/WPF
@@ -828,7 +1239,9 @@ function TrazerVSCode {
 }
 # a linha nesse ponto da janela: "sessao:<id>" (sessão) ou "baixar" (versão nova), guardado no Tag; ou nada
 function AlvoNoPonto($ponto) {
-    for ($e = [Windows.Media.VisualTreeHelper]::HitTest($win, $ponto).VisualHit; $e; $e = [Windows.Media.VisualTreeHelper]::GetParent($e)) {
+    # InputHitTest, não VisualTreeHelper.HitTest: esse acerta o Palco do motor (a janela
+    # inteira) mesmo com IsHitTestVisible=False, e o clique não achava a sessão
+    for ($e = $win.InputHitTest($ponto); $e; $e = [Windows.Media.VisualTreeHelper]::GetParent($e)) {
         if ("$($e.Tag)" -like 'sessao:*' -or "$($e.Tag)" -eq 'baixar') { return "$($e.Tag)" }
     }
 }
@@ -918,9 +1331,48 @@ $menu = [Windows.Markup.XamlReader]::Parse(@'
         </Setter.Value>
       </Setter>
     </Style>
+    <!-- as setinhas do tema: botão (e não item) pro menu ficar aberto enquanto troca -->
+    <Style TargetType="Button">
+      <Setter Property="Foreground" Value="#E5E7EB"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="fundo" Background="Transparent" CornerRadius="3" Width="18" Height="18">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="fundo" Property="Background" Value="#3A3F4B"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </ContextMenu.Resources>
 </ContextMenu>
 '@)
+
+# tema: Temas ◀ nome ▶
+$painelTema = New-Object Windows.Controls.StackPanel
+$painelTema.Orientation = 'Horizontal'
+$painelTema.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
+[void]$painelTema.Children.Add((Texto 'Temas' '#D1D5DB' 70))
+$nomeDoTema = Texto $temas[$config.tema] '#FFFFFF' 70
+$nomeDoTema.TextAlignment = 'Center'
+$nomeDoTema.FontWeight = 'SemiBold'
+function SetaDoTema($simbolo, $direcao) {
+    $botaoTema = New-Object Windows.Controls.Button
+    $botaoTema.Content = $simbolo
+    $botaoTema.Tag = $direcao
+    $botaoTema.Add_Click({ TrocarTema $this.Tag })
+    [void]$painelTema.Children.Add($botaoTema)
+}
+SetaDoTema '◀' -1
+[void]$painelTema.Children.Add($nomeDoTema)
+SetaDoTema '▶' 1
+[void]$menu.Items.Add($painelTema)
 
 # toggle do Clawd
 $itemClawd = New-Object Windows.Controls.MenuItem
@@ -945,7 +1397,7 @@ $lblOpac.TextAlignment = 'Right'
 $slOpac.Add_ValueChanged({
     $v = $slOpac.Value / 100
     $lblOpac.Text = '{0}%' -f [int]($slOpac.Value)
-    $config.opacidade = [math]::Round($v, 2); $cartao.Opacity = $v; SalvarConfig
+    $config.opacidade = [math]::Round($v, 2); $moldura.Opacity = $v; SalvarConfig
 })
 [void]$painelOpac.Children.Add($slOpac)
 [void]$painelOpac.Children.Add($lblOpac)
@@ -1042,17 +1494,22 @@ $timer.Start()
 # teste: depois de desenhar, salva o PNG e, ao lado (.txt), o que viu; e fecha
 if ($Foto) {
     $espera = New-Object Windows.Threading.DispatcherTimer
-    $espera.Interval = [TimeSpan]::FromMilliseconds(1200)
+    $espera.Interval = [TimeSpan]::FromMilliseconds(200)
+    $esperando = @{ tiques = 0 }
     $espera.Add_Tick({
+        # 1,2 s pra assentar; com o motor, até 8 s pelo 1º quadro (o node leva ~1 s pra abrir)
+        $esperando.tiques++
+        if ($esperando.tiques -lt 6) { return }
+        if ($motor.obj -and -not $motor.vivo -and $motor.tentativas -lt 99 -and $esperando.tiques -lt 40) { MotorEstado; return }
         $espera.Stop()
-        if ($Cena) {
+        if ($Cena -and -not $motor.vivo) {
             $tipo, $t = -split $Cena
             ComecarCena $tipo
             $quadros.Stop()
             Quadro ([double]::Parse($t, [Globalization.CultureInfo]::InvariantCulture))
             $win.UpdateLayout()
         }
-        $imagem = [Windows.Media.Imaging.RenderTargetBitmap]::new(320, 440, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
+        $imagem = [Windows.Media.Imaging.RenderTargetBitmap]::new($win.Width, $win.Height, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
         $imagem.Render($win.Content)
         $png = New-Object Windows.Media.Imaging.PngBitmapEncoder
         $png.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($imagem))
@@ -1067,7 +1524,7 @@ if ($Foto) {
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"
         }) + "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
-            "som: $(if ($somDaVez) { $nomeDoSom[$somDaVez] } else { 'nenhum' })" +
+            "som: $(if ($somDaVez) { $nomeDoSom[$config.tema][$avisoDaSituacao[$somDaVez]] } else { 'nenhum' })" +
             "clique: $(if ($cliqueDaVez) { $cliqueDaVez } else { 'nenhum' })" +
             "atualizacao: $(if ($n = VersaoNova) { $n } else { 'nenhuma' })"
         [IO.File]::WriteAllLines("$Foto.txt", [string[]]$visto, [Text.UTF8Encoding]::new($false))
@@ -1076,6 +1533,9 @@ if ($Foto) {
     $win.Add_ContentRendered({ $espera.Start() })
 }
 
+AplicarTema
 Atualizar
+LigarMotor
 [void]$win.ShowDialog()
+if ($motor.obj) { $motor.obj.Parar() }
 Anotar "fechou ($($Error.Count) erros$(if ($Error.Count) { "; último: $($Error[0])" }))"

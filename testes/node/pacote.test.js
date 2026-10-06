@@ -71,15 +71,19 @@ test("configurações lidas no código existem no package.json", () => {
 test("arquivos da janelinha que a extensão copia existem", () => {
     const codigo = fs.readFileSync(path.join(EXT, "out", "extension.js"), "utf8");
     const bloco = codigo.match(/const JANELINHA = \{([\s\S]*?)\};/)[1];
-    const nomes = [...bloco.matchAll(/"([\w.]+\.(?:ps1|swift|sh|js))"/g)].map((m) => m[1]);
+    const nomes = [...bloco.matchAll(/"([\w./-]+\.(?:ps1|swift|sh|js|wav))"/g)].map((m) => m[1]);
     assert.ok(nomes.length >= 4, nomes.join());
     for (const n of nomes) assert.ok(fs.existsSync(path.join(EXT, "janelinha", n)), n);
+    // e as pastas inteiras (motor/, sons): existem e não estão vazias
+    const pastas = [...codigo.match(/const PASTAS_JANELINHA = \[([^\]]*)\]/)[1].matchAll(/"([\w-]+)\/"/g)].map((m) => m[1]);
+    assert.deepStrictEqual(pastas, ["motor", "sons-padrao", "sons-dragonball"]);
+    for (const p of pastas) assert.ok(fs.readdirSync(path.join(EXT, "janelinha", p)).length > 0, p);
 });
 
 test("instaladores extraem do .vsix os mesmos arquivos que existem na extensão", () => {
     for (const f of ["instalar-windows.ps1", "instalar-mac.sh"]) {
         const t = fs.readFileSync(path.join(RAIZ, "instalar", f), "utf8");
-        const citados = [...t.matchAll(/(?:extension\/|')((?:out|janelinha)\/[\w.]+)/g)].map((m) => m[1]);
+        const citados = [...t.matchAll(/(?:extension\/|')((?:out|janelinha)\/[\w./-]+)/g)].map((m) => m[1]);
         assert.ok(citados.length >= 4, `${f}: ${citados}`);
         for (const c of citados) assert.ok(fs.existsSync(path.join(EXT, c)), `${f} cita ${c}, que não existe`);
     }
@@ -118,9 +122,14 @@ test(".vsix leva a janelinha, os scripts e nada de sobra", { skip: !temDist && "
     for (const n of ["extension/package.json", "extension/readme.md", "extension/out/extension.js", "extension/out/hook.js",
         "extension/out/processes.js", "extension/out/install.js", "extension/out/sessions.js",
         "extension/janelinha/overlay.ps1", "extension/janelinha/overlay.swift",
-        "extension/janelinha/minecraft.js", "extension/janelinha/vorbis.min.js", "extension/janelinha/vorbis-licencas.txt"]) {
+        "extension/janelinha/minecraft.js", "extension/janelinha/vorbis.min.js", "extension/janelinha/vorbis-licencas.txt",
+        "extension/janelinha/sons-padrao/terminou.wav", "extension/janelinha/sons-padrao/esperando.wav", "extension/janelinha/sons-padrao/tudo.wav",
+        "extension/janelinha/sons-dragonball/terminou.wav", "extension/janelinha/sons-dragonball/esperando.wav", "extension/janelinha/sons-dragonball/tudo.wav",
+        "extension/janelinha/sons-dragonball/licencas.txt", "extension/janelinha/motor/motor.js", "extension/janelinha/motor/motor.cs",
+        "extension/janelinha/motor/raster.js", "extension/janelinha/motor/tema-padrao.js", "extension/janelinha/motor/tema-minecraft.js"]) {
         assert.ok(nomes.some((x) => x.toLowerCase() === n), `falta ${n} (tem: ${nomes.join(", ")})`);
     }
-    // nada da Mojang no pacote: sons e texturas vêm do servidor dela na instalação
-    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n)), nomes.join(", "));
+    // nada da Mojang no pacote: sons e texturas vêm do servidor dela na instalação (os .wav do
+    // Padrão e do Dragon Ball são nossos / CC0)
+    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n) && !/^extension\/janelinha\/sons-(padrao|dragonball)\/\w+\.wav$/.test(n)), nomes.join(", "));
 });

@@ -1,22 +1,28 @@
 // Claude Monitor no Mac: a mesma janelinha do Windows (overlay.ps1) em Swift/AppKit.
 // Sempre por cima, com as sessões do Claude Code (arquivos do hook em
 // ~/.claude-monitor/sessions) e o usage (mesmo endpoint do /usage, com o login
-// do Claude Code guardado no Keychain; só lê, nunca renova o token). O Clawd,
-// com a picareta, anda pela borda enquanto algo roda, pula parado em cima quando
-// há pergunta/permissão e fica parado em cima quando nada roda.
+// do Claude Code guardado no Keychain; só lê, nunca renova o token). O Clawd anda
+// pela borda enquanto algo roda, pula parado em cima quando há pergunta/permissão e
+// fica parado em cima quando nada roda.
+// Temas (Padrão, Minecraft e Dragon Ball, no botão direito): o Clawd, as cenas e os
+// enfeites do cartão vêm do motor das animações (motor/motor.js, o mesmo do Windows;
+// docs/MOTOR.md), que desenha em software e manda os pixels. Sem node, ou com o motor
+// caído, fica o Clawd daqui (picareta e lutas só no Minecraft) e o cartão de sempre;
+// ele tenta de novo em 5 s, 30 s e 2 min.
 // Sons e texturas do Minecraft vêm do servidor da Mojang (minecraft.js); sem
 // eles, sons do Mac e os desenhos daqui.
 // Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
-// traz o VS Code. Botão direito: Clawd (liga/desliga), Opacidade, Volume e Fechar.
+// traz o VS Code. Botão direito: Temas, Clawd (liga/desliga), Opacidade, Volume e Fechar.
 // Saiu versão nova (a extensão consulta o GitHub): linha roxa embaixo; o clique baixa o zip.
 // A extensão compila isto (xcrun swiftc -swift-version 5 -O -o ClaudeMonitor
 // overlay.swift) e abre; a trava em overlay.lock deixa uma só. Quando o binário
-// muda (versão nova), ela se reabre sozinha.
+// muda (versão nova), ela se reabre sozinha. Diário em janelinha.log (o mesmo do Windows).
 // Teste: ClaudeMonitor --foto arquivo.png desenha, salva o PNG (e, ao lado, um
 // .txt com o que viu) e sai. Sem internet: o usage vem de --uso arquivo.json, se
 // passar. --pasta troca a ~/.claude-monitor por outra. --clicar id clica na linha
 // dessa sessão (o .txt diz o link que abriria). --cena "pedra 2.1" fotografa esse
-// instante da cena (pedra ou bug), em segundos.
+// instante da cena (pedra ou bug), em segundos. --sem-motor desenha o Clawd daqui (o
+// de antes do motor), como quando falta o node.
 import Cocoa
 
 let ambiente = ProcessInfo.processInfo.environment
@@ -29,26 +35,72 @@ func argumento(_ nome: String) -> String? {
 let arquivoFoto = argumento("--foto")
 let pasta = argumento("--pasta") ?? home + "/.claude-monitor"
 let dirSessoes = pasta + "/sessions"
+let semMotor = argumentos.contains("--sem-motor")
 
 try? FileManager.default.createDirectory(atPath: pasta, withIntermediateDirectories: true)
+signal(SIGPIPE, SIG_IGN)  // escrever no motor que caiu dá erro na escrita, não derruba a janelinha
 
-// botão direito: Clawd, opacidade e volume, gravados em config.json (o Windows lê o mesmo).
-// Sem o arquivo, tudo como antes do menu existir: Clawd ligado, opaco, volume cheio
+// diário em janelinha.log (o mesmo do Windows e da extensão): o motor, o tema, os sons.
+// O --foto não anota: conta no stderr (o teste mostra quando falha).
+let diario = pasta + "/janelinha.log"
+let horaDoDiario: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+    return f
+}()
+func anotar(_ texto: String) {
+    let limpo = texto.replacingOccurrences(of: "\\s*[\\r\\n]+\\s*", with: " ", options: .regularExpression)
+    if arquivoFoto != nil { fputs(limpo + "\n", stderr); return }
+    let fm = FileManager.default
+    if let tamanho = (try? fm.attributesOfItem(atPath: diario))?[.size] as? NSNumber, tamanho.intValue > 256 * 1024 {
+        try? fm.removeItem(atPath: diario + ".1")
+        try? fm.moveItem(atPath: diario, toPath: diario + ".1")
+    }
+    let linha = Array("\(horaDoDiario.string(from: Date())) [\(getpid())] \(limpo)\n".utf8)
+    let fd = open(diario, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o644)
+    if fd < 0 { return }
+    _ = linha.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> Int in Darwin.write(fd, p.baseAddress, p.count) }
+    close(fd)
+}
+
+// botão direito: tema, Clawd, opacidade e volume, gravados em config.json (o Windows lê o mesmo).
+// Sem o arquivo, tudo como antes do menu existir: Minecraft, Clawd ligado, opaco, volume
+// cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
+let temas: [(id: String, nome: String)] = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball")]
 let arquivoConfig = pasta + "/config.json"
-var config = (opacidade: 1.0, clawd: true, volume: 1.0)
-if let dados = FileManager.default.contents(atPath: arquivoConfig),
-   let o = (try? JSONSerialization.jsonObject(with: dados)) as? [String: Any] {
+var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft")
+func lerJSON(_ caminho: String) -> [String: Any]? {
+    guard let dados = FileManager.default.contents(atPath: caminho) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: dados)) as? [String: Any]
+}
+if let o = lerJSON(arquivoConfig) {
     if let v = (o["opacidade"] as? NSNumber)?.doubleValue { config.opacidade = min(1, max(0.2, v)) }
     if let v = o["clawd"] as? Bool { config.clawd = v }
     if let v = (o["volume"] as? NSNumber)?.doubleValue { config.volume = min(1, max(0, v)) }
+    if let v = o["tema"] as? String, temas.contains(where: { $0.id == v }) { config.tema = v }
 }
 func salvarConfig() {
-    let o: [String: Any] = ["opacidade": config.opacidade, "clawd": config.clawd, "volume": config.volume]
+    // por cima do que já tinha: chave que esta versão não conhece continua lá
+    var o = lerJSON(arquivoConfig) ?? [:]
+    o["opacidade"] = config.opacidade
+    o["clawd"] = config.clawd
+    o["volume"] = config.volume
+    o["tema"] = config.tema
     if let d = try? JSONSerialization.data(withJSONObject: o) { try? d.write(to: URL(fileURLWithPath: arquivoConfig)) }
 }
+func nomeDoTema() -> String { temas.first(where: { $0.id == config.tema })?.nome ?? config.tema }
+
+// motor das animações (o resto mais embaixo, depois da janela)
+var motor: Motor?                        // o processo aberto (vivo, ou ainda sem o 1º quadro)
+var motorVivo = false                    // já mandou quadro: o Clawd e os enfeites são dele
+var tentativasDoMotor = 0                // quedas seguidas; 99 = desistiu (sem node, sem motor.js)
+var enviadoAoMotor = ""                  // o último estado (só manda quando muda)
+var layouts: [String: Aparencia]? = nil  // o layout de cada tema (mensagem P)
+var pediuFoto = false
 
 if arquivoFoto == nil {
-    // O_CLOEXEC: no execv da versão nova a trava solta junto
+    // O_CLOEXEC: no execv da versão nova (e no node do motor) a trava solta junto
     let trava = open(pasta + "/overlay.lock", O_CREAT | O_RDWR | O_CLOEXEC, 0o644)
     if trava < 0 || flock(trava, LOCK_EX | LOCK_NB) != 0 { exit(0) }
 }
@@ -79,27 +131,46 @@ let estados: [String: (cor: String, rotulo: String)] = [
     "permission": ("#FACC15", "pedindo permissão"),
 ]
 
-// --- sons: "hmm" do aldeão = pergunta/permissão, XP = terminou, subir de nível =
-// terminou a última (nada rodando nem esperando). Com mais de um, sorteia.
-func sonsDoMinecraft(_ nomes: [String]) -> [String] {
-    nomes.map { pasta + "/sons/" + $0 + ".wav" }.filter { FileManager.default.fileExists(atPath: $0) }
-}
-let aldeao = sonsDoMinecraft(["aldeao_hmm1", "aldeao_hmm2"])
-let xp = sonsDoMinecraft(["xp1", "xp2", "xp3"])
-let levelup = sonsDoMinecraft(["levelup"])
-let nomeDoSom = ["permission": "aldeao", "question": "aldeao", "finished": "xp", "tudo": "levelup"]  // pro .txt do --foto
+// --- sons de cada aviso por tema; com mais de um, sorteia. Sem o arquivo, o do Mac.
+// Minecraft: "hmm" do aldeão = pergunta/permissão, XP = terminou, subir de nível =
+// terminou a última (nada rodando nem esperando). Os do Padrão (sons-padrao/) e do
+// Dragon Ball (sons-dragonball/) a extensão copia junto com a janelinha.
+let avisoDaSituacao = ["permission": "esperando", "question": "esperando", "finished": "terminou", "tudo": "tudo"]
+let sonsDoTema: [String: [String: [String]]] = [
+    "minecraft": ["esperando": ["sons/aldeao_hmm1", "sons/aldeao_hmm2"], "terminou": ["sons/xp1", "sons/xp2", "sons/xp3"],
+                  "tudo": ["sons/levelup"]],
+    "padrao": ["esperando": ["sons-padrao/esperando"], "terminou": ["sons-padrao/terminou"], "tudo": ["sons-padrao/tudo"]],
+    "dragonball": ["esperando": ["sons-dragonball/esperando"], "terminou": ["sons-dragonball/terminou"],
+                   "tudo": ["sons-dragonball/tudo"]],
+]
+let somDoMac = ["esperando": "Ping", "terminou": "Glass", "tudo": "Hero"]
+let nomeDoSom: [String: [String: String]] = [  // pro diário e pro .txt do --foto
+    "minecraft": ["esperando": "aldeao", "terminou": "xp", "tudo": "levelup"],
+    "padrao": ["esperando": "sino-esperando", "terminou": "sino-terminou", "tudo": "sino-tudo"],
+    "dragonball": ["esperando": "esferas-esperando", "terminou": "esferas-terminou", "tudo": "esferas-tudo"],
+]
 var tocando: NSSound?  // segura o som até acabar de tocar
 func tocar(_ situacao: String) {
-    guard config.volume > 0 else { return }  // volume no 0 (botão direito): mudo
-    // sem Minecraft, sons do Mac
-    let (arquivos, doMac) = situacao == "tudo" ? (levelup, "Hero") : situacao == "finished" ? (xp, "Glass") : (aldeao, "Ping")
+    guard let aviso = avisoDaSituacao[situacao] else { return }
+    let nome = nomeDoSom[config.tema]?[aviso] ?? aviso
+    // no diário: amigo sem som manda o janelinha.log e dá pra ver se ela tentou tocar
+    guard config.volume > 0 else { anotar("não toquei \(nome): volume no 0 (botão direito > Volume)"); return }
+    let arquivos = (sonsDoTema[config.tema]?[aviso] ?? []).map { pasta + "/" + $0 + ".wav" }
+        .filter { FileManager.default.fileExists(atPath: $0) }
     var som: NSSound?
-    if let arquivo = arquivos.randomElement() { som = NSSound(contentsOfFile: arquivo, byReference: true) }
-    if som == nil { som = NSSound(named: NSSound.Name(doMac)) }
+    var qual = ""
+    if let arquivo = arquivos.randomElement() {
+        som = NSSound(contentsOfFile: arquivo, byReference: true)
+        qual = (arquivo as NSString).lastPathComponent
+    }
+    if som == nil, let doMac = somDoMac[aviso] {
+        som = NSSound(named: NSSound.Name(doMac))
+        qual = doMac + " do Mac"
+    }
     tocando?.stop()
     tocando = som
     som?.volume = Float(config.volume)
-    som?.play()
+    anotar(som?.play() == true ? "tocou \(nome) (\(qual))" : "não toquei \(nome) (\(qual))")
 }
 
 // --- sessões (mesma regra da extensão e do overlay.ps1) ---
@@ -251,6 +322,8 @@ func avisar(_ sessoes: [Sessao]) {
     }
     if tocar_ == "finished", sessoes.allSatisfy({ $0.situacao == "finished" }) { tocar_ = "tudo" }
     guard let t = tocar_ else { return }
+    // o tema comemora (no motor) na mesma hora em que o som toca
+    if t == "finished" || t == "tudo" { motorEvento(t == "tudo" ? "tudo" : "terminou") }
     somDaVez = t
     if arquivoFoto == nil { tocar(t) }
 }
@@ -269,6 +342,8 @@ struct Medida { let pct: Double; let renova: Date? }
 var uso: [(rotulo: String, medida: Medida)]? = nil
 var proximaBusca = Date.distantPast
 var buscando = false
+// quanto falta pra renovar
+func faltaPraRenovar(_ m: Medida) -> String { m.renova.map { tempo($0.timeIntervalSinceNow / 60) } ?? "" }
 
 func dataISO(_ texto: String?) -> Date? {
     guard var s = texto else { return nil }
@@ -385,7 +460,8 @@ func trazerEditor() {
 }
 
 // --- desenho ---
-let L: CGFloat = 320, A: CGFloat = 440  // janela fixa; o resto é transparente e o clique passa
+// janela fixa (a mesma do Windows: o motor desenha nela inteira); o resto é transparente e o clique passa
+let L: CGFloat = 380, A: CGFloat = 440
 let M: CGFloat = 34                      // espaço em volta do cartão, por onde o Clawd anda
 let fonte = NSFont.systemFont(ofSize: 12)
 
@@ -411,8 +487,67 @@ func opacidadeDoPulso() -> CGFloat {
     return CGFloat(0.65 + 0.35 * cos(2 * Double.pi * fase))
 }
 
+// cor do % do usage em cada tema, pro motor (o cartão daqui fica com as de sempre): normal, >= 80%, >= 95%
+let coresDoUso: [String: [String]] = [
+    "padrao": ["#D1D5DB", "#F59E0B", "#EF4444"], "minecraft": ["#80FF20", "#FFAA00", "#FF5555"],
+    "dragonball": ["#FDE047", "#F59E0B", "#EF4444"],
+]
+
+// A cara do cartão: a de sempre ou, com o motor vivo, o layout do tema (mensagem P,
+// docs/MOTOR.md). enfeites: o tema desenha bolinha, tempo, rótulo, barra, % e falta nos
+// lugares que a janelinha guarda; o nome da sessão e os avisos continuam daqui.
+struct Aparencia {
+    var raio: CGFloat = 8
+    var fundo = "#E6181818"
+    var moldura: [CGFloat] = [0, 0, 0, 0]  // esq, cima, dir, baixo: livre pra moldura que o tema desenha
+    var padding: [CGFloat] = [10, 6, 10, 6]
+    var enfeites = false
+    var colTempo: CGFloat = 36, colPct: CGFloat = 38, colFalta: CGFloat = 48, colRotulo: CGFloat = 18
+    var letra: CGFloat = 16                // altura das caixas de número
+    var barra = CGSize(width: 118, height: 4)
+}
+func aparencia(_ o: [String: Any]) -> Aparencia {
+    func n(_ v: Any?) -> CGFloat? { (v as? NSNumber).map { CGFloat($0.doubleValue) } }
+    func quatro(_ v: Any?) -> [CGFloat]? {
+        guard let l = v as? [Any] else { return nil }
+        let r = l.compactMap { n($0) }
+        return r.count == 4 ? r : nil
+    }
+    var a = Aparencia()
+    if let v = n(o["raio"]) { a.raio = v }
+    if let v = o["fundo"] as? String { a.fundo = v }
+    if let v = quatro(o["moldura"]) { a.moldura = v }
+    if let v = quatro(o["padding"]) { a.padding = v }
+    if let v = o["enfeites"] as? Bool { a.enfeites = v }
+    if let c = o["colunas"] as? [String: Any] {
+        if let v = n(c["tempo"]) { a.colTempo = v }
+        if let v = n(c["pct"]) { a.colPct = v }
+        if let v = n(c["falta"]) { a.colFalta = v }
+        if let v = n(c["rotulo"]) { a.colRotulo = v }
+    }
+    if let v = n(o["letra"]) { a.letra = v }
+    if let b = o["barra"] as? [Any], b.count == 2, let w = n(b[0]), let h = n(b[1]) { a.barra = CGSize(width: w, height: h) }
+    return a
+}
+// Com o motor vivo (ou no --foto, que espera por ele), o cartão tem a moldura, o padding e
+// as colunas do layout do tema, como o do Windows (que tem os do Minecraft em WPF);
+// sem motor, o de sempre em todos os temas.
+func aparenciaAtual() -> Aparencia {
+    if let l = layouts, motorVivo || arquivoFoto != nil, let a = l[config.tema] { return a }
+    return Aparencia()
+}
+
 // botão direito: os itens que mexem no config.json (o Fechar fica no Cartao)
 final class Preferencias: NSObject {
+    @objc func trocarTema(_ b: NSButton) {
+        guard let i = temas.firstIndex(where: { $0.id == config.tema }) else { return }
+        config.tema = temas[(i + b.tag + temas.count) % temas.count].id
+        (b.superview?.viewWithTag(2) as? NSTextField)?.stringValue = nomeDoTema()
+        salvarConfig()
+        anotar("tema: \(config.tema)")
+        if config.tema != "minecraft" { palco.luta = nil }  // as lutas daqui são só do Minecraft
+        atualizar()
+    }
     @objc func alternarClawd(_ item: NSMenuItem) {
         config.clawd.toggle()
         salvarConfig()
@@ -430,6 +565,32 @@ final class Preferencias: NSObject {
         salvarConfig()
     }
     func rotular(_ s: NSSlider) { (s.superview?.viewWithTag(1) as? NSTextField)?.stringValue = "\(Int(s.doubleValue.rounded()))%" }
+    // "Temas ◀ Minecraft ▶": setinhas são botões (e não itens) pro menu ficar aberto enquanto troca
+    func itemDosTemas() -> NSMenuItem {
+        let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
+        let rotulo = NSTextField(labelWithString: "Temas")
+        rotulo.font = NSFont.menuFont(ofSize: 0)
+        rotulo.frame = NSRect(x: 20, y: 4, width: 72, height: 18)
+        caixa.addSubview(rotulo)
+        let nome = NSTextField(labelWithString: nomeDoTema())
+        nome.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        nome.alignment = .center
+        nome.tag = 2
+        nome.frame = NSRect(x: 112, y: 4, width: 86, height: 18)
+        caixa.addSubview(nome)
+        let setas: [(String, Int, CGFloat)] = [("◀", -1, 92), ("▶", 1, 198)]
+        for (simbolo, direcao, x) in setas {
+            let b = NSButton(title: simbolo, target: self, action: #selector(trocarTema(_:)))
+            b.isBordered = false
+            b.font = NSFont.menuFont(ofSize: 11)
+            b.tag = direcao
+            b.frame = NSRect(x: x, y: 4, width: 20, height: 18)
+            caixa.addSubview(b)
+        }
+        let item = NSMenuItem()
+        item.view = caixa
+        return item
+    }
     // "Opacidade ——o—— 90%": item de menu com um slider dentro
     func itemComSlider(_ nome: String, _ minimo: Double, _ valor: Double, _ acao: Selector) -> NSMenuItem {
         let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
@@ -454,28 +615,51 @@ final class Preferencias: NSObject {
 }
 let preferencias = Preferencias()
 
+// uma linha da lista
+struct LinhaDoCartao {
+    var id: String
+    var sit: String     // a situação (working, finished, question, permission...)
+    var cor: String     // a da bolinha, '#RRGGBB'
+    var nome: String
+    var tempo: String
+    var rotulo: String  // o tooltip
+}
+
 final class Cartao: NSView {
-    var linhas: [(id: String, cor: NSColor, nome: String, tempo: String, rotulo: String, pulsa: Bool)] = []
+    var linhas: [LinhaDoCartao] = []
     var dicas: [NSString] = []  // o tooltip não segura o dono
     var aviso: String?  // saiu versão nova: a linha roxa embaixo
-    var yAviso: CGFloat = 0
+    // onde fica cada coisa (coordenadas do cartão, y pra baixo); refeito no arrumar
+    var ap = Aparencia()
+    var x0: CGFloat = 10, y0: CGFloat = 6, largura: CGFloat = 222  // começo e largura do conteúdo
+    var alturaLinha: CGFloat = 20, alturaUso: CGFloat = 20
+    var yUso: CGFloat = 0, yAviso: CGFloat = 0
     override var isFlipped: Bool { true }
 
     // preso no canto de baixo à direita, cresce pra cima
     func arrumar() {
-        let n = CGFloat(max(linhas.count, 1))
-        let u = CGFloat(max(uso?.count ?? 1, 1))
-        yAviso = 6 + n * 20 + 10 + u * 20 + 10
-        let h = yAviso - 10 + (aviso == nil ? 0 : 10 + 20) + 6
-        frame = NSRect(x: L - M - 242, y: A - M - h, width: 242, height: h)
+        ap = aparenciaAtual()
+        x0 = ap.moldura[0] + ap.padding[0]
+        y0 = ap.moldura[1] + ap.padding[1]
+        // a linha tem o nome (16) e, com enfeites, o lugar dos números do tema (letra)
+        alturaLinha = max(16, ap.letra) + 4
+        // a do usage: com enfeites só tem os lugares do motor; sem, o texto daqui (16)
+        alturaUso = max(ap.enfeites ? CGFloat(0) : CGFloat(16), ap.letra, ap.barra.height) + 4
+        largura = max(186 + ap.colTempo, ap.colRotulo + ap.barra.width + ap.colPct + ap.colFalta)
+        yUso = y0 + (linhas.isEmpty ? 20 : CGFloat(linhas.count) * alturaLinha) + 10
+        let alturaDoUso: CGFloat = uso.map { CGFloat($0.count) * self.alturaUso } ?? 20
+        yAviso = yUso + alturaDoUso + 10
+        let w = x0 + largura + ap.padding[2] + ap.moldura[2]
+        let h = yAviso - 10 + (aviso == nil ? 0 : 10 + 20) + ap.padding[3] + ap.moldura[3]
+        frame = NSRect(x: L - M - w, y: A - M - h, width: w, height: h)
         removeAllToolTips()
         dicas = linhas.map { $0.rotulo as NSString }
         for (i, d) in dicas.enumerated() {
-            addToolTip(NSRect(x: 0, y: 6 + CGFloat(i) * 20, width: 242, height: 20), owner: d, userData: nil)
+            addToolTip(NSRect(x: 0, y: y0 + CGFloat(i) * alturaLinha, width: w, height: alturaLinha), owner: d, userData: nil)
         }
         if aviso != nil {
             dicas.append("Baixa o zip: extraia e siga o COMO ATUALIZAR.txt")
-            addToolTip(NSRect(x: 0, y: yAviso, width: 242, height: 20), owner: dicas[dicas.count - 1], userData: nil)
+            addToolTip(NSRect(x: 0, y: yAviso, width: w, height: 20), owner: dicas[dicas.count - 1], userData: nil)
         }
         needsDisplay = true
     }
@@ -491,57 +675,107 @@ final class Cartao: NSView {
             camada?.endTransparencyLayer()
             camada?.restoreGState()
         }
-        hex("#E6181818").setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8).fill()
-        let x: CGFloat = 10
-        var y: CGFloat = 6
+        // o fundo fica por dentro da moldura (a moldura quem desenha é o tema, no motor)
+        let mo = ap.moldura
+        let raio = max(0, ap.raio - (mo.max() ?? 0))
+        hex(ap.fundo).setFill()
+        NSBezierPath(roundedRect: NSRect(x: mo[0], y: mo[1], width: bounds.width - mo[0] - mo[2], height: bounds.height - mo[1] - mo[3]),
+                     xRadius: raio, yRadius: raio).fill()
+        var y = y0
         if linhas.isEmpty {
-            escrever("nenhuma sessão aberta", hex("#9CA3AF"), NSRect(x: x, y: y, width: 222, height: 20))
+            escrever("nenhuma sessão aberta", hex("#9CA3AF"), NSRect(x: x0, y: y, width: largura, height: 20))
             y += 20
         }
         for l in linhas {
-            (l.pulsa ? l.cor.withAlphaComponent(opacidadeDoPulso()) : l.cor).setFill()
-            NSBezierPath(ovalIn: NSRect(x: x, y: y + 6, width: 8, height: 8)).fill()
-            escrever(l.nome, hex("#E5E7EB"), NSRect(x: x + 16, y: y, width: 170, height: 20))
-            escrever(l.tempo, l.cor, NSRect(x: x + 186, y: y, width: 36, height: 20), .right)
-            y += 20
+            let cor = hex(l.cor)
+            if !ap.enfeites {  // com enfeites, a bolinha e o tempo são do motor
+                (l.sit == "working" ? cor.withAlphaComponent(opacidadeDoPulso()) : cor).setFill()
+                NSBezierPath(ovalIn: NSRect(x: x0, y: y + (alturaLinha - 8) / 2, width: 8, height: 8)).fill()
+                escrever(l.tempo, cor, NSRect(x: x0 + 186, y: y, width: ap.colTempo, height: alturaLinha), .right)
+            }
+            escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 170, height: alturaLinha))
+            y += alturaLinha
         }
         y += 5
         hex("#33FFFFFF").setFill()
-        NSRect(x: x, y: y, width: 222, height: 1).fill()
+        NSRect(x: x0, y: y, width: largura, height: 1).fill()
         y += 5
         if let nova = aviso {
             hex("#33FFFFFF").setFill()
-            NSRect(x: x, y: yAviso - 5, width: 222, height: 1).fill()
-            escrever("↑ versão \(nova) disponível · baixar", hex("#A78BFA"), NSRect(x: x, y: yAviso, width: 222, height: 20))
+            NSRect(x: x0, y: yAviso - 5, width: largura, height: 1).fill()
+            escrever("↑ versão \(nova) disponível · baixar", hex("#A78BFA"), NSRect(x: x0, y: yAviso, width: largura, height: 20))
         }
         guard let medidas = uso else {
-            escrever("usage indisponível", hex("#6B7280"), NSRect(x: x, y: y, width: 222, height: 20))
+            escrever("usage indisponível", hex("#6B7280"), NSRect(x: x0, y: y, width: largura, height: 20))
             return
         }
+        if ap.enfeites { return }  // rótulo, barra, % e falta: o motor desenha
+        let b = ap.barra
+        let r = min(2, b.height / 2)
         for (rotulo, m) in medidas {
             let c = m.pct >= 95 ? hex("#EF4444") : m.pct >= 80 ? hex("#F59E0B") : hex("#D1D5DB")
-            escrever(rotulo, hex("#9CA3AF"), NSRect(x: x, y: y, width: 18, height: 20))
-            let trilho = NSRect(x: x + 18, y: y + 8, width: 118, height: 4)
+            escrever(rotulo, hex("#9CA3AF"), NSRect(x: x0, y: y, width: ap.colRotulo, height: alturaUso))
+            let trilho = NSRect(x: x0 + ap.colRotulo, y: y + (alturaUso - b.height) / 2, width: b.width, height: b.height)
             hex("#3F3F46").setFill()
-            NSBezierPath(roundedRect: trilho, xRadius: 2, yRadius: 2).fill()
+            NSBezierPath(roundedRect: trilho, xRadius: r, yRadius: r).fill()
             c.setFill()
-            let cheio = 118 * CGFloat(min(max(m.pct, 0), 100)) / 100
-            NSBezierPath(roundedRect: NSRect(x: trilho.minX, y: trilho.minY, width: cheio, height: 4), xRadius: 2, yRadius: 2).fill()
-            escrever(String(format: "%.0f%%", m.pct), c, NSRect(x: x + 136, y: y, width: 38, height: 20), .right)
-            // quanto falta pra renovar
-            let falta = m.renova.map { tempo($0.timeIntervalSinceNow / 60) } ?? ""
-            escrever(falta, hex("#6B7280"), NSRect(x: x + 174, y: y, width: 48, height: 20), .right)
-            y += 20
+            let cheio = b.width * CGFloat(min(max(m.pct, 0), 100)) / 100
+            NSBezierPath(roundedRect: NSRect(x: trilho.minX, y: trilho.minY, width: cheio, height: b.height), xRadius: r, yRadius: r).fill()
+            escrever(String(format: "%.0f%%", m.pct), c, NSRect(x: trilho.maxX, y: y, width: ap.colPct, height: alturaUso), .right)
+            escrever(faltaPraRenovar(m), hex("#6B7280"), NSRect(x: trilho.maxX + ap.colPct, y: y, width: ap.colFalta, height: alturaUso), .right)
+            y += alturaUso
         }
     }
 
-    // a linha nesse ponto (coordenadas do cartão: sessões de 20 a partir de y = 6, o
-    // aviso em yAviso): "sessao:<id>" ou "baixar", como o Tag do Windows
+    // --- o que o motor precisa saber (docs/MOTOR.md): onde ficou cada coisa, na janela ---
+    // [x, y, w, h] em DIPs com y pra baixo a partir do canto de cima à esquerda da janela
+    func naJanela(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> [Double] {
+        [x + frame.minX, y + frame.minY, w, h].map { (Double($0) * 100).rounded() / 100 }
+    }
+    func texto(_ txt: String, _ cor: String, _ caixa: [Double]) -> [String: Any] { ["txt": txt, "cor": cor, "caixa": caixa] }
+    // a bolinha e o tempo (encostado à direita da caixa) de cada sessão
+    func caixasDasLinhas() -> [[String: Any]] {
+        var r: [[String: Any]] = []
+        for (i, l) in linhas.enumerated() {
+            let ly = y0 + CGFloat(i) * alturaLinha
+            let linha: [String: Any] = [
+                "id": l.id, "sit": l.sit, "cor": l.cor,
+                "bola": naJanela(x0, ly + (alturaLinha - 8) / 2, 8, 8),
+                "tempo": texto(l.tempo, l.cor, naJanela(x0 + 186, ly + (alturaLinha - ap.letra) / 2, ap.colTempo, ap.letra)),
+            ]
+            r.append(linha)
+        }
+        return r
+    }
+    // as barras do usage; [] = indisponível (quem escreve isso é a janelinha)
+    func caixasDoUso() -> [[String: Any]] {
+        guard let medidas = uso else { return [] }
+        let cores = coresDoUso[config.tema] ?? ["#D1D5DB", "#F59E0B", "#EF4444"]
+        var r: [[String: Any]] = []
+        for (j, par) in medidas.enumerated() {
+            let m = par.medida
+            let uy = yUso + CGFloat(j) * alturaUso
+            let yl = uy + (alturaUso - ap.letra) / 2
+            let nivel = m.pct >= 95 ? 2 : m.pct >= 80 ? 1 : 0
+            let xb = x0 + ap.colRotulo, xp = xb + ap.barra.width, xf = xp + ap.colPct
+            let medidor: [String: Any] = [
+                "rotulo": texto(par.rotulo, "#9CA3AF", naJanela(x0, yl, ap.colRotulo, ap.letra)),
+                "barra": naJanela(xb, uy + (alturaUso - ap.barra.height) / 2, ap.barra.width, ap.barra.height),
+                "pct": m.pct, "nivel": nivel,
+                "pctTxt": texto(String(format: "%.0f%%", m.pct), cores[nivel], naJanela(xp, yl, ap.colPct, ap.letra)),
+                "falta": texto(faltaPraRenovar(m), "#6B7280", naJanela(xf, yl, ap.colFalta, ap.letra)),
+            ]
+            r.append(medidor)
+        }
+        return r
+    }
+
+    // a linha nesse ponto (coordenadas do cartão: sessões a partir de y0, o aviso em
+    // yAviso): "sessao:<id>" ou "baixar", como o Tag do Windows
     func alvoNoPonto(_ p: NSPoint) -> String? {
-        guard bounds.contains(p), p.y >= 6 else { return nil }
+        guard bounds.contains(p), p.y >= y0 else { return nil }
         if aviso != nil, p.y >= yAviso, p.y < yAviso + 20 { return "baixar" }
-        let i = Int((p.y - 6) / 20)
+        let i = Int((p.y - y0) / alturaLinha)
         return i < linhas.count ? "sessao:" + linhas[i].id : nil
     }
 
@@ -569,6 +803,7 @@ final class Cartao: NSView {
     }
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
+        menu.addItem(preferencias.itemDosTemas())
         let clawd = NSMenuItem(title: "Clawd", action: #selector(Preferencias.alternarClawd(_:)), keyEquivalent: "")
         clawd.target = preferencias
         clawd.state = config.clawd ? .on : .off
@@ -584,6 +819,7 @@ final class Cartao: NSView {
 }
 
 // --- Clawd: pixel art do mascote do Claude Code (o do banner do terminal) ---
+// O daqui só aparece sem o motor (sem node, ou com ele caído).
 // '#' corpo, 'o' olho, 'A'/'B' os dois pares de pernas, que se alternam.
 // Origem (0,0) = entre os pés, então ele "pisa" na trilha e o corpo fica pra fora.
 // Pixel 2x mais alto que largo, como os meio-blocos do terminal (senão fica achatado).
@@ -756,7 +992,7 @@ let mao = CGPoint(x: 12, y: -7.5)       // ponta do braço direito do Clawd
 // e sobe um diamante. espada: chega um bug, 3 espadadas, o bug vira fumaça. A
 // ferramenta é sorteada cada vez que ele começa a andar. Tudo no referencial de
 // quem anda (x+ = pra frente, y- = pra fora do cartão), em função do tempo, então
-// o --foto fotografa qualquer instante (--cena "pedra 2.1").
+// o --foto fotografa qualquer instante (--cena "pedra 2.1"). Só no tema Minecraft.
 // em segundos: o alvo chega, leva 3 golpes (o 3º mata) e a cena acaba em "fim"
 let roteiros: [String: (chega: CGFloat, golpe: CGFloat, fim: CGFloat)] = ["pedra": (0.3, 0.5, 3.2), "bug": (1.0, 0.45, 2.9)]
 let voos: [(CGFloat, CGFloat)] = [(-30, -60), (-12, -80), (10, -75), (28, -55), (-22, -30), (20, -35), (0, -90), (34, -20)]  // px/s
@@ -886,14 +1122,15 @@ final class Palco: NSView {
         let agora = ProcessInfo.processInfo.systemUptime
         let dt = CGFloat(min(agora - antes, 0.1))
         antes = agora
-        guard modo != "parado", let c = cartao?.frame, c.width > 0 else { return }
+        // com o motor vivo este Clawd fica escondido e parado (nada de luta escondida)
+        guard !motorVivo, modo != "parado", let c = cartao?.frame, c.width > 0 else { return }
         if modo == "andando" && instante == nil {
             if let tipo = luta {
                 if CGFloat(agora - lutaDesde) >= roteiros[tipo]!.fim {  // acabou: volta a andar de onde parou
                     luta = nil
                     proxima = agora + .random(in: 20...45)
                 }
-            } else if agora >= proxima {
+            } else if agora >= proxima && config.tema == "minecraft" {  // picareta, pedra e bug são do Minecraft
                 luta = ferramenta == "espada" ? "bug" : "pedra"
                 lutaDesde = agora
             } else {
@@ -935,19 +1172,313 @@ final class Palco: NSView {
         if !anda || !passo { ctx.addPath(pernaB) }
         ctx.fillPath()
 
-        // ferramenta na mão direita; andando, balança como quem minera
-        ctx.translateBy(x: mao.x, y: mao.y)
-        if let c = cena {
-            ctx.rotate(by: momento(c.0, c.1).angulo * .pi / 180)
-        } else if anda {
-            let u = t.truncatingRemainder(dividingBy: 0.64) / 0.32
-            let p = u <= 1 ? u : 2 - u
-            ctx.rotate(by: CGFloat(-25 + 40 * sin(p * .pi / 2)) * .pi / 180)
+        // ferramenta na mão direita; andando, balança como quem minera. O Padrão e o
+        // Dragon Ball não têm ferramenta (como no Windows)
+        if config.tema == "minecraft" {
+            ctx.translateBy(x: mao.x, y: mao.y)
+            if let c = cena {
+                ctx.rotate(by: momento(c.0, c.1).angulo * .pi / 180)
+            } else if anda {
+                let u = t.truncatingRemainder(dividingBy: 0.64) / 0.32
+                let p = u <= 1 ? u : 2 - u
+                ctx.rotate(by: CGFloat(-25 + 40 * sin(p * .pi / 2)) * .pi / 180)
+            }
+            ctx.translateBy(x: -cabo.x, y: -cabo.y)
+            pintar(ctx, ferramenta, CGRect(x: 0, y: 0, width: 17.6, height: 17.6))
         }
-        ctx.translateBy(x: -cabo.x, y: -cabo.y)
-        pintar(ctx, ferramenta, CGRect(x: 0, y: 0, width: 17.6, height: 17.6))
         ctx.restoreGState()
         if let c = cena { pintarRestos(ctx, c.0, c.1) }
+        ctx.restoreGState()
+    }
+}
+
+// --- Motor das animações (motor/motor.js, o mesmo código do Windows; docs/MOTOR.md) ---
+// Lado Mac (o Motor.cs do Windows): abre o node, manda o estado da janelinha (uma linha
+// JSON por mensagem) e guarda os quadros que voltam ("CM" + tipo + 0 + tamanho uint32 LE
+// + dados). Ler e escrever ficam em threads próprias: a janela nunca espera o motor. Os
+// avisos (ao...) chegam na thread da janela.
+final class Motor {
+    static let srgb: CGColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    // BGRA pré-multiplicado, como o motor manda
+    static let bgra = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+
+    let alvo: PalcoDoMotor
+    let proc = Process()
+    let entrada = Pipe(), saida = Pipe(), erros = Pipe()
+    let fila = DispatchQueue(label: "motor-escrever")
+    let fimDaLeitura = DispatchSemaphore(value: 0)
+    let trava = NSLock()
+    // com a trava (a thread que lê escreve, a janela lê)
+    var buf: [UInt8] = []  // o quadro inteiro, W x H
+    var W = 0, H = 0
+    var sujoX0 = Int.max, sujoY0 = Int.max, sujoX1 = 0, sujoY1 = 0
+    var pendente = false  // a janela ainda não viu o último pedaço sujo
+    var quadros = 0
+    var naFila = 0        // mensagens esperando pra ir
+    // só na thread da janela
+    var vivo = false
+    var pronto = ""       // o JSON da mensagem P
+    var aplicadoW = 0, aplicadoH = 0
+    var aoLinha: ((String) -> Void)?   // uma linha pro diário
+    var aoPronto: (() -> Void)?        // chegou a mensagem P: o layout de cada tema
+    var aoPrimeiro: (() -> Void)?      // chegou o 1º quadro
+    var aoSair: ((Int32) -> Void)?     // o processo saiu (depois de tudo que ele mandou)
+
+    init(alvo: PalcoDoMotor) { self.alvo = alvo }
+
+    // node: o node; comoNode: é o executável do VS Code (Electron), que só vira node com
+    // ELECTRON_RUN_AS_NODE=1
+    func iniciar(_ node: String, _ comoNode: Bool, _ argumentos: [String]) throws {
+        proc.executableURL = URL(fileURLWithPath: node)
+        proc.arguments = argumentos
+        var env = ProcessInfo.processInfo.environment
+        if comoNode { env["ELECTRON_RUN_AS_NODE"] = "1" } else { env.removeValue(forKey: "ELECTRON_RUN_AS_NODE") }
+        proc.environment = env
+        proc.standardInput = entrada
+        proc.standardOutput = saida
+        proc.standardError = erros
+        // avisa da saída só depois de ler tudo que ele mandou: o último quadro chega antes
+        proc.terminationHandler = { p in
+            _ = self.fimDaLeitura.wait(timeout: .now() + 2)
+            let codigo = p.terminationStatus
+            p.terminationHandler = nil
+            DispatchQueue.main.async {
+                self.vivo = false
+                self.aoSair?(codigo)
+            }
+        }
+        try proc.run()
+        vivo = true
+        // nossas pontas dos canos não passam pela versão nova no execv: senão o motor velho
+        // nunca vê o fim da entrada e fica órfão
+        for fd in [entrada.fileHandleForWriting.fileDescriptor, saida.fileHandleForReading.fileDescriptor,
+                   erros.fileHandleForReading.fileDescriptor] {
+            _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
+        }
+        let leitor = Thread { self.ler() }
+        leitor.name = "motor-ler"
+        leitor.start()
+        let leitorDeErros = Thread { self.lerErros() }
+        leitorDeErros.name = "motor-stderr"
+        leitorDeErros.start()
+    }
+
+    // fila cheia = motor travado: descarta em vez de travar a janela
+    func enviar(_ json: String) {
+        if !vivo { return }
+        trava.lock()
+        let cabe = naFila < 64
+        if cabe { naFila += 1 }
+        trava.unlock()
+        if !cabe { return }
+        let bytes = Array((json + "\n").utf8)
+        let fd = entrada.fileHandleForWriting.fileDescriptor
+        fila.async {
+            var feito = 0
+            while feito < bytes.count {
+                let k = bytes.withUnsafeBytes { (p: UnsafeRawBufferPointer) -> Int in
+                    Darwin.write(fd, p.baseAddress! + feito, bytes.count - feito)
+                }
+                if k < 0 && errno == EINTR { continue }
+                if k <= 0 { break }  // o motor saiu: o terminationHandler avisa
+                feito += k
+            }
+            self.trava.lock()
+            self.naFila -= 1
+            self.trava.unlock()
+        }
+    }
+
+    func parar() {
+        if proc.isRunning { proc.terminate() }
+    }
+
+    private func contar(_ texto: String) {
+        DispatchQueue.main.async { self.aoLinha?(texto) }
+    }
+
+    private func lerTudo(_ fd: Int32, _ b: inout [UInt8], _ n: Int) -> Bool {
+        var lido = 0
+        while lido < n {
+            let k = b.withUnsafeMutableBytes { (p: UnsafeMutableRawBufferPointer) -> Int in
+                Darwin.read(fd, p.baseAddress! + lido, n - lido)
+            }
+            if k < 0 && errno == EINTR { continue }
+            if k <= 0 { return false }
+            lido += k
+        }
+        return true
+    }
+
+    private func ler() {
+        defer { fimDaLeitura.signal() }
+        let fd = saida.fileHandleForReading.fileDescriptor
+        var cab = [UInt8](repeating: 0, count: 8)
+        var dados: [UInt8] = []
+        while lerTudo(fd, &cab, 8) {
+            if cab[0] != 67 || cab[1] != 77 {  // "CM"
+                contar("motor: mensagem fora do formato, parei de ler")
+                parar()
+                return
+            }
+            let n = Int(cab[4]) | (Int(cab[5]) << 8) | (Int(cab[6]) << 16) | (Int(cab[7]) << 24)
+            if n > 64 * 1024 * 1024 {
+                contar("motor: mensagem grande demais (\(n))")
+                parar()
+                return
+            }
+            if dados.count < n { dados = [UInt8](repeating: 0, count: n) }  // reaproveita: um quadro novo a cada 33 ms
+            if !lerTudo(fd, &dados, n) { return }
+            switch cab[2] {
+            case 81:  // Q: um quadro
+                quadro(dados, n)
+            case 76:  // L: uma linha pro diário
+                contar(String(decoding: dados[0..<n], as: UTF8.self))
+            case 80:  // P: pronto, com o layout de cada tema
+                let texto = String(decoding: dados[0..<n], as: UTF8.self)
+                DispatchQueue.main.async {
+                    self.pronto = texto
+                    self.aoPronto?()
+                }
+            default:
+                break
+            }
+        }
+    }
+
+    // o que o node reclama no stderr vai pro diário, uma linha por vez
+    private func lerErros() {
+        let fd = erros.fileHandleForReading.fileDescriptor
+        var bloco = [UInt8](repeating: 0, count: 4096)
+        var resto: [UInt8] = []
+        while true {
+            let k = bloco.withUnsafeMutableBytes { (p: UnsafeMutableRawBufferPointer) -> Int in
+                Darwin.read(fd, p.baseAddress!, p.count)
+            }
+            if k < 0 && errno == EINTR { continue }
+            if k <= 0 { break }
+            resto += bloco[0..<k]
+            while let i = resto.firstIndex(of: 10) {
+                let linha = String(decoding: resto[0..<i], as: UTF8.self).trimmingCharacters(in: .whitespaces)
+                resto.removeSubrange(0...i)
+                if !linha.isEmpty { contar("motor (stderr): " + linha) }
+            }
+        }
+        if !resto.isEmpty { contar("motor (stderr): " + String(decoding: resto, as: UTF8.self)) }
+    }
+
+    // Q: W,H (o tamanho da tela), x,y,w,h (uint16 LE) + w*h*4 bytes do pedaço que mudou
+    private func quadro(_ d: [UInt8], _ n: Int) {
+        func u16(_ i: Int) -> Int { Int(d[i]) | (Int(d[i + 1]) << 8) }
+        if n < 12 { contar("motor: quadro com tamanho errado"); return }
+        let w0 = u16(0), h0 = u16(2), x = u16(4), y = u16(6), w = u16(8), h = u16(10)
+        if w0 == 0 || h0 == 0 || 12 + w * h * 4 > n || x + w > w0 || y + h > h0 {
+            contar("motor: quadro com tamanho errado")
+            return
+        }
+        trava.lock()
+        if w0 != W || h0 != H || buf.isEmpty {
+            W = w0
+            H = h0
+            buf = [UInt8](repeating: 0, count: W * H * 4)
+        }
+        if w > 0 && h > 0 {
+            let largura = W
+            d.withUnsafeBytes { (de: UnsafeRawBufferPointer) -> Void in
+                self.buf.withUnsafeMutableBytes { (para: UnsafeMutableRawBufferPointer) -> Void in
+                    for r in 0..<h {
+                        memcpy(para.baseAddress! + ((y + r) * largura + x) * 4, de.baseAddress! + 12 + r * w * 4, w * 4)
+                    }
+                }
+            }
+            sujoX0 = min(sujoX0, x)
+            sujoY0 = min(sujoY0, y)
+            sujoX1 = max(sujoX1, x + w)
+            sujoY1 = max(sujoY1, y + h)
+        }
+        quadros += 1
+        let primeiro = quadros == 1
+        let postar = !pendente  // a janela ainda não viu o anterior: junta os dois
+        pendente = true
+        trava.unlock()
+        if postar { DispatchQueue.main.async { self.aplicar() } }
+        if primeiro { DispatchQueue.main.async { self.aoPrimeiro?() } }  // depois do aplicar: já tem o que mostrar
+    }
+
+    // na janela: pede pra redesenhar só o pedaço que mudou
+    private func aplicar() {
+        trava.lock()
+        pendente = false
+        let (x0, y0, x1, y1, w, h) = (sujoX0, sujoY0, sujoX1, sujoY1, W, H)
+        sujoX0 = Int.max
+        sujoY0 = Int.max
+        sujoX1 = 0
+        sujoY1 = 0
+        trava.unlock()
+        guard alvo.motor === self, w > 0, h > 0 else { return }
+        if w != aplicadoW || h != aplicadoH {  // tamanho novo (outra escala): tudo
+            aplicadoW = w
+            aplicadoH = h
+            alvo.needsDisplay = true
+            return
+        }
+        if x1 <= x0 || y1 <= y0 { return }
+        let b = alvo.bounds, sx = b.width / CGFloat(w), sy = b.height / CGFloat(h)
+        alvo.setNeedsDisplay(NSRect(x: CGFloat(x0) * sx, y: b.height - CGFloat(y1) * sy,
+                                    width: CGFloat(x1 - x0) * sx, height: CGFloat(y1 - y0) * sy).insetBy(dx: -1, dy: -1))
+    }
+
+    // Um pedaço do quadro atual pra desenhar: f = a fração da janela (0-1, y pra baixo).
+    // Copia só esse pedaço (o resto não mudou). espaco: o espaço de cor da imagem (nil = sRGB).
+    func pedaco(_ f: CGRect, espaco: CGColorSpace?) -> (imagem: CGImage, x: Int, y: Int, W: Int, H: Int)? {
+        trava.lock()
+        defer { trava.unlock() }
+        if W <= 0 || H <= 0 || buf.count != W * H * 4 { return nil }
+        let x0 = max(0, Int(floor(f.minX * CGFloat(W)))), y0 = max(0, Int(floor(f.minY * CGFloat(H))))
+        let x1 = min(W, Int(ceil(f.maxX * CGFloat(W)))), y1 = min(H, Int(ceil(f.maxY * CGFloat(H))))
+        if x1 <= x0 || y1 <= y0 { return nil }
+        let lw = x1 - x0, lh = y1 - y0, largura = W
+        var copia = Data(count: lw * lh * 4)
+        copia.withUnsafeMutableBytes { (para: UnsafeMutableRawBufferPointer) -> Void in
+            self.buf.withUnsafeBytes { (de: UnsafeRawBufferPointer) -> Void in
+                for r in 0..<lh {
+                    memcpy(para.baseAddress! + r * lw * 4, de.baseAddress! + ((y0 + r) * largura + x0) * 4, lw * 4)
+                }
+            }
+        }
+        guard let provedor = CGDataProvider(data: copia as CFData) else { return nil }
+        var espacos: [CGColorSpace] = [Motor.srgb]
+        if let e = espaco, e.model == .rgb { espacos.insert(e, at: 0) }  // o pedido; não deu, sRGB
+        for e in espacos {
+            if let imagem = CGImage(width: lw, height: lh, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: lw * 4,
+                                    space: e, bitmapInfo: Motor.bgra, provider: provedor, decode: nil,
+                                    shouldInterpolate: false, intent: .defaultIntent) {
+                return (imagem, x0, y0, W, H)
+            }
+        }
+        return nil
+    }
+}
+
+// O que o motor desenha (o Clawd, as cenas e os enfeites do tema), por cima de tudo e sem
+// pegar clique. y pra cima (não é flipped): o CGImage sai em pé sem virar nada.
+final class PalcoDoMotor: NSView {
+    var motor: Motor?
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        guard let m = motor, bounds.width > 0, bounds.height > 0, let ctx = NSGraphicsContext.current?.cgContext else { return }
+        let b = bounds
+        // o pedaço a redesenhar, em fração da janela com y pra baixo (o do motor)
+        let fracao = CGRect(x: dirtyRect.minX / b.width, y: (b.height - dirtyRect.maxY) / b.height,
+                            width: dirtyRect.width / b.width, height: dirtyRect.height / b.height)
+        // --foto: no espaço de cor de onde desenha, os pixels do motor chegam iguais no PNG (o
+        // teste confere as cores com pouca folga, como no Windows); na tela, sRGB como o resto
+        guard let p = m.pedaco(fracao, espaco: arquivoFoto != nil ? ctx.colorSpace : nil) else { return }
+        let sx = b.width / CGFloat(p.W), sy = b.height / CGFloat(p.H)
+        ctx.saveGState()
+        ctx.interpolationQuality = .none  // pixel duro, como o NearestNeighbor do Windows
+        ctx.draw(p.imagem, in: CGRect(x: CGFloat(p.x) * sx, y: b.height - CGFloat(p.y + p.imagem.height) * sy,
+                                      width: CGFloat(p.imagem.width) * sx, height: CGFloat(p.imagem.height) * sy))
         ctx.restoreGState()
     }
 }
@@ -968,22 +1499,152 @@ janela.allowsToolTipsWhenApplicationIsInactive = true
 let raiz = Raiz(frame: NSRect(x: 0, y: 0, width: L, height: A))
 let cartao = Cartao(frame: .zero)
 let palco = Palco(frame: raiz.bounds)
+let palcoDoMotor = PalcoDoMotor(frame: raiz.bounds)
 palco.cartao = cartao
+palcoDoMotor.isHidden = true
 raiz.addSubview(cartao)
 raiz.addSubview(palco)
+raiz.addSubview(palcoDoMotor)  // por cima de tudo, como o Palco do Windows
 janela.contentView = raiz
-// o que o botão direito mudou: Clawd desligado = o palco some; a opacidade o Cartao.draw lê
+// o que o botão direito mudou: Clawd desligado = o palco some; a opacidade o Cartao.draw
+// lê. Com o motor vivo o Clawd é dele (o daqui some) e ele fica sabendo pelo estado
 func aplicarConfig() {
-    palco.isHidden = !config.clawd
+    palco.isHidden = !config.clawd || motorVivo
+    palcoDoMotor.isHidden = !motorVivo
     cartao.needsDisplay = true
+    motorEstado()
 }
-aplicarConfig()
 // nasce no canto de baixo à direita (a margem M já afasta o cartão da borda)
 if let tela = NSScreen.main?.visibleFrame { janela.setFrameOrigin(NSPoint(x: tela.maxX - L, y: tela.minY)) }
+
+// o node dos hooks (no PATH, ou onde o Homebrew e o instalador do Node põem); sem ele, o do
+// VS Code que me abriu (Electron fazendo de node, com ELECTRON_RUN_AS_NODE=1)
+func acharNode() -> (caminho: String, comoNode: Bool)? {
+    let fm = FileManager.default
+    let candidatos = (ambiente["PATH"] ?? "").split(separator: ":").map { String($0) + "/node" }
+        + ["/opt/homebrew/bin/node", "/usr/local/bin/node"]
+    for c in candidatos where fm.isExecutableFile(atPath: c) { return (c, false) }
+    if let c = ambiente["CLAUDE_MONITOR_NODE"], fm.isExecutableFile(atPath: c) { return (c, true) }
+    return nil
+}
+// motor/ fica ao lado do binário (~/.claude-monitor/motor), como no Windows ao lado do overlay.ps1
+let scriptDoMotor = (binario as NSString).deletingLastPathComponent + "/motor/motor.js"
+
+// Abre o motor. Ele desenha o Clawd, as cenas e os enfeites do tema; enquanto não manda o
+// 1º quadro, e se cair, fica o Clawd daqui. Caiu: tenta de novo em 5 s, 30 s e 2 min.
+func ligarMotor() {
+    if semMotor || motor != nil { return }
+    let achado = acharNode()
+    guard let node = achado, FileManager.default.fileExists(atPath: scriptDoMotor) else {
+        if tentativasDoMotor == 0 { anotar("motor desligado: \(achado == nil ? "sem node" : "sem motor.js"); fica o Clawd daqui") }
+        tentativasDoMotor = 99
+        return
+    }
+    let m = Motor(alvo: palcoDoMotor)
+    m.aoLinha = { anotar($0) }
+    // o layout de cada tema; no --foto, monta o cartão com ele e só então pede a foto (motorEstado)
+    m.aoPronto = { [weak m] in
+        guard let m = m, motor === m else { return }
+        layouts = nil
+        if let o = (try? JSONSerialization.jsonObject(with: Data(m.pronto.utf8))) as? [String: Any],
+           let doTema = o["temas"] as? [String: Any] {
+            var novos: [String: Aparencia] = [:]
+            for (nome, v) in doTema {
+                if let l = v as? [String: Any] { novos[nome] = aparencia(l) }
+            }
+            layouts = novos
+        } else {
+            anotar("motor: mensagem P com defeito")
+        }
+        if arquivoFoto != nil { atualizar() }
+    }
+    m.aoPrimeiro = { [weak m] in
+        guard let m = m, motor === m else { return }
+        if tentativasDoMotor > 0 && tentativasDoMotor < 99 { anotar("motor voltou") }
+        motorVivo = true
+        tentativasDoMotor = 0
+        palco.luta = nil
+        palcoDoMotor.needsDisplay = true
+        aplicarConfig()  // o Clawd daqui some, o do motor aparece
+        atualizar()      // os enfeites do tema passam pro motor
+    }
+    m.aoSair = { [weak m] codigo in
+        guard let m = m, motor === m else { return }
+        if arquivoFoto != nil {
+            // o --foto sai depois do quadro: fica o quadro. Sem quadro, a foto é a de sempre
+            if !motorVivo {
+                tentativasDoMotor = 99
+                layouts = nil
+                atualizar()
+            }
+            return
+        }
+        motor = nil
+        motorVivo = false
+        enviadoAoMotor = ""
+        palcoDoMotor.motor = nil
+        tentativasDoMotor += 1
+        aplicarConfig()  // o Clawd daqui volta
+        atualizar()      // e o cartão de sempre
+        let espera = [5, 30, 120][min(2, tentativasDoMotor - 1)]
+        if tentativasDoMotor <= 5 {
+            anotar("motor saiu (\(codigo)); tento de novo em \(espera) s")
+            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(espera)) { ligarMotor() }
+        } else {
+            anotar("motor saiu (\(codigo)) de novo; desisti até reabrir")
+        }
+    }
+    var args = [scriptDoMotor, "--pasta", pasta]
+    if arquivoFoto != nil {
+        // a foto: o quadro desse instante (da cena, com --cena), com sorteio e hora fixos
+        let partes = (argumento("--cena") ?? "").split(separator: " ").map { String($0) }
+        args += ["--foto", partes.count == 2 ? partes[1] : "1", "--semente", "7", "--hora", "12"]
+        if partes.count == 2 { args += ["--cena", partes[0]] }
+    }
+    do {
+        try m.iniciar(node.caminho, node.comoNode, args)
+    } catch {
+        anotar("não abri o motor (\(node.caminho)): \(error.localizedDescription)")
+        tentativasDoMotor = 99
+        return
+    }
+    motor = m
+    palcoDoMotor.motor = m
+    enviadoAoMotor = ""
+    motorEstado()
+}
+
+// o que o motor precisa saber (docs/MOTOR.md); só manda quando mudou
+func motorEstado() {
+    guard let m = motor, cartao.frame.width > 0 else { return }
+    let f = cartao.frame
+    let estado: [String: Any] = [
+        "msg": "estado", "tema": config.tema, "clawd": config.clawd, "modo": palco.modo,
+        "escala": Double(janela.backingScaleFactor), "janela": [Double(L), Double(A)],
+        "cartao": cartao.naJanela(0, 0, f.width, f.height), "raio": Double(cartao.ap.raio), "opacidade": config.opacidade,
+        "linhas": cartao.caixasDasLinhas(), "uso": cartao.caixasDoUso(),
+    ]
+    guard JSONSerialization.isValidJSONObject(estado),
+          let dados = try? JSONSerialization.data(withJSONObject: estado, options: [.sortedKeys]),
+          let json = String(data: dados, encoding: .utf8) else { return }
+    if json != enviadoAoMotor {
+        enviadoAoMotor = json
+        m.enviar(json)
+    }
+    // --foto: a foto sai com o cartão já montado pelo layout do tema
+    if arquivoFoto != nil && layouts != nil && !pediuFoto {
+        pediuFoto = true
+        m.enviar("{\"msg\":\"foto\"}")
+    }
+}
+func motorEvento(_ tipo: String) {
+    if motorVivo { motor?.enviar("{\"msg\":\"evento\",\"tipo\":\"\(tipo)\"}") }
+}
 
 // a extensão trocou o binário por uma versão nova: vira ela (mesmo processo)
 func seAtualizou() {
     guard arquivoFoto == nil, let v = versao, let agora = dataDoArquivo(binario), agora != v else { return }
+    motor?.parar()  // a versão nova abre o motor dela; este não pode ficar órfão
     var args: [UnsafeMutablePointer<CChar>?] = argumentos.map { strdup($0) }
     args.append(nil)
     execv(binario, &args)
@@ -993,10 +1654,10 @@ func atualizar() {
     let agora = Date().timeIntervalSince1970
     let sessoes = lerSessoes(agora: agora)
     avisar(sessoes)
-    cartao.linhas = sessoes.map { s -> (id: String, cor: NSColor, nome: String, tempo: String, rotulo: String, pulsa: Bool) in
+    cartao.linhas = sessoes.map { s -> LinhaDoCartao in
         let e = estados[s.situacao] ?? (cor: "#9CA3AF", rotulo: s.situacao)
-        return (id: s.id, cor: hex(e.cor), nome: s.nome, tempo: tempo((agora - s.since) / 60), rotulo: e.rotulo,
-                pulsa: s.situacao == "working")
+        return LinhaDoCartao(id: s.id, sit: s.situacao, cor: e.cor, nome: s.nome, tempo: tempo((agora - s.since) / 60),
+                             rotulo: e.rotulo)
     }
     buscarUso()
     cartao.aviso = versaoNova()
@@ -1007,16 +1668,19 @@ func atualizar() {
     palco.mudar(situacoes.contains("question") || situacoes.contains("permission") ? "pulando"
                 : situacoes.contains("working") ? "andando" : "parado")
     palco.needsDisplay = true
+    motorEstado()  // depois do arrumar e do mudar: onde a lista nova ficou e o que o Clawd faz
     if let foto = arquivoFoto {
         // --clicar: o meio da linha daquela sessão (ou do aviso, com "baixar"), pelo mesmo caminho do clique de verdade
         if let alvo = argumento("--clicar") {
-            let y: CGFloat? = alvo == "baixar" ? cartao.yAviso + 10 : cartao.linhas.firstIndex(where: { $0.id == alvo }).map { 6 + CGFloat($0) * 20 + 10 }
+            let y: CGFloat? = alvo == "baixar" ? cartao.yAviso + 10
+                : cartao.linhas.firstIndex(where: { $0.id == alvo }).map { cartao.y0 + CGFloat($0) * cartao.alturaLinha + cartao.alturaLinha / 2 }
             if let y = y, let achou = cartao.alvoNoPonto(NSPoint(x: cartao.bounds.midX, y: y)) { clicar(achou) }
         }
         let clawd = config.clawd ? palco.modo + (palco.luta.map { " (\($0))" } ?? "") : "desligado"
+        let som = somDaVez.flatMap { avisoDaSituacao[$0] }.flatMap { nomeDoSom[config.tema]?[$0] } ?? "nenhum"
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
             + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")",
-               "som: \(somDaVez.flatMap { nomeDoSom[$0] } ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
+               "som: \(som)", "clique: \(cliqueDaVez ?? "nenhum")",
                "atualizacao: \(cartao.aviso ?? "nenhuma")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)
     }
@@ -1028,23 +1692,36 @@ func repetir(_ intervalo: TimeInterval, _ bloco: @escaping () -> Void) {
     RunLoop.main.add(t, forMode: .common)  // continua durante arrasto e menu
 }
 
+aplicarConfig()
 atualizar()
 janela.orderFrontRegardless()
+ligarMotor()
 repetir(2) { atualizar() }
 repetir(1.0 / 30) {
     palco.tique()
-    // o pulso da bolinha verde: só a coluna das bolinhas
-    if cartao.linhas.contains(where: { $0.pulsa }) { cartao.setNeedsDisplay(NSRect(x: 8, y: 0, width: 12, height: cartao.bounds.height)) }
+    // o pulso da bolinha verde: só a coluna das bolinhas (com enfeites, quem desenha é o motor)
+    if !cartao.ap.enfeites && cartao.linhas.contains(where: { $0.sit == "working" }) {
+        cartao.setNeedsDisplay(NSRect(x: cartao.x0 - 2, y: 0, width: 12, height: cartao.bounds.height))
+    }
 }
+// mudou de tela (Retina ou não): o motor desenha na escala nova
+_ = NotificationCenter.default.addObserver(forName: NSWindow.didChangeBackingPropertiesNotification, object: janela,
+                                           queue: .main) { _ in motorEstado() }
 
 if let foto = arquivoFoto {
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-        if let cena = argumento("--cena") { palco.fotografar(cena) }
+    // 1,2 s pra assentar; com o motor, até 8 s pelo 1º quadro (o node leva ~1 s pra abrir)
+    var tiques = 0
+    repetir(0.2) {
+        tiques += 1
+        if tiques < 6 { return }
+        if motor != nil && !motorVivo && tentativasDoMotor < 99 && tiques < 40 { motorEstado(); return }
+        if !motorVivo, let cena = argumento("--cena") { palco.fotografar(cena) }  // sem o motor, as lutas daqui
         atualizar()
         if let rep = raiz.bitmapImageRepForCachingDisplay(in: raiz.bounds) {
             raiz.cacheDisplay(in: raiz.bounds, to: rep)
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: foto))
             print("foto: \(foto)")
+            print("motor: \(motorVivo ? "desenhou" : "desligado")")  // o teste confere quem desenhou o Clawd
         }
         exit(0)
     }

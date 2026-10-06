@@ -1,0 +1,40 @@
+Sons do tema Dragon Ball do Claude Monitor (terminou.wav, esperando.wav, tudo.wav).
+Montados a partir de originais CC0 (domínio público): nenhum título, tag ou descrição fala em
+Dragon Ball ou outra obra, e nenhuma descrição diz que o som veio de outra fonte. Freesound: a
+prévia HQ pública (mesma licença do original); Kenney: arquivo do zip do pacote.
+
+arquivo:  originais/fs_639429_cristal.ogg
+título:   Crystal Twinkle
+autor:    LaurenPonder
+página:   https://freesound.org/people/LaurenPonder/sounds/639429/
+baixado:  https://cdn.freesound.org/previews/639/639429_5685306-hq.ogg
+licença:  Creative Commons 0 (https://creativecommons.org/publicdomain/zero/1.0/). Página: "Creative Commons 0 — You can copy, modify, distribute and perform the sound, even for commercial purposes, all without the need of asking permission to the author."
+aceito:   nenhuma menção a franquia, anime, jogo, série ou outra fonte no título, tags ou descrição.
+uso:      G (os 3): uma quinta abaixo (reamostragem, -7 semitons), trecho 0,05–1,6 s, passa-baixa 6 kHz.
+
+arquivo:  originais/fs_399656_trovao_estouro.ogg
+título:   sfx_thunder blast.wav
+autor:    bajko
+página:   https://freesound.org/people/bajko/sounds/399656/
+baixado:  https://cdn.freesound.org/previews/399/399656_2341984-hq.ogg
+licença:  Creative Commons 0 (https://creativecommons.org/publicdomain/zero/1.0/). Página: "Creative Commons 0 — You can copy, modify, distribute and perform the sound, even for commercial purposes, all without the need of asking permission to the author."
+aceito:   nenhuma menção a franquia, anime, jogo, série ou outra fonte no título, tags ou descrição.
+uso:      G tudo: 0,3–1,9 s (o estouro e o começo do ronco), passa-baixa 5 kHz, fade de saída 0,7 s.
+
+arquivo:  originais/kenney_impact-sounds_impactGlass_light_000.ogg
+título:   impact-sounds / impactGlass_light_000.ogg
+autor:    Kenney (www.kenney.nl)
+página:   https://kenney.nl/assets/impact-sounds
+baixado:  zip do pacote na página
+licença:  Creative Commons CC0 (página: "License: Creative Commons CC0"; License.txt do zip: "License: (Creative Commons Zero, CC0)")
+aceito:   pacote da Kenney: efeitos originais dela, CC0.
+uso:      G (os 3): o "tilim" no tom original e +9 semitons.
+
+arquivo:  originais/kenney_impact-sounds_impactGlass_light_002.ogg
+título:   impact-sounds / impactGlass_light_002.ogg
+autor:    Kenney (www.kenney.nl)
+página:   https://kenney.nl/assets/impact-sounds
+baixado:  zip do pacote na página
+licença:  Creative Commons CC0 (página: "License: Creative Commons CC0"; License.txt do zip: "License: (Creative Commons Zero, CC0)")
+aceito:   pacote da Kenney: efeitos originais dela, CC0.
+uso:      G (os 3): o "tilim" +4 / +5 / +9 semitons.

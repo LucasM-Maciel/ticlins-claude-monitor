@@ -67,8 +67,8 @@ let processos;  // [{ tipo, cmd, args }]
 let semFerramentasApple = false;
 let semNode = false;
 const spawnReal = cp.spawn, execFileReal = cp.execFile;
-cp.spawn = (cmd, args) => {
-    processos.push({ tipo: "spawn", cmd, args });
+cp.spawn = (cmd, args, opcoes) => {
+    processos.push({ tipo: "spawn", cmd, args, env: opcoes && opcoes.env });
     return { unref() {} };
 };
 cp.execFile = (cmd, args, opcoes, cb) => {
@@ -144,12 +144,19 @@ const spawns = () => processos.filter((p) => p.tipo === "spawn");
 
 test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", async () => {
     const { pasta } = await ativar({ plataforma: "win32" });
-    for (const f of ["hook.js", "processes.js", "overlay.ps1", "minecraft.js", "vorbis.min.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
+    for (const f of ["hook.js", "processes.js", "overlay.ps1", "minecraft.js", "vorbis.min.js", "sons-padrao/terminou.wav", "sons-padrao/esperando.wav", "sons-padrao/tudo.wav",
+        "sons-dragonball/tudo.wav", "motor/motor.js", "motor/Motor.cs", "motor/raster.js", "motor/tema-padrao.js"]) {
+        assert.ok(fs.existsSync(path.join(pasta, f)), f);
+    }
+    // a pasta motor/ inteira, do jeito que está na extensão
+    const doMotor = fs.readdirSync(path.join(__dirname, "..", "..", "extensao", "janelinha", "motor")).sort();
+    assert.deepStrictEqual(fs.readdirSync(path.join(pasta, "motor")).sort(), doMotor);
     assert.strictEqual(fs.readFileSync(path.join(pasta, "versao-janelinha"), "utf8"), manifesto.version);
     const [s] = spawns();
     assert.strictEqual(s.cmd, "cmd.exe");
     assert.ok(s.args.includes(path.join(pasta, "overlay.ps1")));
     assert.ok(s.args.includes("Bypass"), "sem ExecutionPolicy Bypass o PowerShell recusa o script");
+    assert.strictEqual(s.env.CLAUDE_MONITOR_NODE, process.execPath, "sem node no PATH o motor usa o do VS Code");
     const diario = fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8");
     assert.match(diario, new RegExp(`copiou a janelinha ${manifesto.version} \\(antes: nenhuma\\)`));
     assert.match(diario, /mandou abrir a janelinha/);
@@ -157,7 +164,7 @@ test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", asyn
 
 test("Mac: copia o .swift, compila com swift 5 e abre o binário", async () => {
     const { pasta } = await ativar({ plataforma: "darwin" });
-    for (const f of ["overlay.swift", "minecraft.js", "vorbis.min.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
+    for (const f of ["overlay.swift", "minecraft.js", "vorbis.min.js", "sons-padrao/tudo.wav", "sons-dragonball/tudo.wav", "motor/motor.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
     const compilou = processos.find((p) => p.cmd === "xcrun");
     assert.ok(compilou, "não chamou o xcrun swiftc");
     assert.deepStrictEqual(compilou.args.slice(0, 4), ["swiftc", "-swift-version", "5", "-O"]);
@@ -401,7 +408,7 @@ test("'Usar sons do Minecraft' sem internet: avisa, sem quebrar", async () => {
 test("sem os sons do Minecraft: a extensão baixa sozinha, calada, e anota no diário", async () => {
     await comMojang(async () => {
         const { r, pasta } = await ativar({ semSons: true });
-        await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha \(12 sons, 4 texturas\)/);
+        await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha \(12 sons, \d+ texturas\)/);
         assert.ok(fs.existsSync(path.join(pasta, "sons", "levelup.wav")));
         assert.ok(!r.mensagens.some((m) => /Minecraft/.test(m.texto)), "não era pra mostrar nada");
     });

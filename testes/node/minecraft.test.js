@@ -31,7 +31,7 @@ async function comMojang(opcoes, fn) {
     }
 }
 const WAVS = ["xp1", "xp2", "xp3", ...Object.keys(SONS).filter((n) => n !== "xp")].map((n) => `${n}.wav`).sort();
-const TEXTURAS = ["picareta", "espada", "diamante", "pedra"];
+const TEXTURAS = Object.keys(require("../../extensao/janelinha/minecraft.js").TEXTURAS);
 
 test("baixa os sons (XP em 3 tons) e as texturas da versão mais nova, e cutuca a janelinha", async () => {
     await comMojang({}, async (m) => {
@@ -40,7 +40,7 @@ test("baixa os sons (XP em 3 tons) e as texturas da versão mais nova, e cutuca 
         fs.writeFileSync(overlay, "");
         fs.utimesSync(overlay, new Date(2020, 0, 1), new Date(2020, 0, 1));
         const r = await baixarTudo({ destino });
-        assert.deepStrictEqual(r, { versao: "1.99", sons: 12, texturas: 4 });
+        assert.deepStrictEqual(r, { versao: "1.99", sons: 12, texturas: TEXTURAS.length });
         assert.deepStrictEqual(fs.readdirSync(path.join(destino, "sons")).sort(), WAVS, "sobrou .novo ou faltou som");
         for (const f of WAVS) {
             const w = lerWav(path.join(destino, "sons", f));

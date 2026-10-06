@@ -162,7 +162,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'padrao') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
@@ -172,6 +172,9 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         $foto = "$Saida\windows-$cenario.png"
         Remove-Item "$foto*" -ErrorAction SilentlyContinue
         $argumentos = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', $overlay, '-Foto', $foto, '-Pasta', $pasta)
+        # as lutas antigas (pedra, bug) só existem no Clawd daqui, o de quando falta o node; as
+        # cenas do motor têm os testes delas (testes/node/tema-*.test.js)
+        if ($cenario -in 'pedra', 'bug') { $argumentos += '-SemMotor' }
         if (Test-Path "$pasta\uso.json") { $argumentos += '-ArquivoUso', "$pasta\uso.json" }
         if (Test-Path "$pasta\clicar.txt") { $argumentos += '-Clicar', [IO.File]::ReadAllText("$pasta\clicar.txt") }
         if (Test-Path "$pasta\cena.txt") { $argumentos += '-Cena', [IO.File]::ReadAllText("$pasta\cena.txt") }
@@ -192,7 +195,29 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         Verdade ([Pixels]::Contar($foto, 215, 119, 87, 12) -gt 30) 'cadê o Clawd (laranja)?'
         if ($cenario -eq 'andando') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'não usou a picareta.png' }
         elseif ($cenario -eq 'pedra') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'cadê o diamante (diamante.png) subindo?' }
+        elseif ($cenario -eq 'padrao') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
         else { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -gt 5) 'cadê a ferramenta desenhada (ciano)?' }
+        # tema Minecraft com as texturas de mentira do cenarios.js; o Padrão tem elas na pasta e não usa
+        if ($cenario -in 'minecraft', 'padrao') {
+            $mc = @{
+                'terra (borda)'                 = [Pixels]::Contar($foto, 122, 74, 42, 10)
+                'grama (em cima da borda)'      = [Pixels]::Contar($foto, 60, 176, 67, 10)
+                'orbe vermelho (terminou)'      = [Pixels]::Contar($foto, 239, 68, 68, 6)
+                'orbe amarelo (permissão)'      = [Pixels]::Contar($foto, 250, 204, 21, 6)
+                'orbe trabalhando (quadro 18)'  = [Pixels]::Contar($foto, 79, 255, 51, 8)  # o motor fotografa em T = 1 s
+                'barra de XP verde (5h a 38%)'  = [Pixels]::Contar($foto, 0, 200, 0, 10)
+                'barra de XP dourada (7d a 85%)' = [Pixels]::Contar($foto, 219, 146, 0, 10)
+                # a fonte de mentira é um bloco cheio por letra: o miolo fica na cor exata (suavizada
+                # em 11/9 a sombra se mistura com o fundo); a Segoe na mesma cor dá ~16 pixels
+                'letra do Minecraft'            = [Pixels]::Contar($foto, 128, 255, 32, 3)
+            }
+            $minimo = @{ 'terra (borda)' = 300; 'grama (em cima da borda)' = 300; 'barra de XP verde (5h a 38%)' = 150; 'barra de XP dourada (7d a 85%)' = 300; 'letra do Minecraft' = 60 }
+            if ($cenario -eq 'minecraft') {
+                foreach ($k in $mc.Keys) { $alvoMc = $(if ($minimo[$k]) { $minimo[$k] } else { 40 }); Verdade ($mc[$k] -ge $alvoMc) "cadê ${k}? ($($mc[$k]) pixels)" }
+            } elseif ($cenario -eq 'padrao') {
+                foreach ($k in 'terra (borda)', 'grama (em cima da borda)', 'orbe trabalhando (quadro 18)', 'barra de XP verde (5h a 38%)', 'letra do Minecraft') { Verdade ($mc[$k] -lt 5) "$k no tema Padrão ($($mc[$k]) pixels)" }
+            }
+        }
         if ($cenario -eq 'bug') { Verdade ([Pixels]::Contar($foto, 239, 68, 68, 20) -gt 20) 'o bug não ficou vermelho com a espadada' }
         if ($cenario -eq 'atualizar') { Verdade ([Pixels]::Contar($foto, 167, 139, 250, 25) -gt 10) 'cadê o aviso roxo da versão nova?' }
         if ($cenario -eq 'misto') { Verdade ([Pixels]::Contar($foto, 167, 139, 250, 25) -lt 3) 'aviso roxo sem versão nova' }
@@ -309,7 +334,7 @@ Teste 'baixa os sons e as texturas, sem Minecraft nem ffmpeg, e recarrega a jane
     $r = ComAmbiente @{ USERPROFILE = $casa; PATH = $pathSemFfmpeg; CLAUDE_MONITOR_MOJANG = $urlMojang } { Rodar $node @($scriptMc) }
     Verdade ($r.codigo -eq 0) $r.saida
     foreach ($f in 'xp1', 'xp2', 'xp3', 'levelup', 'aldeao_hmm1', 'aldeao_hmm2', 'gato') { Verdade (Test-Path "$casa\.claude-monitor\sons\$f.wav") "falta $f.wav: $($r.saida)" }
-    foreach ($f in 'picareta', 'espada', 'diamante', 'pedra') { Verdade (Test-Path "$casa\.claude-monitor\$f.png") "falta $f.png: $($r.saida)" }
+    foreach ($f in 'picareta', 'espada', 'diamante', 'pedra', 'terra', 'grama', 'orbe', 'xp_fundo', 'xp_barra', 'fonte') { Verdade (Test-Path "$casa\.claude-monitor\$f.png") "falta $f.png: $($r.saida)" }
     # o mesmo tocador da janelinha: Load() recusa .wav que ele não entende
     foreach ($wav in Get-ChildItem "$casa\.claude-monitor\sons\*.wav") { (New-Object Media.SoundPlayer $wav.FullName).Load() }
     Verdade ((Get-Item "$casa\.claude-monitor\overlay.ps1").LastWriteTimeUtc -gt [DateTime]::UtcNow.AddMinutes(-5)) 'não cutucou a janelinha pra recarregar'
@@ -343,7 +368,9 @@ Teste 'instala: extensão no VS Code e no Cursor, arquivos, versão e hooks' {
         $log = Get-Content "$bin\$editor.log" -Raw
         Verdade ($log -match '--install-extension' -and $log -match [regex]::Escape("claude-monitor-$versao.vsix") -and $log -match '--force') "$editor recebeu: $log"
     }
-    foreach ($f in 'hook.js', 'processes.js', 'overlay.ps1', 'minecraft.js', 'vorbis.min.js') { Verdade (Test-Path "$casa\.claude-monitor\$f") "falta $f" }
+    foreach ($f in 'hook.js', 'processes.js', 'overlay.ps1', 'minecraft.js', 'vorbis.min.js', 'sons-padrao\terminou.wav', 'sons-padrao\esperando.wav', 'sons-padrao\tudo.wav', 'sons-dragonball\tudo.wav', 'motor\motor.js', 'motor\Motor.cs', 'motor\raster.js') { Verdade (Test-Path "$casa\.claude-monitor\$f") "falta $f" }
+    # instalação nova começa no tema Padrão
+    Igual '{"tema":"padrao"}' ([IO.File]::ReadAllText("$casa\.claude-monitor\config.json")) 'config.json da instalação nova' 
     Verdade (Test-Path "$casa\.claude-monitor\sons\levelup.wav") "não baixou os sons do Minecraft: $($r.saida)"
     Verdade (-not (Test-Path "$casa\.claude-monitor\install.js")) 'install.js sobrou na pasta'
     Igual $versao ([IO.File]::ReadAllText("$casa\.claude-monitor\versao-janelinha")) 'versão marcada'

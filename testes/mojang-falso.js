@@ -9,7 +9,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const yazl = require("yazl");
-const { SONS } = require("../extensao/janelinha/minecraft.js");
+const { SONS, TEXTURAS } = require("../extensao/janelinha/minecraft.js");
 
 // a mesma picareta magenta 16x16 dos testes da janelinha
 const MAGENTA = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC", "base64");
@@ -20,7 +20,7 @@ function jar() {
     const zip = new yazl.ZipFile();
     // mais de 64 KB antes do índice: o "fim do zip" não é o arquivo inteiro
     zip.addBuffer(crypto.randomBytes(100000), "net/minecraft/Main.class");
-    for (const t of ["item/diamond_pickaxe", "item/diamond_sword", "item/diamond", "block/diamond_ore"]) {
+    for (const t of Object.values(TEXTURAS)) {
         zip.addBuffer(MAGENTA, `assets/minecraft/textures/${t}.png`);
     }
     zip.addBuffer(MAGENTA, "assets/minecraft/textures/item/iron_pickaxe.png", { compress: false });

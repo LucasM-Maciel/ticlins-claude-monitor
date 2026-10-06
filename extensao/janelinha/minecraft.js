@@ -5,8 +5,9 @@
  * Mojang vai no pacote. Grava em ~/.claude-monitor:
  *   sons/*.wav  os .ogg da versão mais nova, decodificados aqui (vorbis.min.js)
  *   picareta.png, espada.png, diamante.png, pedra.png (a pedra é o minério de
- *               diamante): do jar da versão, só os pedaços que interessam
- *               (o jar tem ~40 MB, baixa ~4 MB)
+ *               diamante) e as do tema Minecraft da janelinha (terra, grama,
+ *               orbe de XP, barra de XP, letra): do jar da versão, só os pedaços
+ *               que interessam (o jar tem ~40 MB, baixa ~4 MB)
  * Sem internet, fica o que tinha (sons do sistema e os desenhos da janelinha).
  * Uso: node minecraft.js  (o instalador roda; o comando "Usar sons do Minecraft"
  * e a extensão, quando falta som, chamam baixarTudo()).
@@ -32,7 +33,37 @@ const SONS = {
     gato: "mob/cat/meow1",
 };
 const TONS = { xp: [0.8, 1.0, 1.25] }; // como o jogo, o XP muda de tom a cada vez: xp1, xp2, xp3
-const TEXTURAS = { picareta: "item/diamond_pickaxe", espada: "item/diamond_sword", diamante: "item/diamond", pedra: "block/diamond_ore" };
+const TEXTURAS = {
+    picareta: "item/diamond_pickaxe", espada: "item/diamond_sword", diamante: "item/diamond", pedra: "block/diamond_ore",
+    // tema Minecraft: borda do cartão, bolinhas, barra do usage e números
+    terra: "block/dirt", grama: "block/grass_block_side", orbe: "entity/experience/experience_orb",
+    xp_fundo: "gui/sprites/hud/experience_bar_background", xp_barra: "gui/sprites/hud/experience_bar_progress", fonte: "font/ascii",
+    // eventos do tema Minecraft (motor/minecraft-*.js): mobs, partículas, corações, blocos e itens.
+    // Um caminho por nome: dois nomes no mesmo arquivo do jar, só um seria gravado.
+    zumbi: "entity/zombie/zombie", creeper: "entity/creeper/creeper", esqueleto: "entity/skeleton/skeleton",
+    aranha: "entity/spider/spider", aranha_olhos: "entity/spider/spider_eyes", slime: "entity/slime/slime",
+    silverfish: "entity/silverfish/silverfish", enderman: "entity/enderman/enderman", enderman_olhos: "entity/enderman/enderman_eyes",
+    lobo: "entity/wolf/wolf", lobo_manso: "entity/wolf/wolf_tame", lobo_coleira: "entity/wolf/wolf_collar",
+    galinha: "entity/chicken/chicken_temperate", flecha: "entity/projectiles/arrow", escudo: "entity/shield/shield_base_nopattern",
+    critico: "particle/critical_hit", coracao_part: "particle/heart",
+    coracao_cheio: "gui/sprites/hud/heart/full", coracao_meio: "gui/sprites/hud/heart/half", coracao_vazio: "gui/sprites/hud/heart/container",
+    coracao_vazio_pisca: "gui/sprites/hud/heart/container_blinking", coracao_ouro: "gui/sprites/hud/heart/absorbing_full",
+    rocha: "block/stone", min_carvao: "block/coal_ore", min_ferro: "block/iron_ore", min_ouro: "block/gold_ore",
+    min_redstone: "block/redstone_ore", min_lapis: "block/lapis_ore", min_esmeralda: "block/emerald_ore",
+    it_carne: "item/rotten_flesh", it_osso: "item/bone", it_linha: "item/string", it_slime: "item/slime_ball", it_ovo: "item/egg",
+    it_carvao: "item/coal", it_ferro: "item/raw_iron", it_ouro: "item/raw_gold", it_redstone: "item/redstone",
+    it_lapis: "item/lapis_lazuli", it_esmeralda: "item/emerald",
+    arco: "item/bow", arco0: "item/bow_pulling_0", arco1: "item/bow_pulling_1", arco2: "item/bow_pulling_2", totem: "item/totem_of_undying",
+    // o Ender Dragon (motor/minecraft-dragao.js)
+    dragao: "entity/enderdragon/dragon", dragao_olhos: "entity/enderdragon/dragon_eyes", dragao_bola: "entity/enderdragon/dragon_fireball",
+    end_stone: "block/end_stone", ceu_end: "environment/end_sky", ovo_dragao: "block/dragon_egg", flash: "particle/flash",
+    cristal: "entity/end_crystal/end_crystal", cristal_raio: "entity/end_crystal/end_crystal_beam",
+    boss_fundo: "gui/sprites/boss_bar/purple_background", boss_barra: "gui/sprites/boss_bar/purple_progress",
+};
+// as numeradas: fumaça, explosão, varrida e faísca (partículas) e as rachaduras do bloco
+for (let i = 0; i < 8; i++) Object.assign(TEXTURAS, { [`poof${i}`]: `particle/generic_${i}`, [`varrida${i}`]: `particle/sweep_${i}`, [`brilho${i}`]: `particle/glitter_${i}` });
+for (let i = 0; i < 16; i++) TEXTURAS[`explosao${i}`] = `particle/explosion_${i}`;
+for (let i = 0; i < 10; i++) TEXTURAS[`racha${i}`] = `block/destroy_stage_${i}`;
 const TAXA = 44100;
 
 function enderecos() {
@@ -222,4 +253,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { baixarTudo, wav, SONS };
+module.exports = { baixarTudo, wav, SONS, TEXTURAS };

@@ -42,11 +42,25 @@ foreach ($e in $editores) {
 Passo 'Copiando os arquivos pra ~/.claude-monitor'
 # os mesmos que a extensão copia quando o VS Code abre; aqui já saem de dentro do .vsix (é um zip)
 New-Item -ItemType Directory -Force $pasta | Out-Null
+# instalação nova começa no tema Padrão; quem já usava (tem versao-janelinha) fica no
+# Minecraft, que é o da janelinha sem tema no config.json. Antes de copiar: a janelinha
+# aberta se reabre ao ver o arquivo novo e lê o config.json na hora
+if (-not (Test-Path (Join-Path $pasta 'versao-janelinha')) -and -not (Test-Path (Join-Path $pasta 'config.json'))) {
+    [IO.File]::WriteAllText((Join-Path $pasta 'config.json'), '{"tema":"padrao"}')
+}
 $temp = Join-Path ([IO.Path]::GetTempPath()) "claude-monitor-$PID"
 New-Item -ItemType Directory -Force $temp | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead($vsix.FullName)
 try {
+    # pastas inteiras (o motor das animações e os sons dos temas) ANTES do overlay.ps1: a
+    # janelinha aberta se reabre ao ver o overlay novo e já acha o motor novo
+    foreach ($pastaDoVsix in 'motor', 'sons-padrao', 'sons-dragonball') {
+        $entradas = @($zip.Entries | Where-Object { $_.FullName -like "extension/janelinha/$pastaDoVsix/*" -and $_.Name })
+        if (-not $entradas) { Falhou "O .vsix está incompleto (falta janelinha/$pastaDoVsix/). Baixe de novo." }
+        New-Item -ItemType Directory -Force "$pasta\$pastaDoVsix" | Out-Null
+        foreach ($entrada in $entradas) { [IO.Compression.ZipFileExtensions]::ExtractToFile($entrada, (Join-Path "$pasta\$pastaDoVsix" $entrada.Name), $true) }
+    }
     $copias = @{
         'out/hook.js' = $pasta; 'out/processes.js' = $pasta; 'out/install.js' = $temp
         'janelinha/overlay.ps1' = $pasta; 'janelinha/minecraft.js' = $pasta; 'janelinha/vorbis.min.js' = $pasta

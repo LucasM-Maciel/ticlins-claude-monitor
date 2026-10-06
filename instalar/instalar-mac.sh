@@ -48,6 +48,13 @@ passo "Copiando os arquivos pra ~/.claude-monitor"
 # os mesmos que a extensão copia quando o VS Code abre; aqui já saem de dentro do .vsix (é um zip)
 TEMP=$(mktemp -d)
 mkdir -p "$PASTA"
+# instalação nova começa no tema Padrão; quem já usava (tem versao-janelinha) fica no Minecraft
+[ -f "$PASTA/versao-janelinha" ] || [ -f "$PASTA/config.json" ] || printf '{"tema":"padrao"}' > "$PASTA/config.json"
+# pastas inteiras: o motor das animações e os sons dos temas
+for p in motor sons-padrao sons-dragonball; do
+  mkdir -p "$PASTA/$p"
+  unzip -o -j -q "$VSIX" "extension/janelinha/$p/*" -d "$PASTA/$p" || falhou "O .vsix está incompleto (falta janelinha/$p/). Baixe de novo."
+done
 unzip -o -j -q "$VSIX" extension/out/hook.js extension/out/processes.js \
   extension/janelinha/overlay.swift extension/janelinha/minecraft.js extension/janelinha/vorbis.min.js -d "$PASTA" \
   || falhou "O .vsix está incompleto. Baixe de novo."

@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -19,6 +19,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const zlib = require("zlib");
 
 const [pasta, cenario, pidVivoTexto] = process.argv.slice(2);
 const pidVivo = Number(pidVivoTexto);
@@ -93,9 +94,46 @@ function uso(cinco, sete) {
     }));
 }
 
+// PNG RGBA; cor(x, y) -> [r, g, b, a]
+function png(arquivo, largura, altura, cor) {
+    const crc = (b) => {
+        let c = ~0;
+        for (const x of b) { c ^= x; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xEDB88320 & -(c & 1)); }
+        return ~c >>> 0;
+    };
+    const pedaco = (tipo, dados) => {
+        const b = Buffer.alloc(12 + dados.length);
+        b.writeUInt32BE(dados.length);
+        b.write(tipo, 4);
+        dados.copy(b, 8);
+        b.writeUInt32BE(crc(b.subarray(4, 8 + dados.length)), 8 + dados.length);
+        return b;
+    };
+    const linhas = Buffer.alloc((largura * 4 + 1) * altura);
+    for (let y = 0; y < altura; y++) for (let x = 0; x < largura; x++) linhas.set(cor(x, y), y * (largura * 4 + 1) + 1 + x * 4);
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(largura);
+    ihdr.writeUInt32BE(altura, 4);
+    ihdr.set([8, 6, 0, 0, 0], 8);  // 8 bits, RGBA
+    fs.writeFileSync(path.join(pasta, arquivo), Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+        pedaco("IHDR", ihdr), pedaco("IDAT", zlib.deflateSync(linhas)), pedaco("IEND", Buffer.alloc(0))]));
+}
+// texturas de mentira do tema Minecraft (as de verdade são da Mojang), com cores fáceis de
+// contar no print: terra marrom, grama verde, orbe branco (pintado vira a cor da situação),
+// barra de XP cinza com a parte cheia verde, letra = um bloco 5x7 por letra
+function texturasDoMinecraft() {
+    const TRANSPARENTE = [0, 0, 0, 0];
+    png("terra.png", 16, 16, () => [122, 74, 42, 255]);
+    png("grama.png", 16, 16, (x, y) => (y < 4 ? [60, 176, 67, 255] : TRANSPARENTE));
+    png("orbe.png", 64, 64, (x, y) => (x >= 4 && x < 12 && y >= 4 && y < 12 ? [255, 255, 255, 255] : TRANSPARENTE));
+    png("xp_fundo.png", 182, 5, () => [32, 32, 32, 255]);
+    png("xp_barra.png", 182, 5, () => [0, 200, 0, 255]);
+    png("fonte.png", 128, 128, (x, y) => (Math.floor(y / 8) >= 2 && x % 8 < 5 && y % 8 < 7 ? [255, 255, 255, 255] : TRANSPARENTE));
+}
+
 let clawd;
 let temUso = false;
-let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup
+let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup (no Padrão: sino-terminou, sino-esperando, sino-tudo)
 let clique = "nenhum";  // o link que o clique abriria (a sessão a clicar vai em clicar.txt)
 let atualizacao = "nenhuma";  // a versão nova que o aviso roxo mostra
 // consulta-versao: a última publicada no GitHub (a extensão grava); versao-janelinha: a instalada
@@ -234,6 +272,25 @@ if (cenario === "misto") {
     sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
     fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ opacidade: 0.5, clawd: false, volume: 0 }));
     clawd = "desligado";
+} else if (cenario === "minecraft") {  // tema Minecraft com as texturas: orbe, terra com grama, barra de XP e a letra
+    sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
+    sessao("b", { estado: "waiting", antes: "working", mostra: ["Deploy pronto", "finished"], linhas: [titulo("Deploy pronto"), texto("Feito.")] });
+    sessao("c", { estado: "permission", since: agora - 5, mexeuEm: agora - 60, mostra: ["Migrar o banco", "permission"], linhas: [titulo("Migrar o banco"), ferramenta("Bash")] });
+    texturasDoMinecraft();
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "minecraft" }));
+    clawd = "pulando";
+    som = "xp";
+    uso(38, 85);
+    temUso = true;
+} else if (cenario === "padrao") {  // tema Padrão: Clawd sem ferramenta, som de sino, nada das texturas do Minecraft
+    sessao("a", { estado: "working", antes: "working", mostra: ["Ainda rodando", "working"], linhas: [titulo("Ainda rodando"), ferramenta("Bash")] });
+    sessao("b", { estado: "waiting", antes: "working", mostra: ["Deploy pronto", "finished"], linhas: [titulo("Deploy pronto"), texto("Feito.")] });
+    texturasDoMinecraft();  // tem as texturas, mas o Padrão não usa
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao" }));
+    clawd = "andando";
+    som = "sino-terminou";
+    uso(38, 85);
+    temUso = true;
 } else {
     console.error(`cenário desconhecido: ${cenario}`);
     process.exit(2);

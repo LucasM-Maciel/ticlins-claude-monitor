@@ -101,10 +101,27 @@ class SessionsProvider {
 // --- Janelinha: fora do VS Code, sempre por cima, com sessões + usage + Clawd ---
 // Windows: overlay.ps1 (PowerShell/WPF, já vem no Windows). Mac: overlay.swift,
 // compilado aqui na 1ª vez (precisa das ferramentas de linha de comando da Apple).
+// Pastas inteiras (terminam em /): motor/ (as animações, docs/MOTOR.md), sons-padrao/ (feitos
+// pelo sons-padrao.py) e sons-dragonball/ (CC0); os do Minecraft vêm da Mojang. O overlay vai
+// por último: a janelinha aberta se reabre ao ver ele mudar e já acha o motor novo.
+const PASTAS_JANELINHA = ["motor/", "sons-padrao/", "sons-dragonball/"];
 const JANELINHA = {
-    win32: ["overlay.ps1", "minecraft.js", "vorbis.min.js"],
-    darwin: ["overlay.swift", "minecraft.js", "vorbis.min.js"],
+    win32: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay.ps1"],
+    darwin: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay.swift"],
 };
+/** A lista com cada pasta trocada pelos arquivos de dentro dela (como estão em `raiz`). */
+function abrirPastas(raiz, lista) {
+    return lista.flatMap((f) => {
+        if (!f.endsWith("/"))
+            return [f];
+        try {
+            return fs.readdirSync(path.join(raiz, f), { withFileTypes: true }).filter((e) => e.isFile()).map((e) => f + e.name);
+        }
+        catch {
+            return [];
+        }
+    });
+}
 const BINARIO_MAC = path.join(sessions_1.MONITOR_DIR, "ClaudeMonitor");
 let janelinhaAberta = false; // com ela aberta quem toca o som é ela
 /** Diário da janelinha (a do Windows também anota nele): quem copiou, quem abriu. */
@@ -130,9 +147,9 @@ function janelinhaLigada() {
  * aberta vê o arquivo novo e se reabre sozinha.
  */
 function copiarJanelinha(context) {
-    const arquivos = JANELINHA[process.platform];
-    if (!arquivos)
+    if (!JANELINHA[process.platform])
         return;
+    const arquivos = abrirPastas(path.join(context.extensionPath, "janelinha"), JANELINHA[process.platform]);
     const marca = path.join(sessions_1.MONITOR_DIR, "versao-janelinha");
     const versao = context.extension.packageJSON.version;
     let copiada = "";
@@ -147,6 +164,7 @@ function copiarJanelinha(context) {
     const agora = new Date();
     for (const f of arquivos) {
         const destino = path.join(sessions_1.MONITOR_DIR, f);
+        fs.mkdirSync(path.dirname(destino), { recursive: true });
         fs.copyFileSync(path.join(context.extensionPath, "janelinha", f), destino);
         fs.utimesSync(destino, agora, agora);
     }
@@ -244,7 +262,8 @@ async function abrirJanelinha() {
             return;
         // via "cmd start": powershell aberto direto com detached morre na hora.
         // overlay.ps1 garante uma só.
-        (0, child_process_1.spawn)("cmd.exe", ["/c", "start", '""', "/min", "powershell.exe", "-WindowStyle", "Hidden", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+        // CLAUDE_MONITOR_NODE: sem node no PATH, o motor das animações roda no do VS Code
+        (0, child_process_1.spawn)("cmd.exe", ["/c", "start", '""', "/min", "powershell.exe", "-WindowStyle", "Hidden", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1], { detached: true, stdio: "ignore", windowsHide: true, env: { ...process.env, CLAUDE_MONITOR_NODE: process.execPath } }).unref();
         anotar("mandou abrir a janelinha");
         janelinhaAberta = true;
     }
@@ -267,7 +286,8 @@ async function abrirJanelinha() {
             return;
         }
         // o binário garante um só (trava em ~/.claude-monitor/overlay.lock)
-        (0, child_process_1.spawn)(BINARIO_MAC, [], { detached: true, stdio: "ignore" }).unref();
+        // CLAUDE_MONITOR_NODE: sem node no PATH, o motor das animações roda no do VS Code
+        (0, child_process_1.spawn)(BINARIO_MAC, [], { detached: true, stdio: "ignore", env: { ...process.env, CLAUDE_MONITOR_NODE: process.execPath } }).unref();
         janelinhaAberta = true;
     }
 }

@@ -91,13 +91,15 @@ t_instala() {
       || falha "$e recebeu: $(cat "$BIN/$e.log" 2>/dev/null)" || return 1
   done
   local f
-  for f in hook.js processes.js overlay.swift minecraft.js vorbis.min.js ClaudeMonitor; do
+  for f in hook.js processes.js overlay.swift minecraft.js vorbis.min.js ClaudeMonitor sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav motor/motor.js motor/raster.js; do
     [ -f "$MONITOR/$f" ] || falha "falta $f" || return 1
   done
   [ -f "$MONITOR/sons/levelup.wav" ] || falha "não baixou os sons do Minecraft: $saida" || return 1
   [ -x "$MONITOR/ClaudeMonitor" ] || falha "janelinha não é executável" || return 1
   [ ! -f "$MONITOR/install.js" ] || falha "install.js sobrou na pasta" || return 1
   [ "$(cat "$MONITOR/versao-janelinha")" = "$VERSAO" ] || falha "versão marcada: $(cat "$MONITOR/versao-janelinha")" || return 1
+  # instalação nova começa no tema Padrão (a janelinha lê e grava o tema no mesmo config.json)
+  [ "$(cat "$MONITOR/config.json" 2>/dev/null)" = '{"tema":"padrao"}' ] || falha "config.json da instalação nova: $(cat "$MONITOR/config.json" 2>/dev/null)" || return 1
   local n
   n=$(node -e "const h=require(process.argv[1]).hooks; console.log(['UserPromptSubmit','Stop','Notification','SessionEnd'].filter(e=>h[e]&&h[e].length===1).length)" "$CASA/.claude/settings.json")
   [ "$n" = 4 ] || falha "hooks: $n de 4" || return 1
@@ -108,6 +110,14 @@ if [ -s "$MONITOR/compilar.log" ]; then
   echo "      avisos do compilador:"
   sed 's/^/        /' "$MONITOR/compilar.log" | head -40
 fi
+# os sons do Padrão e do Dragon Ball: a janelinha toca com o NSSound (o mesmo leitor do afinfo)
+t_sons_dos_temas() {
+  local f
+  for f in "$MONITOR"/sons-padrao/*.wav "$MONITOR"/sons-dragonball/*.wav; do
+    afinfo "$f" >/dev/null 2>&1 || falha "o Mac não entende $f" || return 1
+  done
+}
+teste "o Mac entende os sons do Padrão e do Dragon Ball" t_sons_dos_temas
 t_de_novo() {
   com_prazo 300 instalar >/dev/null 2>&1 || falha "2ª instalação falhou" || return 1
   local n
@@ -149,19 +159,31 @@ teste "sem VS Code nem Cursor: explica e sai com erro" t_sem_editor
 
 echo ""
 echo "Janelinha (cenários de testes/cenarios.js; prints em $SAIDA)"
+# Com node (o CI tem), quem desenha o Clawd, as cenas e os enfeites do tema é o motor
+# (motor/motor.js, ao lado do binário); $2 = --sem-motor: o Clawd daqui, o de quando falta o node
 t_cenario() {
-  local c=$1 pasta="$TMP/cenario $1 ção" foto="$SAIDA/mac-$1.png"
+  local c=$1 sem=${2:-} nome=$1
+  [ -n "$sem" ] && nome="$1-sem-motor"
+  local pasta="$TMP/cenario $nome ção" foto="$SAIDA/mac-$nome.png" saida
   node "$RAIZ/testes/cenarios.js" "$pasta" "$c" $$ >/dev/null || falha "cenarios.js falhou" || return 1
   if [ "$c" = andando ]; then cp "$TMP/magenta.png" "$pasta/picareta.png"; fi
   if [ "$c" = pedra ]; then cp "$TMP/magenta.png" "$pasta/diamante.png"; fi  # o diamante que sobe
   rm -f "$foto" "$foto.txt"
   local extra=()
-  [ -f "$pasta/uso.json" ] && extra=(--uso "$pasta/uso.json")
+  [ -n "$sem" ] && extra=("$sem")
+  [ -f "$pasta/uso.json" ] && extra+=(--uso "$pasta/uso.json")
   [ -f "$pasta/clicar.txt" ] && extra+=(--clicar "$(cat "$pasta/clicar.txt")")
   [ -f "$pasta/cena.txt" ] && extra+=(--cena "$(cat "$pasta/cena.txt")")
-  com_prazo 60 env HOME="$CASA" "$MONITOR/ClaudeMonitor" --foto "$foto" --pasta "$pasta" "${extra[@]}" \
-    || falha "a janelinha não terminou direito" || return 1
+  # stderr junto: no --foto o que iria pro diário (o motor reclamando) sai ali
+  saida=$(com_prazo 60 env HOME="$CASA" "$MONITOR/ClaudeMonitor" --foto "$foto" --pasta "$pasta" "${extra[@]}" 2>&1) \
+    || falha "a janelinha não terminou direito: $saida" || return 1
   diff <(cat "$pasta/esperado.txt") <(cat "$foto.txt") || falha "o que a janelinha mostrou é diferente do esperado (acima)" || return 1
+  if [ -n "$sem" ]; then
+    echo "$saida" | grep -q '^motor: desligado$' || falha "com --sem-motor o motor desenhou: $saida" || return 1
+  else
+    echo "$saida" | grep -q '^motor: desenhou$' || falha "o motor não desenhou (ficou o Clawd daqui): $saida" || return 1
+  fi
+  [ ! -f "$pasta/janelinha.log" ] || falha "o --foto anotou no diário: $(cat "$pasta/janelinha.log")" || return 1
   if [ "$c" = preferencias ]; then
     # config.json do botão direito: sem Clawd (nem ferramenta) e o cartão a 50% (fundo 90% x 50% = alfa ~0,45)
     [ "$(pixels "$foto" 215 119 87 30)" -lt 5 ] || falha "o Clawd apareceu desligado" || return 1
@@ -176,8 +198,14 @@ t_cenario() {
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png; perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
   elif [ "$c" = pedra ]; then
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "cadê o diamante (diamante.png) subindo? perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
+  elif [ "$c" = padrao ]; then
+    # picareta, pedra e bug são do Minecraft
+    [ "$(pixels "$foto" 74 237 217 40)" -lt 5 ] || falha "o Clawd do Padrão apareceu com a ferramenta" || return 1
   else
     [ "$(pixels "$foto" 74 237 217 40)" -gt 5 ] || falha "cadê a ferramenta desenhada (ciano)?" || return 1
+  fi
+  if [ "$c" = minecraft ] || [ "$c" = padrao ]; then
+    enfeites_mc "$c" "$foto" || return 1
   fi
   if [ "$c" = bug ]; then
     [ "$(pixels "$foto" 239 68 68 30)" -gt 20 ] || falha "o bug não ficou vermelho com a espadada" || return 1
@@ -189,10 +217,39 @@ t_cenario() {
     [ "$(pixels "$foto" 167 139 250 30)" -lt 3 ] || falha "aviso roxo sem versão nova"
   fi
 }
+# Tema Minecraft com as texturas de mentira do cenarios.js: os enfeites (moldura de terra com
+# grama, orbes, barra de XP e a letra do jogo) quem desenha no Mac é o motor; o Padrão tem as
+# texturas na pasta e não usa. As cores e a folga do Windows (testes.ps1), um pouco mais larga.
+# nome|r g b|tolerância|mínimo no Minecraft|confere que NÃO aparece no Padrão
+ENFEITES_MC='terra (borda)|122 74 42|12|300|sim
+grama (em cima da borda)|60 176 67|12|300|sim
+orbe vermelho (terminou)|239 68 68|8|40|nao
+orbe amarelo (permissão)|250 204 21|8|40|nao
+orbe trabalhando (quadro 18, o motor fotografa em T = 1 s)|79 255 51|10|40|sim
+barra de XP verde (5h a 38%)|0 200 0|12|150|sim
+barra de XP dourada (7d a 85%)|219 146 0|12|300|nao
+letra do Minecraft|128 255 32|5|60|sim'
+enfeites_mc() {
+  local c=$1 foto=$2 nome cor tol minimo no_padrao n
+  while IFS='|' read -r nome cor tol minimo no_padrao; do
+    # $cor sem aspas de propósito: "r g b" são três argumentos
+    n=$(pixels "$foto" $cor "$tol")
+    if [ "$c" = minecraft ]; then
+      [ "$n" -ge "$minimo" ] || falha "cadê $nome? ($n pixels; perto: $(pixels "$foto" $cor 40 lista))" || return 1
+    elif [ "$no_padrao" = sim ]; then
+      [ "$n" -lt 5 ] || falha "$nome no tema Padrão ($n pixels)" || return 1
+    fi
+  done <<< "$ENFEITES_MC"
+}
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique pedra bug atualizar preferencias; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
+done
+# Sem o motor: o Clawd daqui (Swift), o de quando falta o node. As lutas antigas (pedra, bug)
+# só existem nele; as cenas do motor têm os testes delas (testes/node/tema-*.test.js)
+for c in pedra bug andando padrao; do
+  teste "sem o motor (--sem-motor), cenário '$c': o Clawd daqui" t_cenario "$c" --sem-motor
 done
 t_cores() {
   local foto="$SAIDA/mac-misto.png" c
@@ -236,7 +293,10 @@ t_uma_so() {
   mv "$pasta/novo" "$pasta/ClaudeMonitor"
   for _ in $(seq 1 20); do [ -f "$pasta/reabriu" ] && break; sleep 0.5; done
   kill -9 $primeira 2>/dev/null
-  [ -f "$pasta/reabriu" ] || falha "não se reabriu com o binário novo"
+  [ -f "$pasta/reabriu" ] || falha "não se reabriu com o binário novo" || return 1
+  # o diário (janelinha.log, o mesmo do Windows), no formato dele: esta cópia não tem a pasta motor/ ao lado
+  grep -Eq "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3} \[$primeira\] motor desligado: sem (node|motor\.js); fica o Clawd daqui$" "$pasta/janelinha.log" \
+    || falha "o diário não contou que ficou sem motor: $(cat "$pasta/janelinha.log" 2>/dev/null)"
 }
 teste "uma janelinha só, e ela vira a versão nova quando o binário muda" t_uma_so
 
