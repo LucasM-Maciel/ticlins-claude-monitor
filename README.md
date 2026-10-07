@@ -104,17 +104,20 @@ Botão direito > **Temas ◀ ▶**. Instalação nova começa no Padrão; quem j
 a janelinha antes dos temas continua no Minecraft.
 
 - **Padrão**: o Clawd sem ferramenta. Pisa num bug, abre o notebook, toma café,
-  pensa, risca a lista de tarefas, dorme quando está tudo quieto e faz festa
-  quando acaba tudo. A cada 25 bugs pisados vem um evento especial, com som:
+  pensa, risca a lista de tarefas e faz festa quando acaba tudo. Quando fica
+  tudo quieto, ele dorme (com bolha no nariz e sonhos de programador) ou joga
+  videogame numa TV de tubo, ganhando ou perdendo (uma vez cada). A cada 15 bugs pisados vem um evento especial, com som:
   **Space Invaders** e **Bug Kaiju**, um de cada vez. Os avisos são um sino.
 - **Minecraft**: o Clawd de Steve (às vezes de Alex; bem raro, de Herobrine),
   borda de terra com grama, bolinhas de orbe de XP e o usage na barra de XP.
   Andando, ele enfrenta zumbi, esqueleto, creeper, aranha e outros mobs, ou
   minera; sobe de nível a cada 5 mortes e, a cada 20, enfrenta o **Ender
-  Dragon**, com os sons do jogo.
+  Dragon**, com os sons do jogo. Quando fica tudo quieto, ele põe uma cama e
+  dorme, ou cava um laguinho e pesca (uma vez cada).
 - **Dragon Ball**: o Clawd de quimono, que às vezes se transforma; a nuvem
   voadora, as esferas no lugar das bolinhas e a barra de ki ("MAIS DE 8000!").
-  Cada sessão que termina dá uma esfera; na 7ª, o dragão aparece.
+  Cada sessão que termina dá uma esfera; na 7ª, o dragão aparece. Quando fica
+  tudo quieto, ele medita flutuando ou treina (uma vez cada).
 
 As animações precisam do Node.js (que a instalação já pede); sem ele a
 janelinha mostra o Clawd simples, sem as cenas.

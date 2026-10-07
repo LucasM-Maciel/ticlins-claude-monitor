@@ -79,6 +79,11 @@ const TEXTURAS = {
     end_stone: "block/end_stone", ceu_end: "environment/end_sky", ovo_dragao: "block/dragon_egg", flash: "particle/flash",
     cristal: "entity/end_crystal/end_crystal", cristal_raio: "entity/end_crystal/end_crystal_beam",
     boss_fundo: "gui/sprites/boss_bar/purple_background", boss_barra: "gui/sprites/boss_bar/purple_progress",
+    // parado há muito tempo (motor/parado-minecraft-*.js): a cama e a pesca
+    cama_pe: "block/red_bed_foot_east", cama_cabeca: "block/red_bed_head_east", cama_pe_cima: "block/red_bed_foot_up",
+    cama_cabeca_cima: "block/red_bed_head_up", cama_pe_lado: "block/red_bed_foot_south", cama_baixo: "block/bed_down",
+    vara: "item/fishing_rod", vara_lancada: "item/fishing_rod_cast", boia: "entity/fishing/fishing_hook",
+    it_bacalhau: "item/cod", it_salmao: "item/salmon", it_peixe_tropical: "item/tropical_fish", agua: "block/water_still",
 };
 // as numeradas: fumaça, explosão, varrida e faísca (partículas) e as rachaduras do bloco
 for (let i = 0; i < 8; i++) Object.assign(TEXTURAS, { [`poof${i}`]: `particle/generic_${i}`, [`varrida${i}`]: `particle/sweep_${i}`, [`brilho${i}`]: `particle/glitter_${i}` });

@@ -1,23 +1,23 @@
 'use strict';
 // Tema Padrão: o cartão é o da janelinha (cantos redondos, bolinhas e números dela);
-// aqui só o Clawd, sem ferramenta, e as 7 cenas da prévia aprovada (prévia 2, p4.js),
+// aqui só o Clawd, sem ferramenta, e as cenas da prévia aprovada (prévia 2, p4.js),
 // tudo desenhado aqui, no tamanho de pixel do Clawd. Quando cada uma aparece:
 // - pisa no bug, notebook, café, pensando ✻ e lista de tarefas: metade das paradas
 //   da caminhada (a cada 20-45 s andando), sorteada entre as 5;
-// - dorme: parado (nada rodando) há DORME s; dorme até algo rodar e acorda no lugar;
+// - parado (nada rodando) há 1 min: dorme ou joga videogame, revezando (parado-padrao-<id>.js,
+//   pelo parado.js), até algo rodar, e sai da cena no lugar;
 // - festa: acabou tudo (evento 'tudo');
-// - épico: a cada 25 bugs pisados, na próxima parada na reta de cima; Space Invaders e Bug
+// - épico: a cada 15 bugs pisados, na próxima parada na reta de cima; Space Invaders e Bug
 //   Kaiju se revezam (padrao-epico-<id>.js, se existir).
-// Texto (✻, z z z, a lista) é pixel art: o raster não escreve.
+// Texto (✻, a lista) é pixel art: o raster não escreve.
 const { DEG, sai, arte, rng } = require('./comum');
 const { desenhaClawd, andando, pulando } = require('./clawd');
+const P = require('./parado').paradas('padrao', ['dorme', 'videogame']);
 
-const DORME = 60;          // s parado até dormir (a prévia não diz)
-const ACORDA = 0.6;        // s acordando antes de andar: espreguiça 0,3 e fica em pé 0,3 (o fim da cena da prévia)
 const ESPERA_FESTA = 2;    // s: o overlay.ps1 manda o 'tudo' antes do estado 'parado' (Avisar vem antes do Clawd)
 const SORTEADAS = ['pisa', 'notebook', 'cafe', 'pensando', 'tarefas'];
 const PISOU = 1.6;         // s: quando o Clawd pisa no bug (a cena 'pisa')
-const EPICO = 25;          // bugs pisados por evento épico (dono 06/10)
+const EPICO = 15;          // bugs pisados por evento épico: ~11 bugs/h andando = 1 a cada ~1 h 20 (dono 07/10)
 
 // ---------- desenhos ----------
 // o bug de hoje, igual ao overlay.ps1 ($desenhos.bug / $coresBug), 1,6 px por pixel
@@ -44,7 +44,6 @@ const CODIGO = [[[0, 3, '#D77757'], [4, 5, '#9CA3AF']], [[2, 4, '#60A5FA'], [7, 
 const CHECK = ['......#', '.....##', '#...##.', '##.##..', '.###...', '..#....'];
 const CANECA = ['wcccw..', 'wwwwwhh', 'ooooo.h', 'wwwwwhh', 'wwwww..'];
 const COR_CANECA = { w: '#F3F4F6', c: '#5B3A1E', o: '#60A5FA', h: '#D1D5DB' };
-const ZS = [['###', '.#.', '###'], ['####', '..#.', '.#..', '####'], ['#####', '...#.', '..#..', '.#...', '#####']];
 // o ✻ que gira no terminal do Claude Code: 6 desenhos, ida e volta
 const ASTER = [
   ['.......', '.......', '.......', '...#...', '.......', '.......', '.......'],
@@ -200,31 +199,6 @@ const FABRICAS = {
       },
     };
   },
-  // fecha os olhos 0,25 · senta 0,3–0,6 · dorme até algo rodar (respira a cada 1,6 s) · um z a cada
-  // 0,9 s desde 0,8 (sobe 16 px em 1,8 s, cresce 3→4→5 px). O acordar fica no clawd() do tema.
-  dorme: () => {
-    const zs = ZS.map(z => arte(z, { '#': '#CBD5E1' })), ZP = 1.4;  // 1,4 px por pixel
-    return {
-      dur: Infinity, modos: ['parado'],
-      quadro(g, t) {
-        let p;
-        if (t < 0.3) p = { olhos: t > 0.25 ? 'fechados' : 'abertos' };
-        else if (t < 0.6) p = { olhos: 'fechados', sentado: true, sy: 1 - 0.12 * Math.sin(Math.PI * (t - 0.3) / 0.3) };
-        else p = { olhos: 'fechados', sentado: true, sy: 1 + 0.05 * Math.sin(2 * Math.PI * (t - 0.6) / 1.6) };
-        desenhaClawd(g, p);
-        const a0 = g.globalAlpha;
-        // o z número k nasce em 0,8 + 0,9k e vive 1,8 s: só os 2 últimos estão na tela
-        for (let k = Math.max(0, Math.floor((t - 2.6) / 0.9)); 0.8 + 0.9 * k <= t; k++) {
-          const e = t - (0.8 + 0.9 * k);
-          if (e >= 1.8) continue;
-          const u = e / 1.8, z = zs[Math.min(2, Math.floor(u * 3))];
-          g.globalAlpha = a0 * (u < 0.1 ? u / 0.1 : u > 0.75 ? (1 - u) / 0.25 : 1);
-          g.drawImage(z, 6 + 9 * u + Math.sin(u * 7) * 1.2, -12 - 16 * u - z.height * ZP, z.width * ZP, z.height * ZP);
-        }
-        g.globalAlpha = a0;
-      },
-    };
-  },
   // agacha 0–0,15 · pulo 16 px 0,15–0,6 · confete em 0,4 (28 pedaços, gravidade 140 px/s², somem em
   // 2 s) · pulo 9 px 0,72–1,1 · pulo 5 px 1,2–1,5 · fim 3,0
   festa: semente => {
@@ -287,6 +261,7 @@ function cenaDoEpico(m, id) {
 }
 
 function cenaPorNome(m, nome) {
+  if (P.ids.includes(nome)) return P.cena(m, nome);
   if (nome === 'epico') return cenaDoEpico(m, epicoDaVez(m));
   if (nome.startsWith('epico-')) return cenaDoEpico(m, nome.slice(6));
   const fazer = FABRICAS[nome];
@@ -301,20 +276,14 @@ module.exports = {
   layout: { raio: 8, enfeites: false },
   texturas: [],
   trilha: { raio: 8 },
-  cenas: [...SORTEADAS, 'dorme', 'festa'],
+  cenas: [...SORTEADAS, ...P.ids, 'festa'],
   cenaPorNome,
   clawd(g, m) {
-    const t = m.T, a = m.estado.acordou;
-    if (m.andando && a != null && t - a < ACORDA) {  // acordou: espreguiça antes de sair andando
-      desenhaClawd(g, { sy: t - a < 0.3 ? 1 + 0.1 * Math.sin(Math.PI * (t - a) / 0.3) : 1 });
-      return;
-    }
-    const p = m.andando ? andando(t) : m.modo === 'pulando' ? pulando(t) : { pernas: 'ambas' };
+    if (P.clawd(g, m)) return;  // acordou: a saída da cena de parado, no lugar
+    const t = m.T, p = m.andando ? andando(t) : m.modo === 'pulando' ? pulando(t) : { pernas: 'ambas' };
     desenhaClawd(g, { ...p, ang: 0 });
   },
-  passo(m) {
-    if (m.modo === 'parado' && !m.cena && m.T - m.desdeModo >= DORME && !m.ruins.has('dorme')) m.comecarCena(cenaPorNome(m, 'dorme'));
-  },
+  passo(m) { P.passo(m); },
   // metade das paradas não tem cena. A escolha fica guardada até a cena começar: sem
   // espaço ali, o Mundo pergunta de novo em 0,5 s e um novo cara-ou-coroa deixaria
   // "nada" mais comum que a metade.
@@ -341,31 +310,27 @@ module.exports = {
     return cenaPorNome(m, e.escolhida);
   },
   aoComecarCena(m, cena) {
+    P.aoComecarCena(m, cena);
     if (cena.nome === m.estado.escolhida) m.estado.escolhida = undefined;
     // o próximo é o seguinte a este na roda
     if (cena.epico) { m.salvo.epico = false; m.salvo.epicos = EPICOS.indexOf(cena.epico) + 1; m.salvar(); }
   },
   aoFimCena(m, cena, cortada) {
+    P.aoFimCena(m, cena);  // acordou porque algo começou a rodar: a saída, no lugar
     // épico cortado (pergunta, permissão, tudo pronto) não gasta a vez: o mesmo volta na
     // próxima parada (dono 07/10). Quebrado não volta (m.ruins: o outro faz a vez dele)
     if (cena.epico && cortada && !m.ruins.has(cena.nome)) {
       m.salvo.epico = true; m.salvo.epicos = EPICOS.indexOf(cena.epico); m.salvar();
     }
-    // bug pisado (cortada antes da pisada não conta); o 25º pede o épico
+    // bug pisado (cortada antes da pisada não conta); o 15º pede o épico
     if (cena.nome === 'pisa' && m.T - cena.t0 >= PISOU) {
       const antes = m.salvo.bugs || 0;
       m.salvo.bugs = antes + 1;
       if (Math.floor(m.salvo.bugs / EPICO) > Math.floor(antes / EPICO)) m.salvo.epico = true;
       m.salvar();
     }
-    // acordou porque algo começou a rodar: acorda no lugar (meio de cima) e sai andando dali
-    if (cena.nome === 'dorme' && m.modo === 'andando') {
-      const g = m.geometria();
-      m.dist = g.w / 2 - g.r;
-      m.estado.acordou = m.T;
-    }
   },
-  bloqueia(m) { return m.estado.acordou != null && m.T - m.estado.acordou < ACORDA; },
+  bloqueia: P.bloqueia,
   // o 'tudo' pode chegar antes do estado 'parado' (overlay.ps1) ou depois (já parado)
   aoEvento(m, tipo) {
     if (tipo !== 'tudo') return;

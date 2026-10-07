@@ -1,5 +1,5 @@
 'use strict';
-// motor/tema-padrao.js: as 7 cenas da prévia 2 (desenho, custo, mesmo instante = mesmos
+// motor/tema-padrao.js: as cenas da prévia 2 (desenho, custo, mesmo instante = mesmos
 // bytes) e quando cada uma aparece (dorme parado, festa no 'tudo', metade das paradas).
 // Ver a olho: node testes/motor-foto.js --tema padrao --cena festa --modo parado --tira 0,0.5,1 --zoom 3 --saida f.png
 const { test } = require('node:test');
@@ -13,7 +13,7 @@ const tema = require(path.join(MOTOR, 'tema-padrao'));
 const { estadoDeMentira, fotografar } = require('../motor-foto');
 
 const SORTEADAS = ['pisa', 'notebook', 'cafe', 'pensando', 'tarefas'];
-const modoDa = nome => ((tema.cenaPorNome({ sorteio: () => 0 }, nome).modos || ['andando']).includes('andando') ? 'andando' : 'parado');
+const modoDa = nome => ((tema.cenaPorNome({ sorteio: () => 0, estado: {} }, nome).modos || ['andando']).includes('andando') ? 'andando' : 'parado');
 function novoMundo(modo, { semente = 7, t = tema, escala = 1 } = {}) {
   const m = new Mundo({ tema: t, semente });
   m.erros = [];
@@ -34,8 +34,8 @@ const duracao = c => (c.dur === Infinity ? 10 : c.dur);
 // anda o relógio de a até b de dt em dt (5 quadros/s parado, como o motor)
 function andar(m, a, b, dt = 0.2, cada) { for (let T = a + dt; T <= b + 1e-9; T += dt) { m.passo(T); if (cada) cada(T); } }
 
-test('o tema: layout, trilha e as 7 cenas que a prévia aprovou', () => {
-  assert.deepStrictEqual(tema.cenas.slice().sort(), [...SORTEADAS, 'dorme', 'festa'].sort());
+test('o tema: layout, trilha e as 8 cenas que as prévias aprovaram', () => {
+  assert.deepStrictEqual(tema.cenas.slice().sort(), [...SORTEADAS, 'dorme', 'videogame', 'festa'].sort());
   const L = layoutDe(tema);
   assert.strictEqual(L.raio, 8);
   assert.strictEqual(L.enfeites, false, 'a janelinha desenha bolinhas, números e barras');
@@ -48,7 +48,8 @@ test('o tema: layout, trilha e as 7 cenas que a prévia aprovou', () => {
   }
   assert.strictEqual(tema.cenaPorNome(m, 'zumbi'), null);
   assert.strictEqual(tema.cenaPorNome(m, 'dorme').dur, Infinity, 'dorme até algo rodar');
-  assert.deepStrictEqual([tema.cenaPorNome(m, 'dorme').modos, tema.cenaPorNome(m, 'festa').modos], [['parado'], ['parado']]);
+  assert.strictEqual(tema.cenaPorNome(m, 'videogame').dur, Infinity, 'joga até algo rodar');
+  assert.deepStrictEqual(['dorme', 'videogame', 'festa'].map(n => tema.cenaPorNome(m, n).modos), [['parado'], ['parado'], ['parado']]);
 });
 
 test('toda cena, quadro a quadro (30/s) a duração inteira, nas escalas 1, 1,25 e 2: sem erro e pintando', () => {
@@ -75,7 +76,7 @@ test('toda cena, quadro a quadro (30/s) a duração inteira, nas escalas 1, 1,25
 
 test('mesmo instante = mesmos bytes, de 30 em 30 quadros ou pulando direto pro instante', () => {
   for (const nome of tema.cenas) {
-    const modo = modoDa(nome), escala = 1.25, c = tema.cenaPorNome({ sorteio: () => 0 }, nome);
+    const modo = modoDa(nome), escala = 1.25, c = tema.cenaPorNome({ sorteio: () => 0, estado: {} }, nome);
     const instantes = [0.37, duracao(c) / 2, duracao(c) * 0.9];
     const fotos = instantes.map(t => {
       const a = fotografar({ tema: 'padrao', cena: nome, t, escala, modo }), b = fotografar({ tema: 'padrao', cena: nome, t, escala, modo });
@@ -216,18 +217,18 @@ test('paradas da caminhada: metade sem cena, a outra metade entre as 5 sorteadas
     aoComecarCena(m, c) { tema.aoComecarCena(m, c); comecadas.push(c.nome); },
   };
   const m = novoMundo('andando', { semente: 2026, t: espiao });
-  andar(m, 0, 10 * 3600, 0.1);  // 10 h andando (dá uns 4 épicos)
+  andar(m, 0, 10 * 3600, 0.1);  // 10 h andando (dá uns 7 épicos)
   const total = nulos + comecadas.length, conta = Object.fromEntries(SORTEADAS.map(n => [n, comecadas.filter(c => c === n).length]));
   t.diagnostic(`10 h andando: ${total} paradas, ${nulos} sem cena; ${JSON.stringify(conta)}`);
   assert.ok(total > 750, `só ${total} paradas`);
   assert.ok(Math.abs(nulos / total - 0.5) < 0.08, `${nulos} de ${total} paradas sem cena`);
-  // os épicos de verdade: um a cada 25 bugs pisados, revezando
+  // os épicos de verdade: um a cada 15 bugs pisados, revezando
   const epicos = comecadas.filter(n => n.startsWith('epico-')), pisadas = conta.pisa;
   t.diagnostic(`${pisadas} bugs pisados, épicos: ${epicos.join(' ')}`);
-  assert.strictEqual(epicos.length, Math.floor(pisadas / 25) - (m.salvo.epico ? 1 : 0), 'um épico a cada 25 bugs');
+  assert.strictEqual(epicos.length, Math.floor(pisadas / 15) - (m.salvo.epico ? 1 : 0), 'um épico a cada 15 bugs');
   assert.ok(epicos.length >= 2, `só ${epicos.length} épicos em 10 h`);
   epicos.forEach((n, i) => assert.strictEqual(n, `epico-${tema.epicos[i % 2]}`, 'invaders e kaiju se revezam'));
-  assert.deepStrictEqual(comecadas.filter(n => !SORTEADAS.includes(n) && !n.startsWith('epico-')), [], 'dorme e festa não saem no sorteio');
+  assert.deepStrictEqual(comecadas.filter(n => !SORTEADAS.includes(n) && !n.startsWith('epico-')), [], 'dorme, videogame e festa não saem no sorteio');
   for (const n of SORTEADAS) assert.ok(conta[n] > comecadas.length / 10, `${n} saiu ${conta[n]} de ${comecadas.length}`);
   assert.deepStrictEqual(m.erros, []);
   // cena que quebrou não sai mais; sem nenhuma boa, toda parada fica sem cena
@@ -238,7 +239,7 @@ test('paradas da caminhada: metade sem cena, a outra metade entre as 5 sorteadas
   for (let i = 0; i < 10; i++) assert.strictEqual(tema.naParada(q), null);
 });
 
-test('épico: a cada 25 bugs pisados, na próxima parada na reta de cima; invaders e kaiju se revezam', () => {
+test('épico: a cada 15 bugs pisados, na próxima parada na reta de cima; invaders e kaiju se revezam', () => {
   const falso = nome => ({ cena: () => ({ nome: 'epico', dur: 2, espaco: { frente: 0, tras: 0 }, modos: ['andando'], quadro() { if (nome === 'quebra') throw new Error('x'); } }) });
   const pisar = (m, ate = Infinity) => {
     m.comecarCena(tema.cenaPorNome(m, 'pisa'));
@@ -248,9 +249,9 @@ test('épico: a cada 25 bugs pisados, na próxima parada na reta de cima; invade
     m.receber({ modo: 'andando' });
   };
   const naReta = (m, lado) => { const g = m.geometria(); m.dist = lado === 'cima' ? (g.w - 2 * g.r) / 2 : (g.w - 2 * g.r) + Math.PI * g.r / 2 + 10; };
-  // pede o épico (25 bugs a mais) e devolve a cena que sai na reta de cima
+  // pede o épico (15 bugs a mais) e devolve a cena que sai na reta de cima
   const proximo = m => {
-    for (let i = 0; i < 25; i++) pisar(m);
+    for (let i = 0; i < 15; i++) pisar(m);
     assert.strictEqual(m.salvo.epico, true);
     naReta(m, 'cima');
     return tema.naParada(m);
@@ -258,15 +259,15 @@ test('épico: a cada 25 bugs pisados, na próxima parada na reta de cima; invade
   try {
     tema.trocarEpicos({ invaders: falso(), kaiju: falso() });
     const m = novoMundo('andando');
-    m.salvo.bugs = 23;
+    m.salvo.bugs = 13;
     pisar(m, 1.0);
-    assert.strictEqual(m.salvo.bugs, 23, 'cortada antes da pisada: não conta');
+    assert.strictEqual(m.salvo.bugs, 13, 'cortada antes da pisada: não conta');
     pisar(m);
-    assert.strictEqual(m.salvo.bugs, 24);
+    assert.strictEqual(m.salvo.bugs, 14);
     assert.ok(!m.salvo.epico);
     pisar(m);
-    assert.strictEqual(m.salvo.bugs, 25);
-    assert.strictEqual(m.salvo.epico, true, 'o 25º bug pede o épico');
+    assert.strictEqual(m.salvo.bugs, 15);
+    assert.strictEqual(m.salvo.epico, true, 'o 15º bug pede o épico');
     naReta(m, 'lado');
     assert.strictEqual(tema.naParada(m), undefined, 'no lado do cartão: espera chegar na reta de cima');
     naReta(m, 'cima');

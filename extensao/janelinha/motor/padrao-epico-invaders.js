@@ -1,5 +1,5 @@
 'use strict';
-// Evento épico raro do tema Padrão (a cada 25 bugs pisados), candidata "invaders" (~19 s):
+// Evento épico raro do tema Padrão (a cada 15 bugs pisados), candidata "invaders" (~19 s):
 // homenagem ao conceito do Space Invaders, desenho nosso. A área acima do cartão vira a tela
 // de um fliperama (liga como TV de tubo) e a borda de cima do cartão, o chão verde; o Clawd
 // ganha um canhão na cabeça e enfrenta 18 bugs do Padrão em formação, que marcham em passos

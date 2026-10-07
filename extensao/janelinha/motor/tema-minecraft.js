@@ -3,13 +3,15 @@
 // 1 em 10, Herobrine 1 em 50, sorteados a cada volta que ele dá no cartão); nas paradas da
 // caminhada, 1 em 2 vira um evento do jogo (minecraft-eventos.js), raros mais raros e, de
 // noite, mais hostis; vida, nível a cada 5 mortes + os do dragão (sobrevive a reabrir), o lobo pet e, a
-// cada 20 mortes, o Ender Dragon (minecraft-dragao.js, se existir). Os enfeites do cartão
-// são os mesmos da janelinha WPF (minecraft-enfeites.js).
+// cada 20 mortes, o Ender Dragon (minecraft-dragao.js, se existir). Parado há 1 min: dorme
+// na cama ou pesca, uma vez cada (parado.js). Os enfeites do cartão são os mesmos da
+// janelinha WPF (minecraft-enfeites.js).
 const { IMG, arte, temTexturas, sortearPeso, rng } = require('./comum');
 const { registrarRoupas, desenhaClawd, andando, pulando } = require('./clawd');
 const enfeites = require('./minecraft-enfeites');
 const { MOB, desenhaMob, desenhaCoracoes } = require('./minecraft-kit');
 const { EVENTOS, EV, MINERIOS, sorteiaMinerio, quadroEvento } = require('./minecraft-eventos');
+const P = require('./parado').paradas('minecraft', ['cama', 'pesca']);
 
 const NIVEL = 5;      // mortes por nível
 const DRAGAO = 20;    // mortes por Ender Dragon (o dono mudou de 30 pra 20 em 06/10)
@@ -102,7 +104,7 @@ module.exports = {
       colunas: { tempo: 44, pct: 38, falta: 56, rotulo: 18 }, letra: 11, barra: [118, 5],
     };
   },
-  get texturas() { return [...new Set([...TEXTURAS, ...texturasDoDragao()])]; },
+  get texturas() { return [...new Set([...TEXTURAS, ...P.texturas, ...texturasDoDragao()])]; },
   trilha: { raio: 1 },
   roupas: ROUPAS,
   cenas: EVENTOS.map(ev => ev.id),
@@ -118,6 +120,7 @@ module.exports = {
     const e = m.estado;
     if (!m.cena) e.vida = Math.min(10, e.vida + dt / 4);  // regenera meio coração a cada 4 s (como a prévia)
     if (e.ouro && m.T > e.ouroAte) e.ouro = 0;
+    P.passo(m);
   },
   fundo(g, m) { enfeites.desenharEnfeites(g, m.host, m.T); },
   // o lobo manso segue 30 px atrás, na trilha, por 25 s
@@ -129,6 +132,7 @@ module.exports = {
     desenhaMob(g, MOB.loboManso, 0, 0, { vira: true, quadro: anda ? Math.floor(m.T / 0.12) % 2 : 0, alfa: Math.min(1, (e.petAte - m.T) / 0.5) });
   },
   clawd(g, m) {
+    if (P.clawd(g, m)) return;  // a saída da cena de parado
     const t = m.T, modo = m.andando ? 'andando' : m.host.modo, e = m.estado;
     const p = modo === 'andando' ? andando(t) : modo === 'pulando' ? pulando(t) : { pernas: 'ambas', ang: 0 };
     desenhaClawd(g, { ...p, roupa: m.roupa || 'mc_steve', ferr: 'picareta', T: t });
@@ -153,12 +157,14 @@ module.exports = {
   aoComecarAndar(m) { m.estado.pendente = null; },
   aoDarVolta(m) { m.roupa = sortearRoupa(m); },
   aoComecarCena(m, cena) {
+    P.aoComecarCena(m, cena);
     m.estado.pendente = null;
     if (cena.dragao) { m.salvo.dragao = false; m.salvar(); }
     if (cena.evento) m.estado.ultimo = cena.nome;
   },
   // cortada (pergunta/permissão): só conta o que já aconteceu
   aoFimCena(m, cena, cortada) {
+    P.aoFimCena(m, cena);
     if (cena && cena.dragao) {
       const n = (cena.subidas || []).filter(s => m.T - cena.t0 >= s).length;
       if (n) { m.salvo.niveisDoDragao = (m.salvo.niveisDoDragao || 0) + n; m.salvar(); }
@@ -181,8 +187,10 @@ module.exports = {
     }
     if (c.pet != null && foi >= c.pet) e.petAte = m.T + PET;
   },
+  bloqueia: P.bloqueia,
   // pros testes e pro motor-foto (--cena mineracao:diamante escolhe o minério)
   cenaPorNome(m, nome) {
+    if (P.ids.includes(nome)) return P.cena(m, nome);
     if (nome === 'dragao') return dragao() && typeof dragao().cena === 'function' ? cenaDoDragao(m) : null;
     const [id, minerio] = String(nome).split(':');
     return EV[id] ? cenaDoEvento(m, EV[id], minerio && MINERIOS.find(x => x.id === minerio)) : null;

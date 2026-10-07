@@ -4,12 +4,14 @@
 // usage é de ki; os números, na fonte do visor. O Clawd de gi e cabelo luta com ki nas paradas
 // (onda de energia, teletransporte, nuvem, esfera gigante, rastreador) e, 1 em 10 voltas que
 // dá no cartão, se transforma por 30 s. Cada sessão que termina dá uma esfera; na 7ª, o
-// dragão serpente dá a volta no cartão. Os desenhos estão em dragonball-*.js.
+// dragão serpente dá a volta no cartão. Parado há 1 min: medita ou treina, uma vez cada
+// (parado.js). Os desenhos estão em dragonball-*.js.
 const { lim, sortearPeso } = require('./comum');
 const { registrarRoupas } = require('./clawd');
 const A = require('./dragonball-arte');
 const K = require('./dragonball-cartao');
 const { CENAS } = require('./dragonball-cenas');
+const P = require('./parado').paradas('dragonball', ['medita', 'treino']);
 
 const LUTAS = ['onda', 'teleporte', 'nuvem', 'genki', 'rastreador'];
 const TRANSF = { chance: 1 / 10, dura: 30 };  // 1 em 10 a cada volta no cartão; fica 30 s (+ a entrada)
@@ -69,6 +71,7 @@ function cenaDragao(m) {
   };
 }
 function cenaPorNome(m, nome, k = 0) {
+  if (P.ids.includes(nome)) return P.cena(m, nome);
   if (CENAS[nome]) {
     const c = CENAS[nome](k, m);
     return { nome, modos: ['andando'], ...c, quadro(g, t, mm) { c.quadro.call(this, g, t, vestir(mm), mm); } };
@@ -84,7 +87,7 @@ module.exports = {
     // na fonte do visor (com a sombra): 'agora' 34, '15h47' 35, '2d23h' 35, '100%' 28, '7d' 14
     colunas: { tempo: 36, pct: 38, falta: 48, rotulo: 18 }, letra: 11, barra: [118, 6],
   },
-  texturas: [],
+  texturas: P.texturas,
   trilha: { raio: 8, baixo: 14 },
   roupas: A.ROUPAS,
   cenas: [...LUTAS, ...A.VARIACOES.map(v => v.id), 'dragao'],
@@ -106,6 +109,7 @@ module.exports = {
       m.comecarCena(cenaDragao(m));
       s.dragaoEm = null; s.n = 0; s.tAdd = [];
     }
+    P.passo(m);
   },
 
   // -- regras --
@@ -114,10 +118,12 @@ module.exports = {
     m.comecarCena(cenaTransf(sortearPeso(PESOS, m.sorteio)));
   },
   aoComecarCena(m, cena) {
+    P.aoComecarCena(m, cena);
     const v = A.VAR[cena.nome];
     if (v) m.estado.tr = { v, t0: m.T, tv0: null, ate: m.T + v.entrada + TRANSF.dura };
   },
   aoFimCena(m, cena, cortada) {
+    P.aoFimCena(m, cena);
     const tr = m.estado.tr;
     if (cortada && tr && cena.nome === tr.v.id) tr.t0 = Math.min(tr.t0, m.T - tr.v.entrada);  // pula o resto da entrada
     if (cortada && cena.andou) m.dist += cena.andou(m.T - cena.t0);  // a nuvem parou no meio da volta: ele fica lá
@@ -161,9 +167,11 @@ module.exports = {
     K.desenhaEsferas(g, c[0], c[1], geoCartao(m), s.n, s.tAdd, m.T, null);
   },
   clawd(g, m) {
+    if (P.clawd(g, m)) return;  // a saída da cena de parado
     const R = vestir(m), modo = m.andando ? 'andando' : m.host.modo;
     A.clawdDB(g, modo === 'andando' ? A.andando(m.T, R) : modo === 'pulando' ? A.pulando(m.T, R) : R);
   },
+  bloqueia: P.bloqueia,
   // parado, só mexe a aura (transformado), o dragão chegando e o "MAIS DE 8000!" (a nuvem
   // respira a 6 quadros/s e o brilho da barra passa devagar: os 5 quadros/s do motor bastam)
   animado(m) {

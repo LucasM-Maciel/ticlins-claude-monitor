@@ -1,5 +1,5 @@
 'use strict';
-// Evento épico do tema Padrão (a cada 25 bugs pisados): BUG KAIJU, um filme de monstro de
+// Evento épico do tema Padrão (a cada 15 bugs pisados): BUG KAIJU, um filme de monstro de
 // 19,2 s. O céu acima do cartão vira um pôr do sol vermelho e uma cidadezinha de pixel sobe da
 // borda de cima, dos dois lados do Clawd; o chão treme e o bug do Padrão, gigante, sobe por
 // trás do cartão (só aparece o que passa da borda). Ele ruge e cospe ácido: o Clawd pula por

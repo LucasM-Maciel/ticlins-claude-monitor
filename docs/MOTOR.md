@@ -91,6 +91,8 @@ layout: {
 | `motor.js` | entrada/saída e o relógio |
 | `som.js` | a trilha das cenas épicas: `lerWav` (PCM 8/16/24/32, float) e `mixar` (pistas -> um .wav) |
 | `tema-*.js` | um por tema (com os arquivos `<tema>-*.js` dele, se precisar) |
+| `parado.js` | "parado há muito tempo": começa a cena de parado do tema, reveza e toca a saída |
+| `parado-<tema>-<id>.js` | uma cena de parado (cama, pesca, medita, treino, dorme...) |
 
 O que o `raster.js` **não** tem (dá erro ou é ignorado): `fillText`/`measureText`/`font`
 (texto = fonte de pixel desenhada pelo tema), `roundRect` (TypeError), `filter` (ignorado),
@@ -126,6 +128,15 @@ pular quadros. Coordenadas: origem entre os pés do Clawd, x+ pra frente, y- pra
 cartão. Cena que precisa da janela inteira (o dragão): `g.save(); g.setTransform(e, 0, 0,
 e, 0, 0)` com `e = m.host.escala || 1`, desenha em DIPs da janela, `g.restore()`.
 Pergunta/permissão (modo `pulando`) corta qualquer cena.
+
+Parado há muito tempo (`parado.js`): depois de 60 s parado, o tema começa uma das cenas
+de parado dele, uma vez cada (`m.salvo.paradoVez` sobrevive a reabrir). Cada uma mora em
+`parado-<tema>-<id>.js`: `{ texturas, linhaDoTempo, cena(m), saida: { dur, quadro(g, t, m,
+tCorte) } }`, com a cena `dur: Infinity, modos: ['parado']`. Algo voltou a rodar: o Mundo
+corta a cena e o `clawd()` do tema desenha a `saida` no lugar (≤ 1,2 s, `bloqueia` segura o
+Clawd), terminando no Clawd normal em pé. Pergunta, festa ou dragão cortam sem a saída e não
+gastam a vez. O tema liga com `const P = require('./parado').paradas('<tema>', [ids])` e chama
+`P.passo`, `P.clawd`, `P.bloqueia`, `P.aoComecarCena`, `P.aoFimCena` e `P.cena` (cenaPorNome).
 
 Cena épica com som: `sons: [[t, arquivo, ganho = 1, tom = 1, dur], ...]`, `t` em s desde o
 começo da cena, `arquivo` relativo à pasta (`sons-padrao/...`, `sons-dragonball/...` ou
