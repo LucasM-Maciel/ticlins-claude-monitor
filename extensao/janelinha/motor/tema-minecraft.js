@@ -158,10 +158,13 @@ module.exports = {
     if (cena.evento) m.estado.ultimo = cena.nome;
   },
   // cortada (pergunta/permissão): só conta o que já aconteceu
-  aoFimCena(m, cena) {
+  aoFimCena(m, cena, cortada) {
     if (cena && cena.dragao) {
       const n = (cena.subidas || []).filter(s => m.T - cena.t0 >= s).length;
       if (n) { m.salvo.niveisDoDragao = (m.salvo.niveisDoDragao || 0) + n; m.salvar(); }
+      // cortado antes de subir nível (pergunta, permissão, tudo pronto) não gasta a vez: volta
+      // na próxima parada (dono 07/10: ele nunca via o dragão). Quebrado não volta (m.ruins)
+      else if (cortada && !m.ruins.has(cena.nome)) { m.salvo.dragao = true; m.salvar(); }
       return;
     }
     const c = cena && cena.evento;

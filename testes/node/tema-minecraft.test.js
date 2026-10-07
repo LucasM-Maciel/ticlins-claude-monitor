@@ -411,6 +411,23 @@ test('Ender Dragon: a cada 20 mortes, na próxima parada, só se o minecraft-dra
     assert.strictEqual(tema.naParada(m).nome, 'dragao', 'sem espaço: continua sendo o dragão');
     m.comecarCena(d);
     assert.strictEqual(m.salvo.dragao, false);
+    // cortado antes de subir nível (pergunta no meio): não gasta, volta na próxima parada (dono 07/10)
+    m.passo(m.T + 0.5);
+    m.receber({ modo: 'pulando' });
+    assert.strictEqual(m.cena, null);
+    assert.strictEqual(m.salvo.dragao, true, 'cortado: o pedido volta');
+    m.receber({ modo: 'andando' });
+    const deNovo = tema.naParada(m);
+    assert.ok(deNovo && deNovo.dragao, 'na próxima parada: o dragão de novo');
+    // até o fim: gasta
+    m.comecarCena(deNovo);
+    for (let T = m.T + 0.1; m.cena; T += 0.1) { m.proxima = Infinity; m.passo(T); }
+    assert.strictEqual(m.salvo.dragao, false);
+    // quebrou: não volta
+    m.salvo.dragao = true;
+    m.comecarCena(tema.naParada(m));
+    m.ruins.add('dragao'); m.fimCena(true);  // o que o Mundo faz quando o quadro da cena dá erro
+    assert.strictEqual(m.salvo.dragao, false, 'quebrado: não pede de novo');
   } finally { tema.trocarDragao(undefined); }
 });
 
@@ -433,6 +450,7 @@ test('Ender Dragon: os níveis que a cena mostra subindo ficam (dono 06/10); cor
     m.receber({ modo: 'pulando' });
     assert.strictEqual(m.cena, null);
     assert.strictEqual(tema.nivel(m), 7, 'cortada em 2,5 s: só as 2 subidas que já tinham acontecido');
+    assert.strictEqual(m.salvo.dragao, false, 'cortado depois de subir nível: já valeu, não volta');
   } finally { tema.trocarDragao(undefined); }
 });
 

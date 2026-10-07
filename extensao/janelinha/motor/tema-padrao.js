@@ -345,7 +345,12 @@ module.exports = {
     // o próximo é o seguinte a este na roda
     if (cena.epico) { m.salvo.epico = false; m.salvo.epicos = EPICOS.indexOf(cena.epico) + 1; m.salvar(); }
   },
-  aoFimCena(m, cena) {
+  aoFimCena(m, cena, cortada) {
+    // épico cortado (pergunta, permissão, tudo pronto) não gasta a vez: o mesmo volta na
+    // próxima parada (dono 07/10). Quebrado não volta (m.ruins: o outro faz a vez dele)
+    if (cena.epico && cortada && !m.ruins.has(cena.nome)) {
+      m.salvo.epico = true; m.salvo.epicos = EPICOS.indexOf(cena.epico); m.salvar();
+    }
     // bug pisado (cortada antes da pisada não conta); o 25º pede o épico
     if (cena.nome === 'pisa' && m.T - cena.t0 >= PISOU) {
       const antes = m.salvo.bugs || 0;

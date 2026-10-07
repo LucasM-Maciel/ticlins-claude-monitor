@@ -274,22 +274,22 @@ test('épico: a cada 25 bugs pisados, na próxima parada na reta de cima; invade
     assert.ok(c && c.nome === 'epico-invaders' && c.epico === 'invaders', 'na reta de cima: o 1º é o invaders, sem o cara-ou-coroa');
     m.comecarCena(c);
     assert.strictEqual(m.salvo.epico, false);
-    m.fimCena(true);
+    m.fimCena(false);
     // revezam: kaiju, invaders, kaiju
     for (const id of ['kaiju', 'invaders', 'kaiju']) {
       c = proximo(m);
       assert.strictEqual(c.nome, `epico-${id}`);
-      m.comecarCena(c); m.fimCena(true);
+      m.comecarCena(c); m.fimCena(false);
     }
     assert.strictEqual(tema.cenaPorNome(m, 'epico').nome, 'epico-invaders', 'motor-foto --cena epico: o da vez');
     assert.strictEqual(tema.cenaPorNome(m, 'epico-kaiju').nome, 'epico-kaiju', 'motor-foto --cena epico-kaiju');
     // o que quebrou fica de fora até reabrir: o outro faz as duas vezes
     m.ruins.add('epico-invaders');
-    for (let i = 0; i < 2; i++) { c = proximo(m); assert.strictEqual(c.nome, 'epico-kaiju'); m.comecarCena(c); m.fimCena(true); }
+    for (let i = 0; i < 2; i++) { c = proximo(m); assert.strictEqual(c.nome, 'epico-kaiju'); m.comecarCena(c); m.fimCena(false); }
     // só um arquivo: ele sempre
     tema.trocarEpicos({ kaiju: falso() });
     m.ruins.clear();
-    for (let i = 0; i < 2; i++) { c = proximo(m); assert.strictEqual(c.nome, 'epico-kaiju'); m.comecarCena(c); m.fimCena(true); }
+    for (let i = 0; i < 2; i++) { c = proximo(m); assert.strictEqual(c.nome, 'epico-kaiju'); m.comecarCena(c); m.fimCena(false); }
     // sem nenhum: a parada segue normal e o pedido some
     tema.trocarEpicos(null);
     m.salvo.epico = true;
@@ -298,6 +298,40 @@ test('épico: a cada 25 bugs pisados, na próxima parada na reta de cima; invade
     assert.strictEqual(m.salvo.epico, false);
     assert.strictEqual(tema.cenaPorNome(m, 'epico'), null);
     assert.deepStrictEqual(m.erros, []);
+  } finally { tema.trocarEpicos(undefined); }
+});
+
+test('épico cortado (pergunta, permissão, tudo pronto) não gasta a vez: o mesmo volta; quebrado não (dono 07/10)', () => {
+  const falso = { cena: () => ({ nome: 'epico', dur: 2, espaco: { frente: 0, tras: 0 }, modos: ['andando'], quadro() {} }) };
+  const naCima = m => { const g = m.geometria(); m.dist = (g.w - 2 * g.r) / 2; };
+  try {
+    tema.trocarEpicos({ invaders: falso, kaiju: falso });
+    const m = novoMundo('andando');
+    m.salvo.epico = true;
+    naCima(m);
+    let c = tema.naParada(m);
+    assert.strictEqual(c.nome, 'epico-invaders');
+    m.comecarCena(c);
+    m.passo(m.T + 0.5);
+    m.receber({ modo: 'pulando' });  // pergunta no meio
+    assert.strictEqual(m.cena, null);
+    assert.strictEqual(m.salvo.epico, true, 'cortado: o pedido volta');
+    m.receber({ modo: 'andando' });
+    naCima(m);
+    c = tema.naParada(m);
+    assert.strictEqual(c.nome, 'epico-invaders', 'volta o mesmo, não o próximo da roda');
+    // até o fim: gasta e a roda anda
+    m.comecarCena(c);
+    for (let T = m.T + 0.1; m.cena; T += 0.1) { m.proxima = Infinity; m.passo(T); }
+    assert.strictEqual(m.salvo.epico, false);
+    assert.strictEqual(tema.cenaPorNome(m, 'epico').nome, 'epico-kaiju');
+    // quebrou: não volta
+    m.salvo.epico = true;
+    naCima(m);
+    c = tema.naParada(m);
+    m.comecarCena(c);
+    m.ruins.add(c.nome); m.fimCena(true);  // o que o Mundo faz quando o quadro da cena dá erro
+    assert.strictEqual(m.salvo.epico, false, 'quebrado: não pede de novo');
   } finally { tema.trocarEpicos(undefined); }
 });
 
