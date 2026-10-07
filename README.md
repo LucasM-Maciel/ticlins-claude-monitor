@@ -98,6 +98,8 @@ estiver trabalhando nele.
 
 ## Temas
 
+![Os temas Padrão, Minecraft e Dragon Ball](docs/temas.png)
+
 Botão direito > **Temas ◀ ▶**. Instalação nova começa no Padrão; quem já usava
 a janelinha antes dos temas continua no Minecraft.
 
@@ -187,6 +189,9 @@ bash testes/mac/testes.sh                                            # Mac
 
 A cada push, o GitHub testa o pacote num Mac e num Windows de verdade. Uma tag
 `v*` publica o .zip na página de download.
+
+PR é bem-vindo: o Volume, a Opacidade e o liga/desliga do Clawd no botão
+direito vieram do primeiro, do [@TiagoPortilho](https://github.com/TiagoPortilho) (#1).
 
 ## Licença
 
