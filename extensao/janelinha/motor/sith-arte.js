@@ -160,6 +160,12 @@ function faiscas(g, x, y, d, semente, n = 8, cores = ['#FDE68A', '#F97316', '#FE
   }
   g.restore();
 }
+// as cenas de parado: nada passa pra dentro do cartão (o brilho da Força e as faíscas param
+// 6 DIPs abaixo dos pés; o texto começa em 9). No referencial do Clawd (gira com ele nas curvas).
+function acimaDoCartao(g, desenha) {
+  g.save(); g.beginPath(); g.rect(-70, -90, 140, 96); g.clip();
+  try { desenha(); } finally { g.restore(); }
+}
 // fumacinha cinza (o droide destruído)
 function fumaca(g, x, y, d, dur = 0.8) {
   if (d < 0 || d >= dur) return;
@@ -196,5 +202,5 @@ function nave(w) {
 
 module.exports = {
   SITH, ROUPA, ROUPAS, ALTURA, LAMINA, P, fatia, sai, clawdSith, andando, pulando, sabre, caboNoCinto, capa, contorno,
-  auraForca, droide, droideMetade, DROIDE, tiro, faiscas, fumaca, nave,
+  auraForca, droide, droideMetade, DROIDE, tiro, faiscas, fumaca, nave, acimaDoCartao,
 };

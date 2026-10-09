@@ -10,7 +10,7 @@ você, ela avisa com um som.
 **[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows, Mac e Linux no mesmo arquivo)
 
 > Projeto pessoal e não oficial, sem ligação com a Anthropic (Claude), com a
-> Mojang (Minecraft) nem com os donos de Dragon Ball.
+> Mojang (Minecraft) nem com os donos de Dragon Ball e de Star Wars (Lucasfilm).
 
 ## O que ela mostra
 
@@ -130,6 +130,14 @@ a janelinha antes dos temas continua no Minecraft.
   voadora, as esferas no lugar das bolinhas e a barra de ki ("MAIS DE 8000!").
   Cada sessão que termina dá uma esfera; na 7ª, o dragão aparece. Quando fica
   tudo quieto, ele medita flutuando ou treina (uma vez cada).
+- **Star Wars** (feito pelo [gjthec](https://github.com/gjthec)): o Clawd de
+  armadura preta, capa e sabre vermelho; cristais kyber no lugar das bolinhas e
+  o usage em sabres de luz. Andando, ele rebate tiros de blaster, corta um
+  droide ao meio, ergue outro com a Força ou só respira fundo; quando fica tudo
+  quieto, medita levitando pedras ou monta um sabre no ar (uma vez cada); quando
+  acaba tudo, salta pro hiperespaço. A cada 40 droides destruídos vem um evento
+  especial, com som: **A Batalha da Frota**. Os avisos são bipes de droide e o
+  sabre acendendo.
 
 As animações precisam do Node.js (que a instalação já pede); sem ele a
 janelinha mostra o Clawd simples, sem as cenas.

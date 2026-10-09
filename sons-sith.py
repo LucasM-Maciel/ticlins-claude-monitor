@@ -2,7 +2,11 @@
 - esperando.wav  bipes de droide (pergunta / permissão)
 - terminou.wav   o sabre acendendo (uma sessão terminou)
 - tudo.wav       acorde menor grave de metais (acabou tudo; melodia original)
-- hiper-abre.wav, nave.wav, salto.wav  a trilha do salto pro hiperespaço (tema-sith.js: sons)
+- o resto é a trilha do épico (sith-epico.js: sons): hiper-abre, nave, salto, frota, blaster, laser,
+  rebate, explode, carga, forca, amassa, boom, tunel, chegada
+Volume dos 3 avisos nivelado com os dos outros temas (pico de cada um em gravar); o do épico, no
+VOLUME do sith-epico.js. Os sons novos entram sempre no FIM (o sorteio é um só: mudar a ordem muda
+os que já existem).
 WAV mono 16 bits 44100. Só a biblioteca padrão do Python: python3 sons-sith.py"""
 import math
 import os
@@ -87,9 +91,9 @@ def normalizar(x, pico=0.6):
     return [v * pico / m for v in x]
 
 
-def gravar(nome, x):
+def gravar(nome, x, pico=0.6):
     os.makedirs(PASTA, exist_ok=True)
-    x = normalizar(x)
+    x = normalizar(x, pico)
     with wave.open(os.path.join(PASTA, nome + '.wav'), 'wb') as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -167,13 +171,132 @@ def salto():
     return out
 
 
+# ---------- a trilha do épico (a batalha da frota) ----------
+def inchar(x, ate=1.0):
+    """crescendo: o volume sobe do zero até o fim (ate = fração do som em que chega no máximo)"""
+    a = max(1, int(len(x) * ate))
+    return [v * min(1.0, i / a) for i, v in enumerate(x)]
+
+
+def frota():
+    """a nave-mãe chegando: dois acordes de metais crescendo, ré menor -> si bemol (o ronco é o nave.wav)"""
+    out = []
+    for nota in (38, 50, 53, 57):
+        somar(out, inchar(metais(1.45, nota, 0.4), 0.8), 0)
+    for nota in (34, 46, 50, 53):
+        somar(out, metais(1.6, nota, 0.42), 1.3)
+    return out
+
+
+def blaster():
+    """o tiro dos caças: um "piu" descendo rápido, meio quadrado, com um chiado"""
+    d = 0.16
+    x = [math.copysign(abs(v) ** 0.5, v) for v in seno(d, 1700, 280)]
+    somar(x, passa_baixa(ruido(0.03), 4000), 0, 0.4)
+    return envelope(x, 0.002, d * 0.7)
+
+
+def laser():
+    """o canhão da torre da nave: mais grave e mais grosso que o tiro dos caças"""
+    d = 0.24
+    x = [a * 0.6 + b * 0.5 for a, b in zip(seno(d, 900, 110), passa_baixa(serra(d, 120), 1500))]
+    somar(x, passa_baixa(ruido(0.05), 3000), 0, 0.5)
+    return envelope(x, 0.002, 0.16)
+
+
+def rebate():
+    """o sabre rebatendo o tiro: estalo, um "tzing" metálico e o zumbido do sabre balançando"""
+    out = zeros(0.45)
+    somar(out, envelope(passa_baixa(ruido(0.04), 6000), 0.001, 0.035), 0, 0.9)
+    for f, g in [(2350, 0.5), (3170, 0.3), (4430, 0.18)]:
+        x = seno(0.4, f, f * 0.97)
+        somar(out, [v * math.exp(-11 * i / SR) for i, v in enumerate(x)], 0.004, g)
+    somar(out, envelope(passa_baixa(serra(0.35, 110, 0.06, 9), 900), 0.01, 0.25), 0, 0.5)
+    return out
+
+
+def estouro(d, corte, grave, ganho_grave):
+    """explosão: ruído filtrado que vai morrendo e um baque grave caindo"""
+    x = passa_baixa(passa_baixa(ruido(d), corte), corte)
+    out = [3 * v * math.exp(-4.5 * i / SR / d) for i, v in enumerate(x)]
+    somar(out, envelope(seno(min(d, 0.6), grave, grave * 0.45), 0.003, 0.3), 0, ganho_grave)
+    return out
+
+
+def explode():
+    """um caça estourando"""
+    return estouro(0.6, 1400, 120, 0.8)
+
+
+def carga(d=1.4):
+    """carregando: um zumbido subindo, com um tremor cada vez mais rápido"""
+    total, fase, ft, out = n(d), 0.0, 0.0, []
+    for i in range(total):
+        u = i / total
+        fase += 2 * math.pi * 160 * 7 ** u / SR
+        ft += 2 * math.pi * (4 + 22 * u) / SR
+        out.append((math.sin(fase) + 0.3 * math.sin(2 * fase)) * (0.75 + 0.25 * math.sin(ft)) * (0.3 + 0.7 * u))
+    return envelope(out, 0.05, 0.08)
+
+
+def forca(d=2.0):
+    """a Força segurando: um grave escuro e meio desafinado que cresce, e um ar apertado pulsando"""
+    out = zeros(d)
+    for f, g in [(55, 1.0), (58.3, 0.6), (82.4, 0.5), (110, 0.25)]:
+        somar(out, passa_baixa(serra(d, f, 0.004, 3), 500), 0, g)
+    ar = passa_baixa(ruido(d), 900)
+    somar(out, [v * (0.5 + 0.5 * math.sin(2 * math.pi * 7 * i / SR)) for i, v in enumerate(ar)], 0, 1.2)
+    return envelope(out, 0.35, 0.6)
+
+
+def amassa():
+    """o casco amassando: rangidos metálicos, cada vez mais fortes"""
+    out = zeros(0.6)
+    for k in range(9):
+        t, f = k * 0.06 + 0.01 * rnd.random(), 300 + 500 * rnd.random()
+        x = [a * b for a, b in zip(seno(0.08, f, f * 0.6), passa_baixa(ruido(0.08), 2500))]
+        somar(out, envelope(x, 0.002, 0.05), t, 1.0 + k * 0.08)
+    return out
+
+
+def boom():
+    """o gigante estourando: estrondo longo, o baque bem grave e estalos espalhados"""
+    out = estouro(2.4, 500, 70, 1.4)
+    for _ in range(14):
+        t = 0.05 + 0.9 * rnd.random() ** 1.5
+        somar(out, envelope(passa_baixa(ruido(0.03), 5000), 0.001, 0.025), t, 0.5 * (1 - t))
+    return out
+
+
+def tunel(d=1.9):
+    """o túnel do hiperespaço: um vento que pulsa, o grave rodando e um brilho agudo"""
+    out = [1.6 * v * (0.7 + 0.3 * math.sin(2 * math.pi * 1.7 * i / SR)) for i, v in enumerate(passa_baixa(ruido(d), 700))]
+    for f in (660, 990):
+        somar(out, [v * (0.5 + 0.5 * math.sin(2 * math.pi * 0.9 * i / SR)) for i, v in enumerate(seno(d, f, f * 1.05))], 0, 0.08)
+    somar(out, passa_baixa(serra(d, 55, 0.01, 2), 300), 0, 0.5)
+    return envelope(out, 0.15, 0.4)
+
+
+def chegada():
+    """a saída do salto: um baque abafado e o acorde de ré menor da frota, aberto"""
+    out = []
+    somar(out, envelope(seno(0.5, 160, 50), 0.003, 0.35), 0, 0.9)
+    somar(out, envelope(passa_baixa(ruido(0.5), 900), 0.002, 0.4), 0, 1.5)
+    for nota in (38, 50, 53, 57):
+        somar(out, metais(1.6, nota, 0.45), 0.12)
+    return out
+
+
 if __name__ == '__main__':
-    gravar('esperando', bipes())
-    gravar('terminou', sabre_liga())
+    gravar('esperando', bipes(), 0.14)   # pico: os avisos no volume dos outros temas (~-21 LUFS)
+    gravar('terminou', sabre_liga(), 0.216)
     gravar('tudo', acorde_sombrio())
     gravar('hiper-abre', abre())
     gravar('nave', ronco_da_nave())
     gravar('salto', salto())
+    for nome, f in [('frota', frota), ('blaster', blaster), ('laser', laser), ('rebate', rebate), ('explode', explode),
+                    ('carga', carga), ('forca', forca), ('amassa', amassa), ('boom', boom), ('tunel', tunel), ('chegada', chegada)]:
+        gravar(nome, f())
     with open(os.path.join(PASTA, 'LICENCAS.txt'), 'w', encoding='utf-8') as f:
         f.write('Sons do tema Sith: sintetizados do zero pelo sons-sith.py deste projeto (MIT, como o resto).\n'
                 'Nenhum som de filme, jogo ou terceiros.\n')

@@ -1,7 +1,8 @@
 'use strict';
 // motor/tema-sith.js: toda cena quadro a quadro nas 3 escalas, o quadro como função do tempo, o
-// custo, o salto pro hiperespaço quando acaba tudo (com a trilha de som) e a meditação de parado
-// (a cena até 3 h, a saída terminando no Clawd do tema), e os sons do tema existindo.
+// custo, o salto pro hiperespaço quando acaba tudo (sem trilha: o aviso já toca), o épico a cada
+// 40 droides, a meditação de parado (a cena até 3 h, a saída terminando no Clawd do tema), e os
+// sons do tema existindo. O épico em si: sith-epico.test.js.
 const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -32,18 +33,19 @@ function montar({ escala = 1, modo = 'andando', semente = 2 } = {}) {
   return { m, erros, tela, quadro };
 }
 const cheia = tela => { const px = tela.pixels; for (let i = 0; i < px.length; i++) if (px[i] !== 0) return true; return false; };
-const modoDa = nome => (nome === 'medita' ? 'parado' : 'andando');
-const durDe = cena => (Number.isFinite(cena.dur) ? cena.dur : 20);  // a meditação não acaba sozinha: 20 s
+const PARADAS = ['medita', 'forja'];  // as cenas de parado (parado-sith.test.js)
+const modoDa = nome => (PARADAS.includes(nome) ? 'parado' : 'andando');
+const durDe = cena => (Number.isFinite(cena.dur) ? cena.dur : 20);  // as de parado não acabam sozinhas: 20 s
 
 test('toda cena, quadro a quadro (30/s), a duração inteira, sem erro, nas escalas 1, 1,25 e 2', () => {
-  assert.deepStrictEqual(tema.cenas, ['deflete', 'droide', 'esgana', 'respira', 'medita', 'hiperespaco']);
+  assert.deepStrictEqual(tema.cenas, ['deflete', 'droide', 'esgana', 'respira', 'medita', 'forja', 'hiperespaco']);
   for (const escala of ESCALAS) {
     for (const nome of tema.cenas) {
       const { m, erros, tela, quadro } = montar({ escala, modo: modoDa(nome) });
       const cena = tema.cenaPorNome(m, nome);
       assert.ok(cena && cena.dur > 0, `${nome}: cenaPorNome`);
       m.comecarCena(cena);
-      assert.strictEqual(m.cena && m.cena.nome, nome === 'medita' ? 'medita' : nome, `${nome} não começou`);
+      assert.strictEqual(m.cena && m.cena.nome, nome, `${nome} não começou`);
       const dur = durDe(cena);
       for (let f = 0; f <= Math.ceil(dur * 30) + 1; f++) {
         quadro(f / 30);
@@ -98,7 +100,7 @@ test('custo em 1,25: passeio < 4 ms por quadro e cena < 12 ms no pior (falha só
   }
 });
 
-test('acabou tudo: o salto pro hiperespaço corta a cena da vez, toca a trilha e não repete por cima', () => {
+test('acabou tudo: o salto pro hiperespaço corta a cena da vez, sem trilha (o aviso já toca) e não repete por cima', () => {
   for (const modo of ['andando', 'parado']) {
     const { m, quadro } = montar({ modo });
     const sons = [];
@@ -107,12 +109,13 @@ test('acabou tudo: o salto pro hiperespaço corta a cena da vez, toca a trilha e
     quadro(0.5);
     m.evento('tudo');
     assert.strictEqual(m.cena && m.cena.nome, 'hiperespaco', modo);
-    assert.deepStrictEqual(sons, ['hiperespaco']);
+    const t0 = m.cena.t0;
+    quadro(1);
     m.evento('tudo');  // o segundo não recomeça
-    assert.deepStrictEqual(sons, ['hiperespaco']);
+    assert.strictEqual(m.cena.t0, t0);
     m.receber({ modo: 'parado' });  // o estado 'parado' chegando depois não corta
     assert.strictEqual(m.cena && m.cena.nome, 'hiperespaco');
-    for (const [, arquivo] of m.cena.sons) assert.ok(fs.existsSync(path.join(JANELINHA, arquivo)), `falta ${arquivo}`);
+    assert.deepStrictEqual(sons, [], 'som de cena: só o épico tem (como nos outros temas)');
   }
   // 'terminou' não faz nada; com o Clawd desligado, nem o 'tudo'
   const { m } = montar();
@@ -147,8 +150,80 @@ test('layout: enfeites do tema, moldura de 3 px e as colunas de sempre', () => {
   assert.deepStrictEqual(l.colunas, { tempo: 36, pct: 38, falta: 48, rotulo: 18 });
 });
 
+test('épico: a cada 40 droides destruídos, na próxima parada na reta de cima; cortado volta, quebrado não', () => {
+  const falso = { cena: () => ({ nome: 'epico', dur: 2, espaco: { frente: 0, tras: 0 }, modos: ['andando'], quadro() {} }) };
+  const naReta = (m, lado) => { const g = m.geometria(); m.dist = lado === 'cima' ? (g.w - 2 * g.r) / 2 : (g.w - 2 * g.r) + Math.PI * g.r / 2 + 10; };
+  const ateOFim = m => { for (let T = m.T + 0.1; m.cena; T += 0.1) { m.proxima = Infinity; m.passo(T); } };
+  // uma cena de parada até o fim (ou cortada por uma pergunta em 'ate' s)
+  const cena = (m, nome, ate = Infinity) => {
+    m.comecarCena(tema.cenaPorNome(m, nome));
+    const T0 = m.T;
+    for (let T = T0 + 0.1; m.cena && T - T0 < ate; T += 0.1) { m.proxima = Infinity; m.passo(T); }
+    if (m.cena) m.receber({ modo: 'pulando' });
+    m.receber({ modo: 'andando' });
+  };
+  assert.strictEqual(tema.droidesPorEpico, 40);
+  try {
+    tema.trocarEpico(falso);
+    const { m, erros } = montar();
+    m.salvo.droides = 37;
+    cena(m, 'droide', 1.0);
+    assert.strictEqual(m.salvo.droides, 37, 'cortada antes do golpe: não conta');
+    cena(m, 'deflete'); cena(m, 'respira');
+    assert.strictEqual(m.salvo.droides, 37, 'só cortar e esganar contam');
+    cena(m, 'droide'); cena(m, 'esgana');
+    assert.strictEqual(m.salvo.droides, 39);
+    assert.ok(!m.salvo.sithEpico);
+    cena(m, 'droide');
+    assert.strictEqual(m.salvo.sithEpico, true, 'o 40º pede o épico');
+    naReta(m, 'lado');
+    assert.strictEqual(tema.naParada(m), undefined, 'no lado do cartão: espera chegar na reta de cima');
+    naReta(m, 'cima');
+    const c = tema.naParada(m);
+    assert.ok(c && c.nome === 'epico' && c.epico, 'na reta de cima: o épico, sem o cara-ou-coroa');
+    m.comecarCena(c);
+    assert.strictEqual(m.salvo.sithEpico, false);
+    m.evento('tudo');  // acabou tudo no meio: não corta (o aviso toca por cima)
+    assert.strictEqual(m.cena && m.cena.nome, 'epico');
+    m.passo(m.T + 0.5);
+    m.receber({ modo: 'pulando' });  // pergunta no meio: corta e não gasta a vez
+    assert.strictEqual(m.cena, null);
+    assert.strictEqual(m.salvo.sithEpico, true, 'cortado: o pedido volta');
+    m.receber({ modo: 'andando' });
+    naReta(m, 'cima');
+    m.comecarCena(tema.naParada(m));
+    ateOFim(m);
+    assert.strictEqual(m.salvo.sithEpico, false, 'até o fim: gasta');
+    assert.strictEqual(m.salvo.droides, 40, 'o épico não mexe na conta');
+    // quebrou: não volta, e a parada segue normal
+    m.salvo.sithEpico = true;
+    naReta(m, 'cima');
+    m.comecarCena(tema.naParada(m));
+    m.ruins.add('epico'); m.fimCena(true);  // o que o Mundo faz quando o quadro da cena dá erro
+    assert.strictEqual(m.salvo.sithEpico, false, 'quebrado: não pede de novo');
+    m.salvo.sithEpico = true;
+    let d = tema.naParada(m);
+    assert.ok(!d || d.nome !== 'epico');
+    assert.strictEqual(m.salvo.sithEpico, false);
+    // sem o arquivo: idem
+    m.ruins.clear();
+    tema.trocarEpico(null);
+    m.salvo.sithEpico = true;
+    d = tema.naParada(m);
+    assert.ok(!d || d.nome !== 'epico');
+    assert.strictEqual(m.salvo.sithEpico, false);
+    assert.strictEqual(tema.cenaPorNome(m, 'epico'), null);
+    assert.deepStrictEqual(erros, []);
+  } finally { tema.trocarEpico(undefined); }
+  // o de verdade: motor-foto --cena epico
+  const { m } = montar();
+  const c = tema.cenaPorNome(m, 'epico');
+  assert.ok(c && c.nome === 'epico' && c.epico && c.dur > 15 && c.dur < 21);
+});
+
 test('os sons do tema existem e são WAV que o motor lê', () => {
-  for (const n of ['esperando', 'terminou', 'tudo', 'hiper-abre', 'nave', 'salto']) {
+  for (const n of ['esperando', 'terminou', 'tudo', 'hiper-abre', 'nave', 'salto', 'frota', 'blaster', 'laser', 'rebate', 'explode',
+    'carga', 'forca', 'amassa', 'boom', 'tunel', 'chegada']) {
     const f = path.join(JANELINHA, 'sons-sith', n + '.wav');
     assert.ok(fs.existsSync(f), `falta ${f}`);
     const w = lerWav(fs.readFileSync(f));

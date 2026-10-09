@@ -1,20 +1,24 @@
 'use strict';
-// Tema Sith (dono 08/10: "lado sith", "faz o darth vader"). O Clawd de lorde Sith: elmo, máscara,
+// Tema Sith (PR #3 do gjthec, 09/10/2026; acertado com os outros temas). O Clawd de lorde Sith: elmo, máscara,
 // painel no peito, capa e sabre vermelho. Andando, o sabre fica aceso; parado, o cabo vai pro
 // cinto; pergunta/permissão, pula com o sabre erguido. O cartão é um painel imperial: bolinha =
 // cristal kyber, barra do usage = sabre (instável a partir de 80%), números na fonte de visor.
 // Nas paradas da caminhada: rebate tiros de blaster, corta um droide ao meio, esgana um droide
 // com a Força ou só respira fundo. Acabou tudo: a nave triangular passa num painel acima do
-// cartão e salta pro hiperespaço (com som). Parado há 1 min: medita flutuando, com a Força
-// levantando pedrinhas (parado-sith-medita.js). Os desenhos estão em sith-*.js.
+// cartão e salta pro hiperespaço (sem trilha: o aviso já toca). A cada 40 droides destruídos,
+// o épico raro, a batalha da frota, com som (sith-epico.js). Parado há 1 min, uma vez cada:
+// medita flutuando, com a Força levantando pedrinhas (parado-sith-medita.js), ou monta um
+// sabre no ar com a Força (parado-sith-forja.js). Os desenhos estão em sith-*.js.
 const { DEG, lim, sai, entra, rng, rgba } = require('./comum');
 const A = require('./sith-arte');
 const K = require('./sith-cartao');
-const P = require('./parado').paradas('sith', ['medita']);
+const P = require('./parado').paradas('sith', ['medita', 'forja']);
 
 const { fatia } = A;
 const SORTEADAS = ['deflete', 'droide', 'esgana', 'respira'];
 const CHANCE = 0.6;  // das paradas da caminhada, quantas têm cena
+const MORTE = { droide: 1.75, esgana: 2.5 };  // s: quando o droide da cena é destruído
+const DROIDES = 40;  // droides destruídos por épico: ~30/h andando = 1 a cada ~1 h 20 (como o Padrão)
 const COR = { rotulo: '#9CA3AF', falta: '#6B7280' };
 
 // ---------- as cenas da caminhada ----------
@@ -165,16 +169,11 @@ const FABRICAS = {
 // ---------- acabou tudo: a nave salta pro hiperespaço ----------
 // Um painel escuro abre acima do cartão com estrelas; a nave triangular entra pela direita,
 // carrega, as estrelas esticam em riscos e ela some num clarão; os riscos voltam a ser estrelas e
-// o painel fecha. O Clawd fica com o sabre erguido. Janela inteira: desenha em DIPs.
+// o painel fecha. O Clawd fica com o sabre erguido. Janela inteira: desenha em DIPs. Sem trilha:
+// o aviso 'tudo' já toca (som de cena é só do épico, como nos outros temas).
 // Abre 0–0,35 · nave 0,4–2,3 · estica 2,3–2,7 · salta 2,7–2,85 · clarão 2,85–3,3 · volta 3,3–4,6
 // · fecha 4,8–5,3
 const HIPER = { dur: 5.4, alt: 100, folga: 38 };
-const SS = n => `sons-sith/${n}.wav`, VOLUME = 0.5;  // VOLUME: o nível dos avisos (−17 dB)
-function sonsDoSalto() {
-  return [
-    [0, SS('hiper-abre'), 0.5], [0.4, SS('nave'), 0.6, 1, 2.3], [2.3, SS('salto'), 0.85], [2.95, SS('tudo'), 0.7],
-  ].map(([t, a, g, ...r]) => [t, a, g * VOLUME, ...r]);
-}
 function painelDoSalto(m) {
   const c = m.host.cartao, x = c[0], w = c[2], h = HIPER.alt, y = Math.max(4, c[1] - HIPER.folga - h);
   return { x, y, w, h };
@@ -221,7 +220,7 @@ function desenhaSalto(g, R, t, semente) {
 function cenaSalto(m) {
   const semente = Math.floor(m.sorteio() * 4294967296);
   return {
-    nome: 'hiperespaco', dur: HIPER.dur, espaco: { frente: 0, tras: 0 }, modos: ['andando', 'parado', 'pulando'], sons: sonsDoSalto(),
+    nome: 'hiperespaco', dur: HIPER.dur, espaco: { frente: 0, tras: 0 }, modos: ['andando', 'parado', 'pulando'],
     quadro(g, t, mm) {
       const e = mm.host.escala || 1;
       g.save(); g.setTransform(e, 0, 0, e, 0, 0); desenhaSalto(g, painelDoSalto(mm), t, semente); g.restore();
@@ -231,9 +230,26 @@ function cenaSalto(m) {
   };
 }
 
+// o épico mora no sith-epico.js, que pode não existir: carrega na 1ª vez que precisa
+let epicoModulo, epicoErro = null;
+function epico() {
+  if (epicoModulo === undefined) {
+    try { epicoModulo = require('./sith-epico'); } catch (e) {
+      epicoModulo = null;
+      if (!(e.code === 'MODULE_NOT_FOUND' && String(e.message).split('\n')[0].includes('sith-epico'))) epicoErro = `sith-epico.js com defeito: ${e.message}`;
+    }
+  }
+  return epicoModulo && typeof epicoModulo.cena === 'function' ? epicoModulo : null;
+}
+function cenaDoEpico(m) {
+  const c = epico() && !m.ruins.has('epico') ? epico().cena(m) : null;
+  return c ? { ...c, nome: 'epico', epico: true } : null;
+}
+
 function cenaPorNome(m, nome) {
   if (P.ids.includes(nome)) return P.cena(m, nome);
   if (nome === 'hiperespaco') return cenaSalto(m);
+  if (nome === 'epico') return cenaDoEpico(m);
   const fazer = FABRICAS[nome];
   return fazer ? { nome, ...fazer(Math.floor(m.sorteio() * 4294967296)) } : null;
 }
@@ -253,17 +269,42 @@ module.exports = {
   // o sabre acende quando começa a andar (depois da saída da meditação, se tiver)
   aoComecarAndar(m) { m.estado.acende = m.T + (m.estado.saida && m.estado.saida.t0 === m.T ? 1.0 : 0); },
   naParada(m) {
+    // o épico, sem o cara-ou-coroa, só na reta de cima (a cena conta com o Clawd ali)
+    if (m.salvo.sithEpico) {
+      const c = cenaDoEpico(m);
+      if (epicoErro && m.aoErro) { m.aoErro(epicoErro); epicoErro = null; }
+      if (c) {
+        const p = m.pose();
+        return p.reta && Math.cos(p.a) > 0.99 ? c : undefined;
+      }
+      m.salvo.sithEpico = false; m.salvar();
+    }
     const boas = SORTEADAS.filter(n => !m.ruins.has(n));
     if (!boas.length || !m.chance(CHANCE)) return null;
     return cenaPorNome(m, boas[Math.floor(m.sorteio() * boas.length)]);
   },
-  aoComecarCena(m, cena) { P.aoComecarCena(m, cena); },
-  aoFimCena(m, cena, cortada) { P.aoFimCena(m, cena, cortada); },
+  aoComecarCena(m, cena) {
+    P.aoComecarCena(m, cena);
+    if (cena.epico) { m.salvo.sithEpico = false; m.salvar(); }
+  },
+  aoFimCena(m, cena, cortada) {
+    P.aoFimCena(m, cena, cortada);
+    // épico cortado (pergunta, permissão, tudo pronto) não gasta a vez; quebrado não volta
+    if (cena.epico && cortada && !m.ruins.has(cena.nome)) { m.salvo.sithEpico = true; m.salvar(); }
+    // droide destruído (cortada antes do golpe não conta); o 40º pede o épico
+    if (MORTE[cena.nome] != null && m.T - cena.t0 >= MORTE[cena.nome]) {
+      const antes = m.salvo.droides || 0;
+      m.salvo.droides = antes + 1;
+      if (Math.floor(m.salvo.droides / DROIDES) > Math.floor(antes / DROIDES)) m.salvo.sithEpico = true;
+      m.salvar();
+    }
+  },
   bloqueia: P.bloqueia,
-  // acabou tudo: o salto pro hiperespaço passa na frente de qualquer cena
+  // acabou tudo: o salto pro hiperespaço passa na frente de qualquer cena, menos do épico (que
+  // já tem o salto dele; o aviso toca por cima, como nos outros temas)
   aoEvento(m, tipo) {
     if (tipo !== 'tudo' || !m.host.clawd || m.modo === 'oculto') return;
-    if (m.cena && m.cena.nome === 'hiperespaco') return;
+    if (m.cena && (m.cena.nome === 'hiperespaco' || m.cena.epico)) return;
     if (m.cena) m.fimCena(true);
     m.comecarCena(cenaSalto(m));
   },
@@ -298,4 +339,7 @@ module.exports = {
     if (m.modo === 'pulando' || m.cena) return true;
     return (m.host.uso || []).some(u => K.nivelDe(u) >= 1);
   },
+  droidesPorEpico: DROIDES,
+  // pros testes: troca o sith-epico.js (null = não existe; undefined = o de verdade)
+  trocarEpico(mod) { epicoModulo = mod; epicoErro = null; },
 };

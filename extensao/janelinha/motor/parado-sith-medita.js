@@ -85,17 +85,20 @@ module.exports = {
       nome: 'parado', dur: Infinity, espaco: { frente: 0, tras: 0 }, modos: ['parado'],
       quadro(g, t) {
         const s = estado(t);
-        desenhaPedras(g, lista, t, true);
-        clawdMeditando(g, t, s);
-        raio(g, t, sem, s.alt);
-        desenhaPedras(g, lista, t, false);
+        A.acimaDoCartao(g, () => {
+          desenhaPedras(g, lista, t, true);
+          clawdMeditando(g, t, s);
+          raio(g, t, sem, s.alt);
+          desenhaPedras(g, lista, t, false);
+        });
       },
     };
   },
   // algo voltou a rodar: as pedrinhas caem, a Força apaga, ele desce, pousa e levanta (1 s)
   saida: {
     dur: 1.0,
-    quadro(g, u, m, tCorte) {
+    quadro(g, u, m, tCorte) { A.acimaDoCartao(g, () => this.desenha(g, u, m, tCorte)); },
+    desenha(g, u, m, tCorte) {
       const sem = m.estado.sithSemente >>> 0, c = Math.max(0, tCorte || 0), lista = pedras(sem), s0 = estado(c);
       const cai = fatia(u, 0, 0.35);
       desenhaPedras(g, lista, c, true, cai, 1 - fatia(u, 0.35, 0.5));

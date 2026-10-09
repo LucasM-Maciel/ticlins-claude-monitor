@@ -19,7 +19,8 @@ enfeites dela (no Windows, os do Minecraft em WPF; o resto, como o Padrão).
   uint16 + BGRA pré-multiplicado), `L` linha pro diário, `P` pronto (`{pronto, temas:
   {nome: layout}}`), `S` som da cena épica (`{tocar: <.wav na pasta>, cena}` ou
   `{parar: true}`, quando ela é cortada).
-- Som: só os épicos têm (Invaders/Kaiju no Padrão, Ender Dragon, Shenlong). A cena diz o que
+- Som: só os épicos têm (Invaders/Kaiju no Padrão, Ender Dragon, Shenlong, a Batalha da Frota no
+  Sith). A cena diz o que
   toca e quando (`sons`, abaixo); quando ela começa, o motor junta tudo num .wav só
   (`som.js`: mono, 16 bits, 44100, gravado como `som-cena-0.wav`/`som-cena-1.wav`, revezando)
   e a janelinha toca do começo com o volume do botão direito. No `-Foto`/`--foto` ela não
@@ -139,11 +140,11 @@ gastam a vez. O tema liga com `const P = require('./parado').paradas('<tema>', [
 `P.passo`, `P.clawd`, `P.bloqueia`, `P.aoComecarCena`, `P.aoFimCena` e `P.cena` (cenaPorNome).
 
 Cena épica com som: `sons: [[t, arquivo, ganho = 1, tom = 1, dur], ...]`, `t` em s desde o
-começo da cena, `arquivo` relativo à pasta (`sons-padrao/...`, `sons-dragonball/...` ou
-`sons/...`, os da Mojang), `tom` > 1 = mais agudo e mais curto, `dur` = corta ali (some em até
+começo da cena, `arquivo` relativo à pasta (`sons-padrao/...`, `sons-dragonball/...`,
+`sons-sith/...` ou `sons/...`, os da Mojang), `tom` > 1 = mais agudo e mais curto, `dur` = corta ali (some em até
 0,25 s). Arquivo que falta fica de fora (uma linha no diário) e o resto toca. Cada épico tem um
-`VOLUME` que deixa a trilha no nível dos avisos (−17 dB); os .wav do Padrão e do Shenlong saem
-do `sons-epicos.py`.
+`VOLUME` que deixa a trilha no nível dos avisos (−17 dB; as trilhas mixadas dão de −21 a −23
+LUFS); os .wav do Padrão e do Shenlong saem do `sons-epicos.py`, os do Sith do `sons-sith.py`.
 
 Dentro do `fundo`, `frente` e `atras` as coordenadas já são as da janela (DIPs).
 
