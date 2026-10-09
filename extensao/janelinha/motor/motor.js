@@ -50,7 +50,7 @@ function anotar(texto) {
 process.stdout.on('error', () => process.exit(0));  // a janelinha fechou
 
 // -- temas: um que não carrega não derruba os outros --
-const NOMES = { padrao: './tema-padrao', minecraft: './tema-minecraft', dragonball: './tema-dragonball' };
+const NOMES = { padrao: './tema-padrao', minecraft: './tema-minecraft', dragonball: './tema-dragonball', sith: './tema-sith' };
 const temas = {};
 for (const [nome, arquivo] of Object.entries(NOMES)) {
   try { temas[nome] = require(arquivo); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND' || !String(e.message).includes(arquivo.slice(2))) anotar(`motor: tema ${nome} com defeito: ${e.message}`); }

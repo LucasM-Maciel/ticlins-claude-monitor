@@ -108,7 +108,7 @@
 				"claudeMonitor.overlay": {
 					"type": "boolean",
 					"default": true,
-					"description": "Abrir a janelinha flutuante (sempre por cima, fora do VS Code) com as sessões, o usage e o Clawd. Windows e Mac."
+					"description": "Abrir a janelinha flutuante (sempre por cima, fora do VS Code) com as sessões, o usage e o Clawd. Windows, Mac e Linux."
 				}
 			}
 		}

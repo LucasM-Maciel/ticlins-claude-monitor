@@ -67,7 +67,7 @@ func anotar(_ texto: String) {
 // botão direito: tema, Clawd, opacidade e volume, gravados em config.json (o Windows lê o mesmo).
 // Sem o arquivo, tudo como antes do menu existir: Minecraft, Clawd ligado, opaco, volume
 // cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
-let temas: [(id: String, nome: String)] = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball")]
+let temas: [(id: String, nome: String)] = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars")]
 let arquivoConfig = pasta + "/config.json"
 var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft")
 func lerJSON(_ caminho: String) -> [String: Any]? {
@@ -142,12 +142,14 @@ let sonsDoTema: [String: [String: [String]]] = [
     "padrao": ["esperando": ["sons-padrao/esperando"], "terminou": ["sons-padrao/terminou"], "tudo": ["sons-padrao/tudo"]],
     "dragonball": ["esperando": ["sons-dragonball/esperando"], "terminou": ["sons-dragonball/terminou"],
                    "tudo": ["sons-dragonball/tudo"]],
+    "sith": ["esperando": ["sons-sith/esperando"], "terminou": ["sons-sith/terminou"], "tudo": ["sons-sith/tudo"]],
 ]
 let somDoMac = ["esperando": "Ping", "terminou": "Glass", "tudo": "Hero"]
 let nomeDoSom: [String: [String: String]] = [  // pro diário e pro .txt do --foto
     "minecraft": ["esperando": "aldeao", "terminou": "xp", "tudo": "levelup"],
     "padrao": ["esperando": "sino-esperando", "terminou": "sino-terminou", "tudo": "sino-tudo"],
     "dragonball": ["esperando": "esferas-esperando", "terminou": "esferas-terminou", "tudo": "esferas-tudo"],
+    "sith": ["esperando": "droide-bipes", "terminou": "sabre-liga", "tudo": "acorde-sith"],
 ]
 var tocando: NSSound?  // segura o som até acabar de tocar
 func tocar(_ situacao: String) {
@@ -522,7 +524,7 @@ func opacidadeDoPulso() -> CGFloat {
 // cor do % do usage em cada tema, pro motor (o cartão daqui fica com as de sempre): normal, >= 80%, >= 95%
 let coresDoUso: [String: [String]] = [
     "padrao": ["#D1D5DB", "#F59E0B", "#EF4444"], "minecraft": ["#80FF20", "#FFAA00", "#FF5555"],
-    "dragonball": ["#FDE047", "#F59E0B", "#EF4444"],
+    "dragonball": ["#FDE047", "#F59E0B", "#EF4444"], "sith": ["#FCA5A5", "#F59E0B", "#EF4444"],
 ]
 
 // A cara do cartão: a de sempre ou, com o motor vivo, o layout do tema (mensagem P,
