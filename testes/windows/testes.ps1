@@ -388,6 +388,40 @@ Teste 'rodar o instalador de novo não duplica os hooks' {
     $hooks = (Get-Content "$casa\.claude\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json).hooks
     Verdade (@($hooks.Stop).Count -eq 1) 'duplicou'
 }
+function Hash($arquivo) { (Get-FileHash -Algorithm MD5 $arquivo).Hash }
+Teste 'com a janelinha aberta segurando um som: fecha ela, troca tudo e anota no diário' {
+    $mon = "$casa\.claude-monitor"
+    # a janelinha de verdade (MediaPlayer do WPF) prende o último .wav que tocou: a cópia por
+    # cima falhava e o instalador pulava o resto calado (09/10, a 0.8.0 ficou sem o Star Wars)
+    [IO.File]::WriteAllText("$mon\overlay.ps1", "`$s = [IO.File]::Open((Join-Path `$PSScriptRoot 'sons-dragonball\tudo.wav'), 'Open', 'Read', 'Read'); Start-Sleep 120")
+    $janelinha = Start-Process powershell.exe -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$mon\overlay.ps1`"" -WindowStyle Hidden -PassThru
+    try {
+        $prazo = (Get-Date).AddSeconds(15)
+        do {
+            Start-Sleep -Milliseconds 200
+            $presa = $false
+            try { [IO.File]::Open("$mon\sons-dragonball\tudo.wav", 'Open', 'Write', 'None').Close() } catch { $presa = $true }
+        } until ($presa -or (Get-Date) -gt $prazo)
+        Verdade $presa 'a janelinha falsa não prendeu o som'
+        $r = ComAmbiente $ambiente { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $instalador, '-SemAtalho', '-SemAbrir') 120 }
+        Verdade ($r.codigo -eq 0) $r.saida
+        Verdade $janelinha.HasExited "a janelinha continuou aberta: $($r.saida)"
+        foreach ($f in 'overlay.ps1', 'sons-dragonball\tudo.wav', 'sons-sith\tudo.wav') {
+            Igual (Hash "$tmp\vsix\extension\janelinha\$f") (Hash "$mon\$f") "$f não foi trocado"
+        }
+        Verdade ((Get-Content "$mon\janelinha.log" -Raw) -match "\[instalador \d+\] fechei a janelinha \[$($janelinha.Id)\]") 'não anotou no diário que fechou a janelinha'
+    } finally { Stop-Process -Id $janelinha.Id -ErrorAction Ignore }
+}
+Teste 'arquivo preso por outro programa: falha em vermelho e não marca a versão nova' {
+    $mon = "$casa\.claude-monitor"
+    [IO.File]::WriteAllText("$mon\versao-janelinha", '0.0.1')
+    $preso = [IO.File]::Open("$mon\sons-dragonball\tudo.wav", 'Open', 'Read', 'Read')
+    try { $r = ComAmbiente $ambiente { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $instalador, '-SemAtalho', '-SemAbrir') 120 } }
+    finally { $preso.Close() }
+    Verdade ($r.codigo -eq 1 -and $r.saida -match 'N.o consegui trocar' -and $r.saida -match 'tudo\.wav') "$($r.codigo): $($r.saida)"
+    Verdade ($r.saida -notmatch 'Pronto!') "disse que ficou pronto: $($r.saida)"
+    Igual '0.0.1' ([IO.File]::ReadAllText("$mon\versao-janelinha")) 'marcou a versão nova com a cópia pela metade'
+}
 Teste 'com o code.cmd do Cursor na frente do PATH: instala no VS Code de verdade' {
     $shim = "$tmp\Programs\cursor\resources\app\codeBin"
     New-Item -ItemType Directory -Force $shim | Out-Null

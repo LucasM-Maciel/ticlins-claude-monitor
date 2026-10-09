@@ -50,6 +50,26 @@ if (-not (Test-Path (Join-Path $pasta 'versao-janelinha')) -and -not (Test-Path 
 }
 $temp = Join-Path ([IO.Path]::GetTempPath()) "claude-monitor-$PID"
 New-Item -ItemType Directory -Force $temp | Out-Null
+# no diário da janelinha
+function Anotar($t) { [IO.File]::AppendAllText((Join-Path $pasta 'janelinha.log'), "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') [instalador $PID] $t`r`n") }
+# a janelinha aberta prende o último som que tocou (o MediaPlayer do WPF segura o .wav) e a
+# cópia por cima dele falhava: o resto ficava de fora calado (09/10, a 0.8.0 sem o Star Wars).
+# Fecha antes de copiar; no fim o instalador abre de novo
+$overlayDaPasta = Join-Path $pasta 'overlay.ps1'
+foreach ($processo in @(Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction Ignore)) {
+    if ($processo.CommandLine -and $processo.CommandLine.IndexOf($overlayDaPasta, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        Stop-Process -Id $processo.ProcessId -Force -ErrorAction Ignore
+        Wait-Process -Id $processo.ProcessId -Timeout 5 -ErrorAction Ignore
+        Anotar "fechei a janelinha [$($processo.ProcessId)] pra copiar"
+    }
+}
+# arquivo preso (a janelinha que acabou de fechar, um antivírus olhando) ganha uns segundos
+function Extrair($entrada, $destino) {
+    for ($vez = 1; ; $vez++) {
+        try { [IO.Compression.ZipFileExtensions]::ExtractToFile($entrada, $destino, $true); return }
+        catch { if ($vez -ge 10) { throw }; Start-Sleep -Milliseconds 300 }
+    }
+}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead($vsix.FullName)
 try {
@@ -59,7 +79,7 @@ try {
         $entradas = @($zip.Entries | Where-Object { $_.FullName -like "extension/janelinha/$pastaDoVsix/*" -and $_.Name })
         if (-not $entradas) { Falhou "O .vsix está incompleto (falta janelinha/$pastaDoVsix/). Baixe de novo." }
         New-Item -ItemType Directory -Force "$pasta\$pastaDoVsix" | Out-Null
-        foreach ($entrada in $entradas) { [IO.Compression.ZipFileExtensions]::ExtractToFile($entrada, (Join-Path "$pasta\$pastaDoVsix" $entrada.Name), $true) }
+        foreach ($entrada in $entradas) { Extrair $entrada (Join-Path "$pasta\$pastaDoVsix" $entrada.Name) }
     }
     $copias = @{
         'out/hook.js' = $pasta; 'out/processes.js' = $pasta; 'out/install.js' = $temp
@@ -68,13 +88,17 @@ try {
     foreach ($nome in $copias.Keys) {
         $entrada = $zip.GetEntry("extension/$nome")
         if (-not $entrada) { Falhou "O .vsix está incompleto (falta $nome). Baixe de novo." }
-        [IO.Compression.ZipFileExtensions]::ExtractToFile($entrada, (Join-Path $copias[$nome] (Split-Path $nome -Leaf)), $true)
+        Extrair $entrada (Join-Path $copias[$nome] (Split-Path $nome -Leaf))
     }
+} catch {
+    # erro de .NET aqui dentro só parava este bloco: o instalador seguia e dizia "Pronto!"
+    $motivo = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $_.Exception.Message }
+    Falhou "Não consegui trocar um arquivo em $pasta`n       $motivo`n       Feche a janelinha (botão direito > Fechar) e o que estiver usando esse arquivo, e rode o instalador de novo."
 } finally { $zip.Dispose() }
-# a extensão só recopia quando a versão muda
+# a extensão só recopia quando a versão muda: só marca com tudo copiado
 [IO.File]::WriteAllText((Join-Path $pasta 'versao-janelinha'), $versao)
 # no diário da janelinha (ela se reabre ao ver o arquivo mudar)
-[IO.File]::AppendAllText((Join-Path $pasta 'janelinha.log'), "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') [instalador $PID] copiou a janelinha $versao`r`n")
+Anotar "copiou a janelinha $versao"
 Ok $pasta
 
 Passo 'Ligando o Claude Code na extensão (hooks)'
