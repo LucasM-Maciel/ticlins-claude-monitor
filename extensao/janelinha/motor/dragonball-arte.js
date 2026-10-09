@@ -25,22 +25,78 @@ const ROUPAS = {
   },
 };
 const ALTURA = ROUPAS[ROUPA].linhas.length;  // 14 meias-fileiras
+// SSJ 4 (o épico da lua cheia; o dono escolheu a "fera" entre 5 opções, 09/10): cabelo preto bem
+// alto com as pontas jogadas pra trás, pelo carmim (R, l = luz) em volta dos olhos, no tronco e nos
+// braços, o peito de fora no meio, munhequeira azul, a calça do gi. Atrás: a juba até a cintura
+// (JUBA_SSJ4) e a cauda fina (CAUDA_SSJ4). Os braços continuam nas colunas 1-2 e 15-16
+const ROUPA_SSJ4 = 'dragonball-ssj4', PELO = '#C21F3A', PELO_ESC = '#7A1028', PELO_LUZ = '#E0485F';
+ROUPAS[ROUPA_SSJ4] = {
+  linhas: [
+    'h.......h.........', 'hh...h..hh....h...', '.hh..hh.hhh...hh..', '.hhhhhhhhhhh.hhh..', 'hhhhhjhhhhjhhhhhh.', 'hhhhjhhhhjhhhhhhhh', 'hhhhhhhhhhhhhhhhhh',
+    '...hh#hh##hh#hh...', '...Rro######orR...', '...Rro######orR...',
+    '.RwlRRRR##RRRRlwR.', '.RwRRRRR##RRRRRwR.', '...ffffffffffff...', '...gggggggzgggg...',
+    '....A.B....A.B....', '....A.B....A.B....',
+  ],
+  cores: { '#': DB.corpo, o: DB.olho, r: PELO_ESC, R: PELO, l: PELO_LUZ, w: DB.azul, f: DB.azul, g: DB.gi, z: DB.giDobra, h: DB.cabelo, j: DB.cabeloLuz },
+  perna: [DB.gi, DB.azul], corpo: DB.corpo,
+};
 
 // SSJ 3: crina comprida atrás do corpo (colunas -6..2 do Clawd, meias-fileiras 2..13 do sprite)
 const CRINA = ['......hhh', '....hhhhh', '..hhhhhhh', '.hhhhhhhh', 'hhhhjhhhh', 'hhhhhhhhh', 'hhhjhhhh.', '.hhhhhhh.', '.hhhhhhj.', '..hhhhh..', '..hhhh...', '...hh....'];
-function crina(g, longo, cabelo, L, t, dy, branco) {
-  const n = Math.ceil(lim(longo, 0, 1) * CRINA.length);
-  const escuro = mistura(cabelo[0], '#000000', 0.4), vazio = (r, c) => r >= n || c < 0 || c >= 9 || CRINA[r][c] === '.';
+const CRINA_SSJ3 = { grade: CRINA, col0: -6, linha0: 2 };
+// a juba do SSJ 4: desce pelas costas até a cintura (colunas -7..2, a partir da meia-fileira 3); o
+// contorno (também em cima) puxa pro vermelho, senão o preto some no cartão escuro
+const JUBA_SSJ4 = {
+  grade: ['.......hhh', '.....hhhhh', '...hhhhhhh', '..hhhhjhhh', '.hhhhhhhhh', 'hhhhjhhhhh', 'hhhhhhhhh.', '.hhhhhhhh.', 'hhhhhhjh..', '.hhhhhhh..', 'hhhhhh....', '.hh.hh....', '.h........'],
+  col0: -7, linha0: 3, borda: '#4A1414', contornoCima: true,
+};
+// forma: { grade, col0 (coluna do Clawd da 1ª coluna da grade), linha0 (meia-fileira do sprite da 1ª
+// linha), borda (cor do contorno; sem ela, o cabelo escurecido), contornoCima }
+function crina(g, longo, cabelo, L, t, dy, branco, forma = CRINA_SSJ3) {
+  const G = forma.grade, R = G.length, C = G[0].length, n = Math.ceil(lim(longo, 0, 1) * R);
+  const escuro = forma.borda || mistura(cabelo[0], '#000000', 0.4);
+  const vazio = (r, c) => r < 0 || r >= n || c < 0 || c >= C || G[r][c] === '.';
   for (let r = 0; r < n; r++) {
-    const balanco = Math.round(Math.sin(t * 5 - Math.floor(r / 3) * 0.9) * (r / 11)) * 1.5;  // a ponta balança mais
-    for (let c = 0; c < 9; c++) {
-      const ch = CRINA[r][c];
+    const balanco = Math.round(Math.sin(t * 5 - Math.floor(r / 3) * 0.9) * (r / (R - 1))) * 1.5;  // a ponta balança mais
+    for (let c = 0; c < C; c++) {
+      const ch = G[r][c];
       if (ch === '.') continue;
-      const borda = vazio(r, c - 1) || vazio(r + 1, c);
+      const borda = vazio(r, c - 1) || vazio(r + 1, c) || (forma.contornoCima && vazio(r - 1, c));
       g.fillStyle = branco || (borda ? escuro : ch === 'j' ? cabelo[1] : cabelo[0]);
-      g.fillRect((c - 15) * 1.5 + balanco, (r + 2 - L) * 1.5 + dy, 1.5, 1.5);
+      g.fillRect((c + forma.col0 - 9) * 1.5 + balanco, (r + forma.linha0 - L) * 1.5 + dy, 1.5, 1.5);
     }
   }
+}
+
+// a cauda: sai da cintura (atrás), desce, sobe e enrola a ponta de volta pro corpo; a ponta
+// balança. cresce 0..1 (o pedaço já pra fora), em células de 1,5 px com contorno escuro; afina
+// na ponta
+const CAUDA_COR = '#8B5A2B';  // a de sempre (castanha); a do SSJ 4 é o pelo vermelho
+const CAUDA_PTS = [[-8, -4.5], [-13, -2.5], [-18, -4], [-20, -8.5], [-17.5, -11.5], [-14.5, -10]];
+const CAUDA_PADRAO = { pts: CAUDA_PTS, grossa: 0.7 };  // grossa: até onde (0..1) tem 2 células
+// a do SSJ 4: fina, sai da cintura, desce um pouco e sobe com a ponta pra trás (por fora da juba)
+const CAUDA_SSJ4 = { pts: [[-9, -4.5], [-13.5, -3], [-17, -4.5], [-18.5, -8], [-21, -10.5]], grossa: 0 };
+function caudaEm(s, pts = CAUDA_PTS) {  // catmull-rom pelos pontos; s 0..1
+  const n = pts.length - 1, f = lim(s, 0, 1) * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
+  const P = k => pts[lim(k, 0, n)], [p0, p1, p2, p3] = [P(i - 1), P(i), P(i + 1), P(i + 2)];
+  const c = (a, b, c2, d) => 0.5 * (2 * b + (-a + c2) * u + (2 * a - 5 * b + 4 * c2 - d) * u * u + (-a + 3 * b - 3 * c2 + d) * u * u * u);
+  return [c(p0[0], p1[0], p2[0], p3[0]), c(p0[1], p1[1], p2[1], p3[1])];
+}
+function cauda(g, cresce, t, dy, cor = CAUDA_COR, forma = CAUDA_PADRAO) {
+  const n = Math.round(lim(cresce, 0, 1) * 24);
+  if (n < 1) return;
+  const P = 1.5, q = v => Math.round(v / P) * P, esc = mistura(cor, '#000000', 0.5), luz = mistura(cor, '#FFFFFF', 0.28);
+  const pts = [];
+  for (let k = 0; k <= n; k++) {
+    const s = k / 24, [x, y] = caudaEm(s, forma.pts), b = Math.sin(t * 4.2 - s * 2.4) * 1.4 * s * s;
+    pts.push([q(x + b), q(y + dy - b * 0.4), s < forma.grossa ? 2 : 1]);  // grossura em células
+  }
+  g.fillStyle = esc;
+  for (const [x, y, w] of pts) g.fillRect(x - P, y - P, (w + 2) * P, (w + 2) * P);  // contorno: uma célula em volta
+  g.fillStyle = cor;
+  for (const [x, y, w] of pts) g.fillRect(x, y, w * P, w * P);
+  g.fillStyle = luz;
+  for (const [x, y] of pts.slice(3, -2)) g.fillRect(x, y, P, P);  // o brilho de cima
 }
 
 // ---------- aura ----------
@@ -177,11 +233,24 @@ const VARIACOES = [
   { id: 'kaioken', forca: 1, cabelo: null, aura: '#EF4444', estilo: { forte: true, claro: [0.15, 0.5] }, entrada: 1.2 },
 ];
 const VAR = Object.fromEntries(VARIACOES.map(v => [v.id, v]));
+// fora de VARIACOES (o sorteio das voltas e as cenas de transformação não veem): quem liga é o
+// épico da lua cheia (a cada 150 voltas), por 2 min. Entra pronta: a entrada é o próprio épico
+// a aura dele é mais baixa (auraTam) e mais fraca (auraAlfa): forte, ela cobria o pelo e a juba
+const SSJ4 = {
+  id: 'ssj4', forca: 8, cabelo: [DB.cabelo, DB.cabeloLuz], aura: PELO, auraTam: 0.85, auraAlfa: 0.6, estilo: { claro: [0.2, 0.55], brilho: '#FDE047' },
+  longo: 1, juba: JUBA_SSJ4, roupa: ROUPA_SSJ4, cauda: PELO, caudaForma: CAUDA_SSJ4, entrada: 0,
+};
+const comprido = v => (v.longo === true ? 1 : v.longo || 0);
 const cabeloEm = (v, k) => [mistura(DB.cabelo, v.cabelo[0], k), mistura(DB.cabeloLuz, v.cabelo[1], k)];
 function ativoTransf(v, t) {
-  const R = { cabelo: v.cabelo, aura: 1, auraCor: v.aura, auraEstilo: v.estilo };
+  const R = { cabelo: v.cabelo, aura: v.auraTam || 1, auraCor: v.aura, auraEstilo: v.estilo };
+  if (v.auraAlfa) R.auraAlfa = v.auraAlfa;
   if (v.raios) R.raios = true;
-  if (v.longo) R.longo = 1;
+  if (v.longo) R.longo = comprido(v);
+  if (v.juba) R.juba = v.juba;
+  if (v.roupa) R.roupa = v.roupa;
+  if (v.cauda) { R.cauda = 1; R.caudaCor = v.cauda; }
+  if (v.caudaForma) R.caudaForma = v.caudaForma;
   if (v.id === 'kaioken') { const s = Math.sin(2 * Math.PI * t / 0.5); R.aura = 1 + 0.12 * s; R.tinta = { cor: '#EF4444', a: 0.14 + 0.1 * s }; }
   return R;
 }
@@ -190,9 +259,13 @@ const ESTRELINHA_AZUL = ['..#..', '..#..', '##w##', '..#..', '..#..'];
 // devolve { R (vai pro Clawd), pose (só na entrada: ele fica parado), anel {u, cor}, extra(g, L) }
 function efeitoTransf(v, te, tv, t) {
   const base = { auraCor: v.aura, auraEstilo: v.estilo };
+  for (const k of ['auraAlfa', 'juba', 'caudaForma']) if (v[k]) base[k] = v[k];
   if (tv != null) {
     const u = fatia(tv, 0, VOLTA), pisca = u < 1 && Math.floor(tv / 0.075) % 2 === 0;
-    return { R: { ...base, cabelo: v.cabelo && pisca ? v.cabelo : null, aura: 1 - u, longo: v.longo ? 1 - u : 0 } };
+    const R = { ...base, cabelo: v.cabelo && pisca ? v.cabelo : null, aura: (v.auraTam || 1) * (1 - u), longo: comprido(v) * (1 - u) };
+    if (v.roupa && pisca) R.roupa = v.roupa;
+    if (v.cauda) { R.cauda = 1 - u; R.caudaCor = v.cauda; }
+    return { R };
   }
   if (te >= v.entrada) return { R: ativoTransf(v, t) };
   const P = (R, pose = {}, anel = null, extra = null) => ({ R: { ...base, ...R }, pose, anel, extra });
@@ -243,12 +316,17 @@ function efeitoTransf(v, te, tv, t) {
 }
 
 // o Clawd do tema: p = pose + o que a transformação veste (cabelo, aura, auraCor, auraEstilo,
-// auraAlfa, longo, raios, tinta, ta = relógio); vira os ganchos do desenhaClawd do núcleo
+// auraAlfa, longo, juba (forma da crina), raios, tinta, roupa, cauda (0..1), caudaCor, caudaForma,
+// ta = relógio); vira os ganchos
+// do desenhaClawd do núcleo
 function clawdDB(g, p = {}) {
   const alfa = p.alfa ?? 1, ta = p.ta || 0, corBranco = p.branco === true ? '#FFFFFF' : p.branco;
-  const q = { ...p, roupa: ROUPA, cabelo: p.cabelo || null, aura: null, atras: null, frente: null };
+  const q = { ...p, roupa: ROUPAS[p.roupa] ? p.roupa : ROUPA, cabelo: p.cabelo || null, aura: null, atras: null, frente: null };
   if (p.aura > 0) q.aura = k => aura(k, ta, p.aura, alfa * (p.auraAlfa ?? 1), p.auraCor, p.auraEstilo);
-  if (p.longo > 0) q.atras = (k, dy, L) => crina(k, p.longo, p.cabelo || [DB.cabelo, DB.cabeloLuz], L, ta, dy, corBranco);
+  if (p.longo > 0 || p.cauda > 0) q.atras = (k, dy, L) => {  // a cauda na frente da crina
+    if (p.longo > 0) crina(k, p.longo, p.cabelo || [DB.cabelo, DB.cabeloLuz], L, ta, dy, corBranco, p.juba);
+    if (p.cauda > 0) cauda(k, p.cauda, ta, dy, corBranco || p.caudaCor, p.caudaForma);
+  };
   if (p.raios) q.frente = (k, dy, L) => raiosEletricos(k, ta, L);
   desenhaClawd(g, q);
 }
@@ -421,6 +499,10 @@ const GLIFOS = {
   S: ['.####.', '#....#', '#.....', '#.....', '#.....', '.####.', '.....#', '.....#', '.....#', '#....#', '.####.'],
   D: ['#####.', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#####.'],
   E: ['######', '#.....', '#.....', '#.....', '#.....', '#####.', '#.....', '#.....', '#.....', '#.....', '######'],
+  B: ['#####.', '#....#', '#....#', '#....#', '#....#', '#####.', '#....#', '#....#', '#....#', '#....#', '#####.'],
+  U: ['#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '.####.'],
+  G: ['.####.', '#....#', '#.....', '#.....', '#.....', '#..###', '#....#', '#....#', '#....#', '#....#', '.####.'],
+  '∞': ['.........', '.........', '.........', '.##...##.', '#..#.#..#', '#...#...#', '#..#.#..#', '.##...##.', '.........', '.........', '.........'],
   '!': ['#', '#', '#', '#', '#', '#', '#', '#', '.', '.', '#'],
   '+': ['.....', '.....', '.....', '..#..', '..#..', '#####', '..#..', '..#..', '.....', '.....', '.....'],
 };
@@ -438,7 +520,8 @@ function textoPx(g, s, x, y, cor, sombra = true) {
 }
 
 module.exports = {
-  DB, ROUPA, ROUPAS, ALTURA, fatia, aura, crina, raiosEletricos, anelClarao, VOLTA, VARIACOES, VAR, efeitoTransf, ativoTransf,
+  DB, ROUPA, ROUPAS, ALTURA, fatia, aura, crina, cauda, CAUDA_COR, raiosEletricos, anelClarao, VOLTA, VARIACOES, VAR, efeitoTransf, ativoTransf,
+  SSJ4, ROUPA_SSJ4, PELO, PELO_ESC, PELO_LUZ, JUBA_SSJ4, CAUDA_SSJ4,
   clawdDB, andando, pulando, INIMIGOS, desenhaInimigo, chegando, disco, bolaKi, feixe, fumaca, estrelinhas, impacto, linhasVel,
   ESTRELA3, nuvemPequena, desenhaNuvemP, fiapo, GLIFOS, largPx, textoPx,
 };

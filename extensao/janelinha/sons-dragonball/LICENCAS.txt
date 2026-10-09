@@ -2,8 +2,8 @@ Sons do tema Dragon Ball do Claude Monitor (terminou.wav, esperando.wav, tudo.wa
 Montados a partir de originais CC0 (domínio público): nenhum título, tag ou descrição fala em
 Dragon Ball ou outra obra, e nenhuma descrição diz que o som veio de outra fonte. Freesound: a
 prévia HQ pública (mesma licença do original); Kenney: arquivo do zip do pacote.
-Os shenlong-*.wav (o dragão das 7 esferas, evento épico) são feitos do zero pelo
-sons-epicos.py: nada de terceiros. A trilha do dragão também usa o tudo.wav e o terminou.wav (abaixo).
+Os shenlong-*.wav (o dragão das 7 esferas, evento épico), os pedido-*.wav (o pedido ao dragão)
+e os ssj4-*.wav (o épico da lua cheia) são feitos do zero pelo sons-epicos.py: nada de terceiros. A trilha do dragão também usa o tudo.wav e o terminou.wav (abaixo).
 
 arquivo:  originais/fs_639429_cristal.ogg
 título:   Crystal Twinkle

@@ -128,8 +128,11 @@ a janelinha antes dos temas continua no Minecraft.
   dorme, ou cava um laguinho e pesca (uma vez cada).
 - **Dragon Ball**: o Clawd de quimono, que às vezes se transforma; a nuvem
   voadora, as esferas no lugar das bolinhas e a barra de ki ("MAIS DE 8000!").
-  Cada sessão que termina dá uma esfera; na 7ª, o dragão aparece. Quando fica
-  tudo quieto, ele medita flutuando ou treina (uma vez cada).
+  Cada sessão que termina dá uma esfera; na 7ª, o dragão aparece e realiza um
+  pedido do Clawd (limite infinito, feijões mágicos, banquete ou código sem
+  bugs, um de cada vez). A cada 150 voltas no cartão vem a **lua cheia**: ele
+  vira um macaco dourado gigante e volta no Super Saiyajin 4, que dura 2 min.
+  Quando fica tudo quieto, ele medita flutuando ou treina (uma vez cada).
 - **Star Wars** (feito pelo [gjthec](https://github.com/gjthec)): o Clawd de
   armadura preta, capa e sabre vermelho; moldura de neon, cristais kyber no
   lugar das bolinhas e o usage em sabres de luz que mudam de cor com o gasto

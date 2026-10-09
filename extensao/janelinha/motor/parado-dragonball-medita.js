@@ -30,6 +30,16 @@ const ROUPAS = {
   [R_SENTA]: { ...BASE, linhas: [...cab(false), ...SENTADO], cores: { ...BASE.cores, b: DB.azul } },
   [R_ABRE]: { ...BASE, linhas: [...cab(true), ...SENTADO], cores: { ...BASE.cores, b: DB.azul } },
 };
+// o SSJ 4 tem roupa própria (pelo no peito e nos braços): as mesmas 3, no grid dele. A pálpebra
+// fechada fica no pelo escuro em volta do olho; sentado, o pelo desce até as mãos nos joelhos
+const FERA = A.ROUPAS[A.ROUPA_SSJ4];
+const OLHO_FECHADO_4 = ['...Rrr######rrR...', '...Roo######ooR...'];
+const SENTADO_4 = ['...lRRRR##RRRRl...', '.RwRRRRR##RRRRRwR.', '.RwffffffffffffwR.', '.gggggggzzggggggg.', 'bbgggggg..ggggggbb'];
+const cab4 = olhos => [...FERA.linhas.slice(0, 8), ...(olhos ? FERA.linhas.slice(8, 10) : OLHO_FECHADO_4)];
+const NA_FERA = { [A.ROUPA]: A.ROUPA_SSJ4, [R_PE]: R_PE + '-ssj4', [R_SENTA]: R_SENTA + '-ssj4', [R_ABRE]: R_ABRE + '-ssj4' };
+ROUPAS[NA_FERA[R_PE]] = { ...FERA, linhas: [...cab4(false), ...FERA.linhas.slice(10)] };
+ROUPAS[NA_FERA[R_SENTA]] = { ...FERA, linhas: [...cab4(false), ...SENTADO_4], cores: { ...FERA.cores, b: DB.azul } };
+ROUPAS[NA_FERA[R_ABRE]] = { ...FERA, linhas: [...cab4(true), ...SENTADO_4], cores: { ...FERA.cores, b: DB.azul } };
 registrarRoupas(ROUPAS);
 
 // o que o Clawd veste agora (cópia do vestir() do tema-dragonball.js: a transformação, se houver)
@@ -38,12 +48,17 @@ function vestir(m) {
   if (!tr) return R;
   return { ...R, ...A.efeitoTransf(tr.v, m.T - tr.t0, tr.tv0 != null ? m.T - tr.tv0 : null, m.T).R };
 }
-// o clawdDB do tema com outra roupa (a transformação continua valendo: cabelo, crina, raios, tinta)
+// o clawdDB do tema com outra roupa (a transformação continua valendo: cabelo, crina, cauda, raios,
+// tinta; no SSJ 4, a roupa da cena vira a versão com pelo)
 function clawdRoupa(g, p, roupa) {
   const alfa = p.alfa ?? 1, ta = p.ta || 0;
+  if (p.roupa === A.ROUPA_SSJ4) roupa = NA_FERA[roupa] || roupa;
   const qq = { ...p, roupa, cabelo: p.cabelo || null, aura: null, atras: null, frente: null };
   if (p.aura > 0) qq.aura = k => A.aura(k, ta, p.aura, alfa * (p.auraAlfa ?? 1), p.auraCor, p.auraEstilo);
-  if (p.longo > 0) qq.atras = (k, dy, L) => A.crina(k, p.longo, p.cabelo || [DB.cabelo, DB.cabeloLuz], L, ta, dy, null);
+  if (p.longo > 0 || p.cauda > 0) qq.atras = (k, dy, L) => {  // a cauda na frente da crina
+    if (p.longo > 0) A.crina(k, p.longo, p.cabelo || [DB.cabelo, DB.cabeloLuz], L, ta, dy, null, p.juba);
+    if (p.cauda > 0) A.cauda(k, p.cauda, ta, dy, p.caudaCor, p.caudaForma);
+  };
   if (p.raios) qq.frente = (k, dy, L) => A.raiosEletricos(k, ta, L);
   desenhaClawd(g, qq);
 }

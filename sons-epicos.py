@@ -1,6 +1,7 @@
 """Gera os sons dos eventos épicos, feitos do zero (nada de terceiros):
 - Padrão (8-bit): Space Invaders (epico-*.wav) e Bug Kaiju (kaiju-*.wav) -> sons-padrao/
-- Dragon Ball: o dragão das 7 esferas (shenlong-*.wav) -> sons-dragonball/
+- Dragon Ball: o dragão das 7 esferas (shenlong-*.wav), o pedido ao dragão (pedido-*.wav) e o
+  épico da lua cheia, o macaco dourado e o SSJ 4 (ssj4-*.wav) -> sons-dragonball/
 Cada um é uma peça curta; quem diz quando cada peça toca é a cena (sons: [...]) e o motor
 junta tudo num .wav só quando ela começa (motor/som.js). O Ender Dragon usa os sons do
 próprio Minecraft, baixados da Mojang na instalação (minecraft.js).
@@ -221,6 +222,121 @@ def shenlong():
     return s
 
 
+def sino(fq, dd=0.6):
+    """um tilim de sino: parciais inarmônicos que somem rápido"""
+    tt = tempo(dd)
+    return sum(a * np.sin(2 * np.pi * fq * r * tt) * np.exp(-tt * k) for r, a, k in ((1, 1, 6), (2.76, .35, 9), (5.4, .12, 14))) * env(len(tt), 0.002, None, 0.03)
+
+
+def serra(f, harm=12):
+    """dente de serra sem serrilhado (soma dos harmônicos), f por amostra"""
+    return sum(np.sin(2 * np.pi * np.cumsum(f * k) / SR) / k for k in range(1, harm))
+
+
+# ============================== Dragon Ball: o épico da lua cheia ==============================
+def ssj4():
+    s = {}
+    # a noite: grilos (trinados agudos em grupos), o vento baixo e um grave parado, sombrio
+    d = 3.2
+    t = tempo(d)
+    grilo = np.sin(2 * np.pi * 4300 * t) * (np.sin(2 * np.pi * 32 * t) > 0.3) * ((t * 2.2) % 1 < 0.28)
+    grilo2 = np.sin(2 * np.pi * 3900 * t) * (np.sin(2 * np.pi * 29 * t) > 0.3) * (((t + 0.37) * 1.7) % 1 < 0.22)
+    vento = filtro(rng.standard_normal(len(t)), 500) * (0.6 + 0.4 * np.sin(2 * np.pi * 0.5 * t))
+    grave = (seno(constante(d, 55)) + 0.5 * seno(constante(d, 82.4))) * (0.8 + 0.2 * np.sin(2 * np.pi * 0.7 * t))
+    s['ssj4-noite'] = (grilo * 0.12 + grilo2 * 0.09 + vento * 0.6 + grave * 0.35) * env(len(t), 0.5, None, 0.6)
+    # a lua sobe: um coro de senos em lá menor que cresce, com um brilho que sobe de tom
+    d = 2.6
+    t = tempo(d)
+    coro = sum(seno(constante(d, hz(n)) * (1 + 0.004 * np.sin(2 * np.pi * (5 + k) * t + k))) for k, n in enumerate([57, 60, 64, 69])) / 4
+    brilho = sum(np.sin(2 * np.pi * np.cumsum(varre(d, f, f * 1.5)) / SR) * (0.5 + 0.5 * np.sin(2 * np.pi * (7 + k) * t)) for k, f in enumerate([1760, 2217, 2637])) / 3
+    s['ssj4-lua'] = (coro * 0.7 + brilho * 0.25 * np.minimum(1, t / d * 1.5)) * env(len(t), 0.8, None, 0.7)
+
+    # o coração: tum-tum grave
+    def tum(dd=0.22):
+        return seno(varre(dd, 75, 38)) * env(N(dd), 0.003, 0.07) + filtro(ruido(dd, 3000), 400) * env(N(dd), 0.001, 0.02) * 0.4
+    s['ssj4-coracao'] = juntar(0.55, (0, tum(), 1), (0.17, tum(), 0.7))
+    # cresce: um ronco que sobe, a tensão (serra grave subindo) e o chão tremendo
+    d = 2.2
+    t = tempo(d)
+    ronco = filtro(rng.standard_normal(len(t)), 260) * (0.5 + 0.5 * np.sin(2 * np.pi * 13 * t))
+    tensao = filtro(serra(varre(d, 38, 115)), 900)
+    s['ssj4-cresce'] = (ronco * 0.9 + tensao * 0.5) * np.minimum(1, (t / d) ** 1.4 + 0.08) * env(len(t), 0.05, None, 0.25)
+    # o rugido do macaco gigante: mais grave e áspero que o do dragão, com eco
+    d = 1.7
+    t = tempo(d)
+    f = varre(d, 150, 78) + 14 * np.sin(2 * np.pi * 31 * t)
+    voz = serra(f) * (0.7 + 0.3 * np.sin(2 * np.pi * 37 * t))
+    garganta = filtro(rng.standard_normal(len(t)), [180, 1600], 'band')
+    s['ssj4-ruge'] = eco(filtro((voz * 0.6 + garganta * 0.6) * env(len(t), 0.06, None, 0.5), 2600), 0.15, 0.3, 4)
+    # o soco no peito: tum oco
+    d = 0.35
+    s['ssj4-soco'] = seno(varre(d, 110, 45)) * env(N(d), 0.002, 0.08) + filtro(ruido(d, 4000), 900) * env(N(d), 0.001, 0.025) * 0.6
+    # encolhe: o ronco desce e um brilho mágico cai de tom
+    d = 1.0
+    t = tempo(d)
+    cai = sum(np.sin(2 * np.pi * np.cumsum(varre(d, f, f / 3)) / SR) for f in (3000, 3800, 4700)) / 3
+    s['ssj4-encolhe'] = (cai * 0.4 * (0.6 + 0.4 * np.sin(2 * np.pi * 18 * t)) + filtro(rng.standard_normal(len(t)), 300) * 0.6 * (1 - t / d)) * env(len(t), 0.02, None, 0.2)
+    # o clarão: estouro, o grave caindo e o brilho em cima
+    d = 1.4
+    t = tempo(d)
+    s['ssj4-explode'] = (filtro(rng.standard_normal(len(t)), 3000) * env(len(t), 0.001, 0.35) + seno(varre(d, 70, 28)) * env(len(t), 0.002, 0.5) * 0.9
+                         + juntar(d, (0.02, sino(hz(93), 1.2), 0.25)))
+    # a aura: o zumbido grave pulsando e os estalos por cima
+    d = 1.6
+    t = tempo(d)
+    estalos = filtro(filtro(rng.standard_normal(len(t)), [900, 5000], 'band') * (rng.random(len(t)) < 0.004), 6000) * 6
+    zumbido = (serra(constante(d, 82), 6) * 0.5 + seno(constante(d, 41))) * (0.7 + 0.3 * np.sin(2 * np.pi * 9 * t))
+    chiado = filtro(rng.standard_normal(len(t)), [1200, 4000], 'band') * (0.5 + 0.5 * np.sin(2 * np.pi * 6 * t))
+    s['ssj4-aura'] = (filtro(zumbido, 1200) * 0.6 + chiado * 0.35 + estalos * 0.4) * env(len(t), 0.08, None, 0.5)
+    return s
+
+
+# ============================== Dragon Ball: o pedido ao dragão ==============================
+def pedido():
+    s = {}
+    # o Clawd fala: sílabas fofas (triângulo deslizando)
+    sil = [(76, 79), (74, 72), (79, 81), (77, 74), (81, 84), (79, 76)]
+    s['pedido-fala'] = filtro(juntar(1.0, *[(0.15 * i, triangulo(varre(0.1, hz(a), hz(b))) * env(N(0.1), 0.01, None, 0.03), 0.5) for i, (a, b) in enumerate(sil)]), 5000)
+    # concedido: o acorde grave que cresce e os sinos subindo
+    d = 1.6
+    t = tempo(d)
+    acorde = sum(seno(constante(d, hz(n))) for n in (45, 52, 57, 64)) / 4 * env(len(t), 0.25, 0.6, 0.3)
+    s['pedido-concede'] = acorde * 0.8 + juntar(d, *[(0.1 + 0.09 * i, sino(hz(n), 0.9), 0.3) for i, n in enumerate([81, 85, 88, 93])])
+    # infinito: o raio (sopro subindo) e um arpejo de sinos que não para de subir
+    d = 1.8
+    t = tempo(d)
+    sopro = filtro(rng.standard_normal(len(t)), [900, 5000], 'band') * np.minimum(1, t / 0.15) * env(len(t), 0.01, 0.6, 0.2)
+    s['pedido-infinito'] = sopro * 0.4 + juntar(d, *[(0.07 * i, sino(hz(72 + [0, 4, 7][i % 3] + 12 * (i // 3)), 0.6), 0.28) for i in range(9)])
+    # cai: tum macio
+    s['pedido-cai'] = seno(varre(0.18, 170, 70)) * env(N(0.18), 0.002, 0.04) + filtro(ruido(0.18, 4000), 1200) * env(N(0.18), 0.001, 0.015) * 0.3
+    # mordida: crec
+    s['pedido-mordida'] = juntar(0.14, *[(0.03 * i, filtro(rng.standard_normal(N(0.04)), [1500, 7000], 'band') * env(N(0.04), 0.001, 0.008), 1 - 0.2 * i) for i in range(3)])
+    # energia: o zap subindo e o tilim no fim
+    d = 0.9
+    zap = seno(varre(d * 0.7, 200, 1600) * (1 + 0.03 * np.sin(2 * np.pi * 30 * tempo(d * 0.7))))
+    s['pedido-energia'] = juntar(d, (0, zap * env(len(zap), 0.01, None, 0.1), 0.5), (0.55, sino(hz(88), 0.35), 0.4), (0.62, sino(hz(93), 0.28), 0.3))
+    # arroto: serra grave tremendo
+    d = 0.6
+    t = tempo(d)
+    s['pedido-arroto'] = filtro(serra(varre(d, 100, 72)) * (0.6 + 0.4 * np.sin(2 * np.pi * 28 * t)), 900) * env(len(t), 0.02, 0.3, 0.1)
+    # papel: o pergaminho desenrolando (sopro que sobe) e o estalo de abrir
+    d = 0.6
+    t = tempo(d)
+    centro = 700 * (4000 / 700) ** (t / d)
+    ru = rng.standard_normal(len(t))
+    papel = np.zeros(len(t))
+    n = N(0.05)
+    for i in range(0, len(t), n):  # passa-banda que anda (em pedaços de 50 ms)
+        c = centro[i]
+        papel[i:i + n] = filtro(ru, [c * 0.7, min(c * 1.4, 15000)], 'band')[i:i + n]
+    s['pedido-papel'] = papel * env(len(t), 0.05, None, 0.15) + juntar(d, (0.5, filtro(ruido(0.05, 9000), 6000) * env(N(0.05), 0.001, 0.01), 0.4))
+    # estala: um bug vira estrelinha
+    s['pedido-estala'] = juntar(0.3, (0, seno(varre(0.12, 1000, 350)) * env(N(0.12), 0.001, 0.03), 0.6), (0.02, sino(hz(96), 0.28), 0.35))
+    # festa: dó-mi-sol-dó de sino
+    s['pedido-festa'] = juntar(1.0, *[(0.08 * i, sino(hz(n), 0.7), 0.3) for i, n in enumerate([84, 88, 91, 96])])
+    return s
+
+
 def gravar(pasta, sons):
     os.makedirs(pasta, exist_ok=True)
     for nome, x in sons.items():
@@ -232,3 +348,4 @@ def gravar(pasta, sons):
 
 gravar(os.path.join(RAIZ, 'sons-padrao'), {**invaders(), **kaiju()})
 gravar(os.path.join(RAIZ, 'sons-dragonball'), shenlong())
+gravar(os.path.join(RAIZ, 'sons-dragonball'), {**ssj4(), **pedido()})  # depois: o sorteio dos de cima não muda

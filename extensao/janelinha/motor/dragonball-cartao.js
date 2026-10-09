@@ -192,7 +192,8 @@ const DRAGAO_CABECA = [
   '..sgggggggggggggggkk', '...kgbbbbbbtbtbtbtk.', '....kbbbbbbbbbbbb...', '.....kkkkkkkkkkk....',
 ];
 const COR_DRAGAO = { h: '#FEF3C7', k: '#14532D', g: '#22A45A', s: '#15803D', w: '#FFFFFF', r: '#DC2626', n: '#0F3D22', b: '#FDE68A', t: '#FFFFFF' };
-const DRAG = { afasta: 9, vel: 300, seg: 64, passo: 3.2, luz: 0.7, sobe: 46, fim: 1.1 };
+// pedido: s pairando depois de subir (o Clawd faz o pedido e ganha; dragonball-pedido.js)
+const DRAG = { afasta: 9, vel: 300, seg: 64, passo: 3.2, luz: 0.7, sobe: 46, pedido: 5.0, fim: 1.1 };
 // G = { w, h, r, extra } do cartão (extra = a trilha que desce por baixo da nuvem)
 const posEsfera = (G, k) => ({ x: G.w - 14 - (6 - k) * 9, y: -7 });
 const centroEsferas = G => G.w - 14 - 27 + 3.5;
@@ -208,7 +209,18 @@ function caminhoDragao(G) {
     },
   };
 }
-const duracaoDragao = G => DRAG.luz + (caminhoDragao(G).per + DRAG.sobe) / DRAG.vel + DRAG.fim;
+const paraEm = c => DRAG.luz + (c.per + DRAG.sobe) / DRAG.vel;  // quando ele para de subir e fica pairando
+const duracaoDragao = G => paraEm(caminhoDragao(G)) + DRAG.pedido + DRAG.fim;
+const voltaAng = a => Math.atan2(Math.sin(a), Math.cos(a));  // pro intervalo -pi..pi
+// a cabeça em t (relativa ao canto do cartão): subindo, segue o caminho; pairando, balança e
+// vira pra olhar o alvo (o Clawd fazendo o pedido) em 0,5 s
+function cabecaDragao(G, t, alvo, c = caminhoDragao(G)) {
+  const TS = paraEm(c), sCab = Math.min(DRAG.vel * (t - DRAG.luz), c.per + DRAG.sobe), ph = c.P(Math.max(0, sCab));
+  if (t < TS || !alvo) return { x: ph.x, y: ph.y, a: ph.a };
+  const hv = t - TS, k = Math.min(1, hv / 0.6), u = k * k * (3 - 2 * k);
+  const y = ph.y + 1.5 * Math.sin(hv * 2.4) * k, quer = Math.atan2(alvo.y - y, alvo.x - ph.x);
+  return { x: ph.x, y, a: ph.a + voltaAng(quer - ph.a) * u };
+}
 // gomos do corpo prontos (contorno + corpo; a barriga vai por cima, virada pra dentro)
 const GOMOS = cache(140);
 function gomo(rs, branco) {
@@ -221,17 +233,20 @@ function gomo(rs, branco) {
   c.meio = n;
   return GOMOS.set(chave, c);
 }
-// t = s desde o começo do evento; (ox, oy) = canto do cartão
-function desenhaDragao(g, ox, oy, G, t) {
-  const c = caminhoDragao(G), T1 = DRAG.luz + (c.per + DRAG.sobe) / DRAG.vel;
+// t = s desde o começo do evento; (ox, oy) = canto do cartão. o: { alvo {x, y} (pra onde a cabeça
+// vira pairando, relativo ao cartão), olho 0..1 (os olhos acendem: o pedido concedido) }
+function desenhaDragao(g, ox, oy, G, t, o = {}) {
+  const c = caminhoDragao(G), TS = paraEm(c), T1 = TS + DRAG.pedido;
   if (t < DRAG.luz || t >= T1 + DRAG.fim) return;
   const sCab = Math.min(DRAG.vel * (t - DRAG.luz), c.per + DRAG.sobe), branco = t >= T1 && t < T1 + 0.15;
+  const hv = t - TS, onda = hv > 0 ? Math.min(1, hv / 0.6) : 0;  // pairando: o corpo ondula
   g.save(); g.translate(ox, oy);
   if (t < T1 + 0.15) {
     for (let i = DRAG.seg; i >= 1; i--) {
       const s = sCab - i * DRAG.passo;
       if (s < 0) continue;
       const p = c.P(s), rs = 1.5 + 2.6 * (1 - i / DRAG.seg), nx = Math.sin(p.a), ny = -Math.cos(p.a);
+      if (onda) { const d = 1.3 * onda * Math.sin(hv * 3.2 - i * 0.32); p.x += nx * d; p.y += ny * d; }
       const img = gomo(rs, branco);
       g.drawImage(img, Math.round(p.x) - img.meio, Math.round(p.y) - img.meio);
       if (!branco) {
@@ -240,14 +255,21 @@ function desenhaDragao(g, ox, oy, G, t) {
         if (i === DRAG.seg) { g.fillStyle = '#FDE68A'; g.fillRect(Math.round(p.x - Math.cos(p.a) * 3) - 1, Math.round(p.y - Math.sin(p.a) * 3) - 1, 3, 3); }  // ponta do rabo
       }
     }
-    const ph = c.P(sCab);
+    const ph = cabecaDragao(G, t, o.alvo, c);
     g.save(); g.translate(ph.x, ph.y); g.rotate(ph.a);
+    if (Math.cos(ph.a) < 0) g.scale(1, -1);  // olhando pra trás: desvira (o queixo pra baixo)
     if (!branco) {  // bigodes ondulando pra trás
       g.fillStyle = '#FDE68A';
       for (let j = 1; j <= 11; j++) g.fillRect(Math.round(21 - j * 2.5), Math.round(4.5 + j * 0.7 + 1.8 * Math.sin(t * 9 + j * 0.6)), 1.5, 1.5);
     }
     const cab = arte(DRAGAO_CABECA, COR_DRAGAO);
     g.drawImage(branco ? tingida(cab, '#FFFFFF', 'dragao') : cab, -4.5, -10.5, 30, 18);
+    if (o.olho > 0 && !branco) {  // o olho acende (o 'r' da coluna 9, linha 6)
+      const ex = -4.5 + 9 * 1.5 + 0.75, ey = -10.5 + 6 * 1.5 + 0.75, gr = g.createRadialGradient(ex, ey, 0, ex, ey, 9);
+      gr.addColorStop(0, rgba('#FEF08A', 0.85 * o.olho)); gr.addColorStop(0.4, rgba('#F87171', 0.45 * o.olho)); gr.addColorStop(1, rgba('#F87171', 0));
+      g.fillStyle = gr; g.fillRect(ex - 9, ey - 9, 18, 18);
+      g.fillStyle = rgba('#FFFFFF', o.olho); g.fillRect(ex - 0.75, ey - 0.75, 1.5, 1.5);
+    }
     g.restore();
   } else {  // some num brilho: estrelinhas subindo de onde o corpo estava
     const u = (t - T1 - 0.15) / (DRAG.fim - 0.15), a3 = arte(ESTRELA3, { '#': '#FEF9C3', w: '#FFFFFF' });
@@ -293,5 +315,5 @@ function desenhaEsferas(g, ox, oy, G, n, tAdd, t, ev) {
 
 module.exports = {
   escrever, bolinha, nuvem, nuvemArte, barra, nivelDe, CORES_BARRA, ovo, ovoAceso, OVO, largPx,
-  desenhaEsferas, desenhaDragao, duracaoDragao, DRAG, HALO,
+  desenhaEsferas, desenhaDragao, duracaoDragao, cabecaDragao, caminhoDragao, paraEm, DRAG, HALO,
 };
