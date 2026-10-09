@@ -131,14 +131,17 @@ a janelinha antes dos temas continua no Minecraft.
   Cada sessão que termina dá uma esfera; na 7ª, o dragão aparece. Quando fica
   tudo quieto, ele medita flutuando ou treina (uma vez cada).
 - **Star Wars** (feito pelo [gjthec](https://github.com/gjthec)): o Clawd de
-  armadura preta, capa e sabre vermelho; cristais kyber no lugar das bolinhas e
-  o usage em sabres de luz que mudam de cor com o gasto (violeta, roxo, magenta,
-  vermelho). Andando, ele rebate tiros de blaster, corta um
+  armadura preta, capa e sabre vermelho; moldura de neon, cristais kyber no
+  lugar das bolinhas e o usage em sabres de luz que mudam de cor com o gasto
+  (violeta, roxo, magenta, vermelho). Andando, ele rebate tiros de blaster, corta um
   droide ao meio, ergue outro com a Força ou só respira fundo; quando fica tudo
   quieto, medita levitando pedras ou monta um sabre no ar (uma vez cada); quando
-  acaba tudo, salta pro hiperespaço. A cada 30 droides destruídos vem um evento
-  especial, com som: **A Batalha da Frota**. Os avisos são bipes de droide e o
-  sabre acendendo.
+  acaba tudo, salta pro hiperespaço. A cada 50 voltas no cartão ele **troca de
+  lado da Força**: no lado da luz veste o manto, o sabre fica verde e o cartão
+  off-white, verde e marrom; mais 50 voltas e ele volta pro lado sombrio. A cada
+  30 droides destruídos vem um evento especial, com som, um de cada lado:
+  **A Batalha da Frota** (no espaço) e **A Defesa da Floresta**. Os avisos são
+  bipes de droide e o sabre acendendo.
 
 As animações precisam do Node.js (que a instalação já pede); sem ele a
 janelinha mostra o Clawd simples, sem as cenas.

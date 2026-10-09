@@ -19,8 +19,8 @@ enfeites dela (no Windows, os do Minecraft em WPF; o resto, como o Padrão).
   uint16 + BGRA pré-multiplicado), `L` linha pro diário, `P` pronto (`{pronto, temas:
   {nome: layout}}`), `S` som da cena épica (`{tocar: <.wav na pasta>, cena}` ou
   `{parar: true}`, quando ela é cortada).
-- Som: só os épicos têm (Invaders/Kaiju no Padrão, Ender Dragon, Shenlong, a Batalha da Frota no
-  Sith). A cena diz o que
+- Som: só os épicos têm (Invaders/Kaiju no Padrão, Ender Dragon, Shenlong, a Batalha da Frota e a
+  Defesa da Floresta no Sith, uma de cada lado da Força). A cena diz o que
   toca e quando (`sons`, abaixo); quando ela começa, o motor junta tudo num .wav só
   (`som.js`: mono, 16 bits, 44100, gravado como `som-cena-0.wav`/`som-cena-1.wav`, revezando)
   e a janelinha toca do começo com o volume do botão direito. No `-Foto`/`--foto` ela não

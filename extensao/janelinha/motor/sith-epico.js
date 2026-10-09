@@ -1,13 +1,14 @@
 'use strict';
 // Evento épico raro do tema Sith (a cada 30 droides destruídos), ~19 s: A BATALHA DA FROTA.
 // A área acima do cartão vira o espaço (abre de baixo pra cima, a partir da borda do cartão).
-// A nave-mãe do lorde entra pela esquerda e para no alto; caças droides chegam: as torres da
-// nave derrubam uns, outros mergulham atirando no Clawd, que rebate os tiros com o sabre de
-// volta neles. Um droide gigante sai do hiperespaço e o olho dele carrega: o Clawd apaga o
-// sabre, ergue a mão e a Força o esmaga até estourar (clarão, onda de choque, destroços). A
-// nave carrega o salto e dispara num risco de luz, e a gente vai junto: o túnel do
-// hiperespaço. Na saída, a nave chega na frente de um planeta vermelho; o espaço fecha de
-// volta pra borda e o Clawd segue o passeio. Desenho nosso (nada de filme): a nave é uma cunha
+// A nave-mãe do lorde entra pela esquerda e para no alto, e o Clawd sai do cartão levitando na
+// Força até o meio da batalha (dono, 09/10); caças droides chegam: as torres da nave derrubam
+// uns, outros mergulham atirando nele, que rebate os tiros com o sabre de volta neles. Um
+// droide gigante sai do hiperespaço e o olho dele carrega: o Clawd apaga o sabre, ergue a mão e
+// a Força o esmaga até estourar (clarão, onda de choque, destroços). A nave carrega o salto e
+// dispara num risco de luz, e a gente vai junto: o túnel do hiperespaço. Na saída, a nave
+// chega na frente de um planeta vermelho; o Clawd desce de volta pro lugar dele, o espaço fecha
+// de volta pra borda e ele segue o passeio. Desenho nosso (nada de filme): a nave é uma cunha
 // genérica, os caças e o gigante são os droides do tema.
 //
 // Tudo é pré-calculado na cena(m), pela semente: o caminho de cada caça, cada tiro e onde ele
@@ -17,7 +18,7 @@
 const { lim, sai, entra, tela, cache, arte, rng, rgba } = require('./comum');
 const A = require('./sith-arte');
 
-const { fatia } = A;
+const { fatia, explosao, GIGANTE } = A;  // o gigante e a explosão: sith-arte.js (os dois épicos usam)
 const P = A.P;
 
 // ---------- ritmo (s) ----------
@@ -34,9 +35,21 @@ const VOO = 0.32, VOLTA = 0.2, VT = 0.14, VB = 0.3;  // tiro do caça até o sab
 const SABRE = [16, -15];                     // onde o tiro bate no sabre (referencial do Clawd)
 const MAO = [12, -9];                        // a mão erguida (a Força sai dela)
 
+// ---------- o voo (dono, 09/10): o Clawd sai do cartão e luta no ar, levitando na Força ----------
+// Ele sobe em diagonal até o meio da batalha (J.Xb, a ~metade do vão até a nave), paira
+// balançando, e no fim desce de volta pro lugar onde estava. Sobe 0,55–1,6 · desce 17,2–18,1
+const VOA = { sobe: [0.55, 1.6], desce: [17.2, 18.1] };
+// onde o Clawd está em t, a partir do lugar dele no cartão (k: 0 no chão, 1 no alto)
+function clawdEm(J, t) {
+  const k = sai(fatia(t, VOA.sobe[0], VOA.sobe[1])) * (1 - entra(fatia(t, VOA.desce[0], VOA.desce[1])));
+  const x = (J.Xb - J.X0) * k + Math.sin(t * 0.8) * J.deriva * k, y = -J.alt * k + Math.sin(t * 2.2) * 1.5 * k;  // paira: balança de lado e sobe e desce
+  return { x, y, k, aura: 0.45 * k };
+}
+
 const linhaDoTempo = [
   [0, 'o espaço abre acima do cartão, de baixo pra cima'],
   [T.nave[0], 'a nave-mãe entra pela esquerda e para no alto'],
+  [VOA.sobe[0], 'o Clawd levita na Força e sobe pro meio da batalha'],
   [4.2, 'caças droides: as torres da nave derrubam 5; 3 mergulham no Clawd e ele rebate os tiros neles'],
   [T.gigante[0], 'um droide gigante sai do hiperespaço e o olho dele carrega'],
   [T.agarra, 'o Clawd apaga o sabre e ergue a mão: a Força segura o gigante, que treme'],
@@ -47,12 +60,13 @@ const linhaDoTempo = [
   [T.salta[0], 'a nave dispara num risco de luz'],
   [T.tunel[0], 'o túnel do hiperespaço (a capa voando)'],
   [T.sai, 'a saída: clarão, a nave chega e um planeta vermelho sobe'],
+  [VOA.desce[0], 'o Clawd desce de volta pro lugar dele'],
   [T.fecha[0], 'o espaço fecha de volta pra borda do cartão'],
   [T.volta[0], 'o sabre volta pra posição do passeio'],
 ];
 
 // ---------- desenhos ----------
-const COR = { g: '#374151', l: '#9CA3AF', k: '#6B7280', r: '#B91C1C', R: '#FCA5A5', w: '#EF4444', o: '#111827', a: '#4B5563', W: '#FFF1F2' };
+const COR = A.CORES_FROTA;
 // caça droide: o casco redondo dos droides do tema, o olho vermelho e duas asas pra trás (bico pra esquerda)
 const CACA = [
   '.....kkw.',
@@ -65,23 +79,6 @@ const CACA = [
   '.....kkw.',
 ];
 const CW = CACA[0].length * P, CH = CACA.length * P;
-// o droide gigante: o casco do droide do tema, o olho enorme, dois canhões e as perninhas
-const GIGANTE = [
-  '.......gggggg.......',
-  '.....ggllllllgg.....',
-  '....glllllllllkg....',
-  '...gllllllllllkkg...',
-  '..glllgggggglllkkg..',
-  'aaglgoorRRrooglkkgaa',
-  'aaglgorRWWRrogllkgaa',
-  'aaglgorRWWRrogllkgaa',
-  '..glgoorRRroogllkg..',
-  '..glllggggggllkkkg..',
-  '...gkkkkkkkkkkkkg...',
-  '....ggkkkkkkkkgg....',
-  '.....g..g..g..g.....',
-  '....g..g....g..g....',
-];
 const PG = 3, GW = GIGANTE[0].length * PG, GH = GIGANTE.length * PG, OLHO = [27 - GW / 2, 21 - GH / 2];  // o olho, do centro dele
 
 // a nave-mãe de lado (a ponta pra direita), w de comprimento: o casco em cunha (a face de cima
@@ -221,7 +218,12 @@ function montar(m, r) {
   const w = Math.round(Math.min(cw * 0.66, HJ * 0.95)), M = medidasNave(w);
   const J = { cw, HJ, X0, nave: { w, M, x: Math.round(cw * 0.06), y: -HJ + 6 } };
   J.barriga = J.nave.y + M.topo + M.h;
-  const banda = [J.barriga + 9, -42];
+  // o voo: ~metade do vão entre o cartão e a barriga da nave, a ~1/3 do palco (o gigante cabe na
+  // frente); balança de lado sem sair do palco
+  J.alt = Math.round(lim(-J.barriga * 0.5, 22, 66));
+  J.Xb = Math.round(lim(cw * 0.32, 24, cw - 110));
+  J.deriva = lim(Math.min(J.Xb - 14, cw - J.Xb - 30), 0, 7);
+  const banda = [J.barriga + 9, Math.max(J.barriga + 11, Math.min(-42, -(J.alt + 30)))];
   const naBanda = () => banda[0] + (banda[1] - banda[0]) * r();
   J.cacas = [];
   // os que a torre derruba: entram pela direita e cruzam o palco; a torre acerta no meio do caminho
@@ -235,16 +237,17 @@ function montar(m, r) {
   }
   // os que mergulham no Clawd: descem do alto, atiram em tf (no fundo da curva) e o sabre devolve
   for (const b0 of BATE) {
-    const tb = b0 + (r() - 0.5) * 0.24, tf = tb - VOO, th = tb + VOLTA, D = 2.2;
-    const lado = X0 + 110 <= cw - 10 ? 1 : -1, xq = lim(X0 + lado * (40 + 30 * r()), 20, cw - 20);
-    const yq = lim(J.barriga + 12, -80, -50) + 6 * r(), q = [xq, yq];
+    const tb = b0 + (r() - 0.5) * 0.24, tf = tb - VOO, th = tb + VOLTA, D = 2.2, cl = clawdEm(J, tb);
+    const lado = J.Xb + 110 <= cw - 10 ? 1 : -1, xq = lim(X0 + cl.x + lado * (40 + 30 * r()), 20, cw - 20);
+    const yq = Math.max(J.barriga + 10, cl.y - 28 - 6 * r()), q = [xq, yq];
     const p0 = [xq + 70, -HJ - 14], p1 = [xq - 80, -HJ - 14];
-    J.cacas.push({ tipo: 'mergulho', tb, tf, th, te: tf - D / 2, D, fase: r() * 6, p0, p1, c: [2 * q[0] - (p0[0] + p1[0]) / 2, 2 * q[1] - (p0[1] + p1[1]) / 2] });
+    const s = [X0 + cl.x + SABRE[0], cl.y + SABRE[1]];  // onde o tiro bate no sabre (o Clawd no ar, em tb)
+    J.cacas.push({ tipo: 'mergulho', tb, tf, th, te: tf - D / 2, D, fase: r() * 6, p0, p1, s, c: [2 * q[0] - (p0[0] + p1[0]) / 2, 2 * q[1] - (p0[1] + p1[1]) / 2] });
   }
   J.cacas.sort((a, b) => a.te - b.te);
   // o gigante: na frente do Clawd se cabe, senão atrás (e olhando pra ele)
-  const dir = X0 + 80 + GW / 2 <= cw - 6 ? 1 : -1;
-  J.gigante = { x: lim(X0 + dir * 80, GW / 2 + 6, cw - GW / 2 - 6), y: Math.max(J.barriga + 26, Math.min(-54, -HJ * 0.48)), dir };
+  const dir = J.Xb + 80 + GW / 2 <= cw - 6 ? 1 : -1;
+  J.gigante = { x: lim(J.Xb + dir * 80, GW / 2 + 6, cw - GW / 2 - 6), y: Math.max(J.barriga + 26, Math.min(-54, -HJ * 0.48)), dir };
   const rd = rng(Math.floor(r() * 4294967296));
   J.destrocos = Array.from({ length: 16 }, () => ({ a: rd() * Math.PI * 2, v: 40 + rd() * 90, s: rd() < 0.4 ? 3 : 2, cor: rd() < 0.5 ? '#6B7280' : '#9CA3AF', gira: rd() * 6 }));
   J.estrelas = Array.from({ length: 64 }, () => ({ a: rd() * Math.PI * 2, r0: 0.15 + 0.85 * rd(), z: rd(), v: 0.75 + 0.5 * rd() }));
@@ -253,18 +256,6 @@ function montar(m, r) {
 }
 
 // ---------- o quadro ----------
-function explosao(g, x, y, d, sem) {  // um caça: clarão, bola de fogo, faíscas e fumaça
-  if (d < 0 || d > 1.1) return;
-  if (d < 0.06) { g.fillStyle = '#FFFFFF'; g.fillRect(x - 3, y - 3, 6, 6); }
-  if (d < 0.35) {
-    const u = d / 0.35, raio = 2 + 6 * sai(u);
-    g.save(); g.globalAlpha *= 1 - u;
-    for (const [f, cor] of [[1, '#F97316'], [0.65, '#FDE68A'], [0.3, '#FFFFFF']]) { g.fillStyle = cor; g.beginPath(); g.arc(x, y, raio * f, 0, Math.PI * 2); g.fill(); }
-    g.restore();
-  }
-  A.faiscas(g, x, y, d, sem, 10, ['#FDE68A', '#F97316', '#EF4444']);
-  A.fumaca(g, x, y + 3, d - 0.1, 0.9);
-}
 
 function desenharCacas(g, t, J, X, Y) {
   const img = arte(CACA, COR);
@@ -285,7 +276,7 @@ function desenharCacas(g, t, J, X, Y) {
         A.tiro(g, de[0] + (ate[0] - de[0]) * u, de[1] + (ate[1] - de[1]) * u, Math.atan2(ate[1] - de[1], ate[0] - de[0]), '#EF4444');
       }
     } else {  // o tiro verde até o sabre, e rebatido de volta no caça
-      const s = [J.X0 + SABRE[0], SABRE[1]];
+      const s = f.s;
       if (t >= f.tf && t < f.tb) {
         const de = posCaca(f, f.tf), u = (t - f.tf) / VOO;
         A.tiro(g, de[0] + (s[0] - de[0]) * u, de[1] + (s[1] - de[1]) * u, Math.atan2(s[1] - de[1], s[0] - de[0]));
@@ -338,7 +329,7 @@ function desenharGigante(g, t, J, X, Y) {
     }
     if (forca > 0) {
       // o fio da Força: uma onda vermelha que sai da mão e chega nele; e os estalos em volta
-      const mx = J.X0 + MAO[0], my = MAO[1], dx = x - mx, dy = y - my, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+      const cl = clawdEm(J, t), mx = J.X0 + cl.x + MAO[0], my = cl.y + MAO[1], dx = x - mx, dy = y - my, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
       g.save(); g.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 28; i++) {
         const k = (i / 28 + t * 0.9) % 1, meio = Math.sin(Math.PI * k), w = Math.sin(k * 14 - t * 18) * 3 * meio;
@@ -497,8 +488,28 @@ function desenhar(g, t, m, J) {
   g.restore();
 }
 
-// o Clawd: sabre pronto, as defesas (como no 'deflete'), a mão erguida na Força, o sabre alto
-// no salto e a capa voando no túnel; no fim, a pose do passeio
+// levitando: um anel achatado de faíscas da Força girando embaixo dele e 3 pedrinhas que sobem junto
+const PEDRAS = [[-9, 6, 2, 0], [5, 9, 1.5, 1.7], [10, 4.5, 1.5, 3.1]];
+function levita(g, c, t) {
+  if (c.k <= 0.02) return;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 16; i++) {
+    const a = i * Math.PI / 8 + t * 2.4, frente = Math.sin(a) > 0 ? 1 : 0.45;
+    g.fillStyle = rgba(i % 4 ? A.SITH.forca : '#FECACA', 0.6 * frente * c.k);
+    g.fillRect(c.x + Math.cos(a) * 10 - 0.5, c.y + 2.5 + Math.sin(a) * 2.2 - 0.5, 1, 1);
+  }
+  g.restore();
+  g.save(); g.globalAlpha *= c.k;
+  for (const [px, py, l, f] of PEDRAS) {
+    const y = c.y + py + Math.sin(t * 2 + f) * 1.2;
+    g.fillStyle = '#6B7280'; g.fillRect(c.x + px, y, l, l);
+    g.fillStyle = '#9CA3AF'; g.fillRect(c.x + px, y, l * 0.5, l * 0.5);
+  }
+  g.restore();
+}
+
+// o Clawd: levita na Força, sabre pronto, as defesas (como no 'deflete'), a mão
+// erguida na Força, o sabre alto no salto e a capa voando no túnel; desce e, no fim, a pose do passeio
 function desenharClawd(g, t, J, T0, m) {
   let ang = 25, len = 1, x = 0, y = 0, bracos = null, aura = 0, vento = 0.4;
   for (const f of J.cacas) {
@@ -518,8 +529,12 @@ function desenharClawd(g, t, J, T0, m) {
     if (t >= T.salta[0] && t < T.salta[0] + 0.4) y = -3 * Math.sin(Math.PI * (t - T.salta[0]) / 0.4);
     vento = 0.4 + 0.6 * (fatia(t, T.tunel[0], T.tunel[0] + 0.3) - fatia(t, T.sai, T.sai + 0.6));
   }
+  const cl = clawdEm(J, t);
+  x += cl.x; y += cl.y; aura = Math.max(aura, cl.aura);
+  if (cl.k > 0) vento = Math.max(vento, 0.4 + 0.3 * cl.k);
   g.save();
   g.setTransform(T0.a, T0.b, T0.c, T0.d, T0.e, T0.f);
+  levita(g, cl, t);
   A.clawdSith(g, { T: m.T, x, y, bracos, aura, vento, sabre: { ang, len } });
   g.restore();
 }
@@ -539,6 +554,7 @@ function sons(J) {
   L.push([T.reacende[0], SS('terminou'), 1]);  // o sabre acendendo (o aviso, que já é baixinho)
   L.push([T.carga[0], SS('carga'), 0.6], [T.salta[0] - 0.42, SS('salto'), 0.9], [T.tunel[0], SS('tunel'), 0.8], [T.sai, SS('chegada'), 0.8]);
   L.push([T.fecha[0], SS('hiper-abre'), 0.35, 0.75]);
+  L.push([VOA.sobe[0], SS('forca'), 0.4, 1.25], [VOA.desce[0], SS('forca'), 0.25, 0.8]);  // levita e desce
   return L.map(([t, a, g, ...r]) => [t, a, g * VOLUME, ...r]);
 }
 
@@ -557,4 +573,4 @@ function cena(m) {
   };
 }
 
-module.exports = { linhaDoTempo, cena, T, SABRE, GW, GH, posCaca };  // do T em diante: pros testes
+module.exports = { linhaDoTempo, cena, T, VOA, SABRE, MAO, GW, GH, posCaca, clawdEm };  // do T em diante: pros testes

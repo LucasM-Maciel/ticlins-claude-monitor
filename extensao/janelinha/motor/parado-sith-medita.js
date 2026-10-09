@@ -3,7 +3,8 @@
 // acende num brilho vermelho atrás dele e ele sobe uns pixels acima da borda; fica flutuando,
 // subindo e descendo devagar, enquanto pedrinhas sobem da borda e giram em volta dele (as de
 // trás passam atrás, as da frente na frente). De vez em quando um raio vermelho estala entre
-// as mãos. Na saída (algo voltou a rodar) as pedrinhas caem, ele desce, pousa e levanta.
+// as mãos. Na saída (algo voltou a rodar) as pedrinhas caem, ele desce, pousa e levanta. No lado
+// da luz, o brilho e o estalo são verdes (as cores vêm de A.COR).
 // Tudo função do tempo: os sorteios vêm da semente da cena (m.estado.sithSemente, pra saída).
 const { sai, entra, rng, arte } = require('./comum');
 const A = require('./sith-arte');
@@ -57,7 +58,7 @@ function raio(g, t, sem, alt) {
   let x = -12, y = -8 - alt;
   for (let i = 0; i < 8; i++) {
     const nx = x + 3, ny = -8 - alt + (rr() - 0.5) * 6;
-    g.fillStyle = i % 2 ? '#FECACA' : A.SITH.verm;
+    g.fillStyle = i % 2 ? A.COR.palida : A.COR.lamina;
     g.fillRect(Math.min(x, nx), Math.min(y, ny), 1.2, Math.abs(ny - y) + 1);
     x = nx; y = ny;
   }

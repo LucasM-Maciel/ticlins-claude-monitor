@@ -2,10 +2,12 @@
 // motor/tema-sith.js: toda cena quadro a quadro nas 3 escalas, o quadro como função do tempo, o
 // custo, o salto pro hiperespaço quando acaba tudo (sem trilha: o aviso já toca), o épico a cada
 // 30 droides, a meditação de parado (a cena até 3 h, a saída terminando no Clawd do tema), e os
-// sons do tema existindo. O épico em si: sith-epico.test.js.
+// sons do tema existindo, e os dois lados (a cada 50 voltas: a virada, as cores e as cenas da
+// luz, o épico de cada lado). O épico em si: sith-epico.test.js.
 const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const MOTOR = path.join(__dirname, '..', '..', 'extensao', 'janelinha', 'motor');
 const { Tela } = require(path.join(MOTOR, 'raster'));
@@ -14,12 +16,14 @@ const { layoutDe } = require(path.join(MOTOR, 'comum'));
 const { lerWav } = require(path.join(MOTOR, 'som'));
 const tema = require(path.join(MOTOR, 'tema-sith'));
 const K = require(path.join(MOTOR, 'sith-cartao'));
+const A = require(path.join(MOTOR, 'sith-arte'));
 const { estadoDeMentira } = require('../motor-foto');
 
 const ESCALAS = [1, 1.25, 2];
 const JANELINHA = path.join(MOTOR, '..');
-function montar({ escala = 1, modo = 'andando', semente = 2 } = {}) {
-  const m = new Mundo({ tema, semente });
+function montar({ escala = 1, modo = 'andando', semente = 2, lado = null, pasta = null } = {}) {
+  const m = new Mundo({ tema, semente, pasta });
+  if (lado) Object.assign(m.salvo, { sithLado: lado, sithVoltas: lado === 'luz' ? 50 : 0 });  // o lado e as voltas dele
   const erros = [];
   m.aoErro = e => erros.push(e);
   m.receber({ ...estadoDeMentira('sith', modo), escala });
@@ -39,7 +43,7 @@ const modoDa = nome => (PARADAS.includes(nome) ? 'parado' : 'andando');
 const durDe = cena => (Number.isFinite(cena.dur) ? cena.dur : 20);  // as de parado não acabam sozinhas: 20 s
 
 test('toda cena, quadro a quadro (30/s), a duração inteira, sem erro, nas escalas 1, 1,25 e 2', () => {
-  assert.deepStrictEqual(tema.cenas, ['deflete', 'droide', 'esgana', 'respira', 'medita', 'forja', 'hiperespaco']);
+  assert.deepStrictEqual(tema.cenas, ['deflete', 'droide', 'esgana', 'respira', 'gira', 'medita', 'forja', 'hiperespaco', 'virada']);
   for (const escala of ESCALAS) {
     for (const nome of tema.cenas) {
       const { m, erros, tela, quadro } = montar({ escala, modo: modoDa(nome) });
@@ -254,4 +258,150 @@ test('os sons do tema existem e são WAV que o motor lê', () => {
     const w = lerWav(fs.readFileSync(f));
     assert.ok(w && w.amostras && w.amostras.length > 1000, n);
   }
+});
+
+// ---------- os dois lados ----------
+test('lado da luz: toda cena quadro a quadro (30/s) sem erro, nas cores e na roupa da luz, e diferente do lado sombrio', () => {
+  try {
+    for (const nome of tema.cenas) {
+      const { m, erros, tela, quadro } = montar({ escala: 1.25, modo: modoDa(nome), lado: 'luz' });
+      const cena = tema.cenaPorNome(m, nome);
+      m.comecarCena(cena);
+      const dur = durDe(cena);
+      for (let f = 0; f <= Math.ceil(dur * 30) + 1; f++) {
+        quadro(f / 30);
+        if (f % 10 === 0) assert.ok(cheia(tela), `${nome}: quadro ${f} vazio`);
+        if (f === 15 && nome !== 'virada') assert.strictEqual(A.COR.roupa, 'jedi', `${nome}: a roupa da luz`);
+      }
+      assert.deepStrictEqual(erros, [], nome);
+      assert.strictEqual(m.ruins.size, 0, `${nome}: ${[...m.ruins]}`);
+    }
+    // o mesmo instante nos dois lados: outro desenho (cartão e Clawd)
+    const um = lado => { const { quadro } = montar({ escala: 1.25, lado }); return Buffer.from(quadro(1.0).bgra()); };
+    assert.ok(!um('luz').equals(um('sombra')));
+  } finally { A.trocarLado('sombra'); }
+});
+
+test('a cada 50 voltas andadas troca de lado, pela virada na parada seguinte, pra sempre', () => {
+  try {
+    assert.strictEqual(tema.voltasPorLado, 50);
+    const { m, erros } = montar();
+    const ate = (m2, t) => { for (let T = m2.T + 1 / 30; m2.cena && T - m2.cena.t0 < t; T += 1 / 30) { m2.proxima = Infinity; m2.passo(T); } };
+    assert.strictEqual(m.salvo.sithLado, 'sombra', 'começa no lado sombrio');
+    for (let i = 0; i < 49; i++) tema.aoDarVolta(m);
+    let c = tema.naParada(m);
+    assert.ok(!c || c.nome !== 'virada', '49 voltas: ainda não');
+    tema.aoDarVolta(m);
+    assert.strictEqual(m.salvo.sithVoltas, 50);
+    c = tema.naParada(m);
+    assert.ok(c && c.nome === 'virada' && c.de === 'sombra' && c.para === 'luz', 'a 50ª: a virada, sem o cara-ou-coroa');
+    // cortada antes do clarão: não troca, e a próxima parada tenta de novo
+    m.comecarCena(c);
+    ate(m, 1.0);
+    assert.strictEqual(tema.ladoDe(m), 'sombra', 'antes do clarão, o lado velho');
+    m.receber({ modo: 'pulando' });
+    assert.strictEqual(m.cena, null);
+    assert.strictEqual(m.salvo.sithLado, 'sombra');
+    m.receber({ modo: 'andando' });
+    c = tema.naParada(m);
+    assert.ok(c && c.nome === 'virada', 'tenta de novo');
+    // do clarão em diante já é o lado novo; cortada depois dele, vale
+    m.comecarCena(c);
+    ate(m, 1.8);
+    assert.strictEqual(tema.ladoDe(m), 'luz', 'do clarão em diante, o lado novo');
+    m.receber({ modo: 'pulando' });
+    assert.strictEqual(m.salvo.sithLado, 'luz');
+    m.receber({ modo: 'andando' });
+    c = tema.naParada(m);
+    assert.ok(!c || c.nome !== 'virada', 'já trocou');
+    // mais 50: volta pro lado sombrio, agora até o fim da cena
+    for (let i = 0; i < 50; i++) tema.aoDarVolta(m);
+    c = tema.naParada(m);
+    assert.ok(c && c.nome === 'virada' && c.para === 'sombra');
+    m.comecarCena(c);
+    ate(m, 99);
+    assert.strictEqual(m.cena, null);
+    assert.strictEqual(m.salvo.sithLado, 'sombra');
+    // quebrada: troca sem cena
+    for (let i = 0; i < 50; i++) tema.aoDarVolta(m);
+    m.ruins.add('virada');
+    c = tema.naParada(m);
+    assert.ok(!c || c.nome !== 'virada');
+    assert.strictEqual(m.salvo.sithLado, 'luz');
+    assert.deepStrictEqual(erros, []);
+  } finally { A.trocarLado('sombra'); }
+});
+
+test('as voltas contam andando de verdade, ficam no motor-estado.json, e quem já passou das 50 começa direto na luz', () => {
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'sith-lado-'));
+  try {
+    const { m } = montar({ pasta });
+    for (let T = 0; T < 120; T += 1 / 30) { m.proxima = Infinity; m.passo(T); }  // 2 min andando, sem parar
+    assert.ok(m.salvo.sithVoltas >= 2, `voltas: ${m.salvo.sithVoltas}`);
+    const salvo = JSON.parse(fs.readFileSync(path.join(pasta, 'motor-estado.json'), 'utf8'));
+    assert.strictEqual(salvo.sithVoltas, m.salvo.sithVoltas);
+    // reabriu a janelinha com 73 voltas e sem lado salvo (versão antiga): já começa na luz, sem virada
+    fs.writeFileSync(path.join(pasta, 'motor-estado.json'), JSON.stringify({ sithVoltas: 73, droides: 4 }));
+    const b = montar({ pasta }).m;
+    assert.strictEqual(b.salvo.sithLado, 'luz');
+    const c = tema.naParada(b);
+    assert.ok(!c || c.nome !== 'virada');
+    assert.strictEqual(b.salvo.droides, 4);
+  } finally { fs.rmSync(pasta, { recursive: true, force: true }); A.trocarLado('sombra'); }
+});
+
+test('o sabre do usage no lado da luz: verde-escuro, verde, verde-claro; amarelo a partir de 80%, vermelho a partir de 95%', () => {
+  const { corDaLamina, corDoPct, barra, CORES_PCT } = K;
+  try {
+    assert.strictEqual(corDaLamina(0, 'luz'), '#15803D');
+    assert.strictEqual(corDaLamina(30, 'luz'), '#22C55E');
+    assert.strictEqual(corDaLamina(50, 'luz'), '#4ADE80');
+    assert.strictEqual(corDaLamina(65, 'luz'), '#D9F99D');
+    for (const p of [80, 88, 94.9]) assert.strictEqual(corDaLamina(p, 'luz'), '#FACC15', `${p}%`);
+    for (const p of [95, 100, 140]) assert.strictEqual(corDaLamina(p, 'luz'), '#EF4444', `${p}%`);
+    assert.strictEqual(corDaLamina(20, 'sombra'), corDaLamina(20), 'sem lado: o da tela (sombrio)');
+    assert.strictEqual(corDoPct(85, 1, 'luz'), CORES_PCT[1]);
+    A.trocarLado('luz');
+    assert.strictEqual(corDaLamina(0), '#15803D', 'sem lado: o da tela (luz)');
+    const px = pct => {
+      const tela = new Tela(130, 8), g = tela.getContext('2d');
+      barra(g, [0, 1, 118, 6], pct, pct >= 80 ? 1 : 0, 0);
+      const b = tela.bgra(), i = (5 * 130 + 20) * 4;
+      return { r: b[i + 2], g: b[i + 1], b: b[i] };
+    };
+    const verde = px(20), amarelo = px(88);
+    assert.ok(verde.g > verde.r && verde.g > verde.b, `20%: ${JSON.stringify(verde)}`);
+    assert.ok(amarelo.r > 2 * amarelo.b && amarelo.g > 2 * amarelo.b, `88%: ${JSON.stringify(amarelo)}`);
+  } finally { A.trocarLado('sombra'); }
+});
+
+test('o épico é o do lado da tela: na luz, o epico-luz (com o lado dele), e a conta dos droides é uma só', () => {
+  const falso = nome => ({ cena: () => ({ nome, dur: 2, espaco: { frente: 0, tras: 0 }, modos: ['andando'], quadro() {} }) });
+  const naReta = m => { const g = m.geometria(); m.dist = (g.w - 2 * g.r) / 2; };
+  try {
+    tema.trocarEpico(falso('s'), 'sombra');
+    tema.trocarEpico(falso('l'), 'luz');
+    const { m, erros } = montar({ lado: 'luz' });
+    m.salvo.sithEpico = true;
+    naReta(m);
+    const c = tema.naParada(m);
+    assert.ok(c && c.nome === 'epico-luz' && c.lado === 'luz' && c.epico);
+    m.comecarCena(c);
+    Object.assign(m.salvo, { sithLado: 'sombra', sithVoltas: 0 });  // (de mentira) o lado mudou: a cena segue no dela
+    assert.strictEqual(tema.ladoDe(m), 'luz');
+    m.receber({ modo: 'pulando' });
+    assert.strictEqual(m.salvo.sithEpico, true, 'cortado: o pedido volta');
+    m.receber({ modo: 'andando' });
+    naReta(m);
+    const d = tema.naParada(m);
+    assert.ok(d && d.nome === 'epico' && d.lado === 'sombra', 'no lado sombrio, o épico de sempre');
+    assert.strictEqual(tema.cenaPorNome(m, 'epico-luz').lado, 'luz');
+    // a luz sem o arquivo: o pedido se gasta (como no sombrio)
+    tema.trocarEpico(null, 'luz');
+    Object.assign(m.salvo, { sithLado: 'luz', sithVoltas: 50 });
+    const e = tema.naParada(m);
+    assert.ok(!e || !e.epico);
+    assert.strictEqual(m.salvo.sithEpico, false);
+    assert.deepStrictEqual(erros, []);
+  } finally { tema.trocarEpico(undefined); A.trocarLado('sombra'); }
 });

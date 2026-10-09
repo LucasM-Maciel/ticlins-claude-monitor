@@ -4,8 +4,10 @@
 - tudo.wav       acorde menor grave de metais (acabou tudo; melodia original)
 - o resto é a trilha do épico (sith-epico.js: sons): hiper-abre, nave, salto, frota, blaster, laser,
   rebate, explode, carga, forca, amassa, boom, tunel, chegada
-Volume dos 3 avisos nivelado com os dos outros temas (pico de cada um em gravar); o do épico, no
-VOLUME do sith-epico.js. Os sons novos entram sempre no FIM (o sorteio é um só: mudar a ordem muda
+- e a do épico do lado da luz (sith-epico-luz.js), que usa vários desses e mais: floresta, capsula,
+  forca-luz, pedra, arremesso, tomba, sol, passaros
+Volume dos 3 avisos nivelado com os dos outros temas (pico de cada um em gravar); o dos épicos, no
+VOLUME do sith-epico.js e do sith-epico-luz.js. Os sons novos entram sempre no FIM (o sorteio é um só: mudar a ordem muda
 os que já existem).
 WAV mono 16 bits 44100. Só a biblioteca padrão do Python: python3 sons-sith.py"""
 import math
@@ -287,6 +289,108 @@ def chegada():
     return out
 
 
+# ---------- a trilha do épico da luz (a defesa da floresta) ----------
+def filtro_variavel(x, corte):
+    """o passa_baixa com o corte mudando ao longo do som (corte: função de u, 0..1)"""
+    y, s, total = [], 0.0, len(x)
+    for i, v in enumerate(x):
+        s += (1 - math.exp(-2 * math.pi * corte(i / total) / SR)) * (v - s)
+        y.append(s)
+    return y
+
+
+def piado(f0, f1, d):
+    """um piado de passarinho: seno varrendo rápido, com um trinado"""
+    return envelope([v * (0.7 + 0.3 * math.sin(2 * math.pi * 38 * i / SR)) for i, v in enumerate(seno(d, f0, f1))], 0.004, d * 0.5)
+
+
+def floresta(d=2.6):
+    """a floresta abrindo: o vento nas folhas crescendo e sumindo, e passarinhos ao longe"""
+    vento = passa_baixa(ruido(d), 700)
+    total = len(vento)
+    out = [1.4 * v * math.sin(math.pi * i / total) ** 0.8 * (0.75 + 0.25 * math.sin(2 * math.pi * 0.7 * i / SR)) for i, v in enumerate(vento)]
+    t = 0.25
+    for _ in range(6):
+        f = 2600 + 1800 * rnd.random()
+        for k in range(2 + int(rnd.random() * 2)):
+            somar(out, piado(f, f * (1.25 + 0.2 * rnd.random()), 0.05 + 0.03 * rnd.random()), t + k * 0.09, 0.22)
+        t += 0.25 + 0.2 * rnd.random()
+    return out
+
+
+def capsula():
+    """a cápsula dos droides caindo: um assobio descendo e o baque no chão da floresta (em 0,85 s)"""
+    out = []
+    queda = [a * 0.5 + b * 0.5 for a, b in zip(seno(0.85, 1900, 380), passa_baixa(ruido(0.85), 2500))]
+    somar(out, inchar(envelope(queda, 0.02, 0.05), 0.9), 0, 0.6)
+    somar(out, envelope(seno(0.5, 110, 40), 0.003, 0.4), 0.85, 1.0)
+    baque = passa_baixa(passa_baixa(ruido(0.6), 600), 600)
+    somar(out, [3 * v * math.exp(-7 * i / SR) for i, v in enumerate(baque)], 0.85, 1.2)
+    return out
+
+
+def forca_luz(d=2.0):
+    """a Força da luz: uma quinta grave e limpa que cresce, e um brilho agudo cintilando"""
+    out = zeros(d)
+    for f, g in [(110, 1.0), (165, 0.7), (220, 0.45)]:
+        somar(out, passa_baixa(serra(d, f, 0.003, 4), 700), 0, g)
+    for f in (880, 1320):
+        somar(out, [v * (0.5 + 0.5 * math.sin(2 * math.pi * 6 * i / SR)) for i, v in enumerate(seno(d, f, f * 1.02))], 0, 0.12)
+    somar(out, passa_baixa(ruido(d), 1200), 0, 0.5)
+    return envelope(out, 0.4, 0.6)
+
+
+def pedra(d=1.3):
+    """a pedra arrancada do chão: um ronco de terra subindo e estalos de raiz e cascalho"""
+    ronco = passa_baixa(passa_baixa(ruido(d), 220), 220)
+    out = [4 * v * (0.3 + 0.7 * i / len(ronco)) for i, v in enumerate(ronco)]
+    for _ in range(16):
+        somar(out, envelope(passa_baixa(ruido(0.025), 3500), 0.001, 0.02), d * rnd.random() ** 0.8, 0.35 + 0.4 * rnd.random())
+    return envelope(out, 0.08, 0.25)
+
+
+def arremesso(d=0.55):
+    """a pedra arremessada: um zunido de ar que sobe e passa"""
+    x = filtro_variavel(ruido(d), lambda u: 300 + 2600 * math.sin(math.pi * min(1.0, u * 1.2)) ** 2)
+    total = len(x)
+    return [2.5 * v * math.sin(math.pi * i / total) ** 1.5 for i, v in enumerate(x)]
+
+
+def tomba():
+    """o gigante acertado: a pedra batendo no casco, o metal rangendo e o estrondo na floresta (em 0,85 s)"""
+    out = zeros(2.2)
+    somar(out, envelope(seno(0.4, 140, 55), 0.002, 0.3), 0, 1.0)
+    for f, g in [(520, 0.4), (780, 0.25), (1170, 0.15)]:  # o casco ressoando
+        somar(out, [v * math.exp(-6 * i / SR) for i, v in enumerate(seno(0.8, f, f * 0.96))], 0, g)
+    somar(out, envelope(passa_baixa(serra(0.9, 70, 0.03, 2), 400), 0.1, 0.3), 0.15, 0.5)  # rangendo enquanto cai
+    somar(out, estouro(1.3, 700, 80, 1.2), 0.85)
+    for _ in range(12):  # os galhos quebrando
+        somar(out, envelope(passa_baixa(ruido(0.02), 4500), 0.001, 0.015), 0.85 + 0.6 * rnd.random(), 0.4)
+    return out
+
+
+def sol():
+    """o sol saindo: um arpejo maior subindo nos metais (melodia original) e o acorde abrindo"""
+    out = []
+    for t, nota, d in [(0.0, 67, 0.32), (0.3, 72, 0.32), (0.6, 76, 0.32), (0.9, 74, 0.26), (1.15, 79, 1.5)]:
+        somar(out, metais(d, nota), t, 0.45)
+    for nota in (48, 55, 60, 64):  # dó maior
+        somar(out, inchar(metais(2.2, nota, 0.4), 0.5), 0.6)
+    return out
+
+
+def passaros():
+    """os passarinhos voltando: piados em dupla, de lá pra cá"""
+    out = zeros(2.0)
+    t = 0.0
+    for _ in range(7):
+        f = 2800 + 1600 * rnd.random()
+        for k in range(2):
+            somar(out, piado(f * (1 + 0.15 * k), f * (1.35 + 0.15 * k), 0.06), t + k * 0.08, 0.5)
+        t += 0.2 + 0.15 * rnd.random()
+    return out
+
+
 if __name__ == '__main__':
     gravar('esperando', bipes(), 0.14)   # pico: os avisos no volume dos outros temas (~-21 LUFS)
     gravar('terminou', sabre_liga(), 0.216)
@@ -296,6 +400,10 @@ if __name__ == '__main__':
     gravar('salto', salto())
     for nome, f in [('frota', frota), ('blaster', blaster), ('laser', laser), ('rebate', rebate), ('explode', explode),
                     ('carga', carga), ('forca', forca), ('amassa', amassa), ('boom', boom), ('tunel', tunel), ('chegada', chegada)]:
+        gravar(nome, f())
+    # o épico da luz: depois de todos os outros (o sorteio é um só)
+    for nome, f in [('floresta', floresta), ('capsula', capsula), ('forca-luz', forca_luz), ('pedra', pedra),
+                    ('arremesso', arremesso), ('tomba', tomba), ('sol', sol), ('passaros', passaros)]:
         gravar(nome, f())
     with open(os.path.join(PASTA, 'LICENCAS.txt'), 'w', encoding='utf-8') as f:
         f.write('Sons do tema Sith: sintetizados do zero pelo sons-sith.py deste projeto (MIT, como o resto).\n'

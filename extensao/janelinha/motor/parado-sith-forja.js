@@ -5,7 +5,8 @@
 // peças se encaixam uma a uma (uma faísca a cada uma; o cristal some dentro da empunhadura num
 // brilho vermelho), o cabo pronto sobe, a lâmina acende e balança, apaga, e ele desmonta o
 // cabo de volta no giro. Na saída (algo voltou a rodar) a lâmina apaga, as peças caem na borda
-// e somem, e ele levanta. Tudo função do tempo: a semente fica em m.estado.sithForja (pra saída).
+// e somem, e ele levanta. No lado da luz, o mesmo em verde (as cores vêm de A.COR). Tudo função
+// do tempo: a semente fica em m.estado.sithForja (pra saída).
 const { sai, rng, rgba } = require('./comum');
 const A = require('./sith-arte');
 
@@ -84,7 +85,7 @@ function desenhaPeca(g, p, x, y, ang, t, brilho = 1) {
     ret('#111827', x0, y0, w, h);
     for (const f of [0.18, 0.42, 0.66]) ret('#4B5563', x0, y0 + h * f, w, 0.6);
   } else if (p.id === 'interruptor') {
-    ret('#374151', x0, y0, w, h); ret(A.SITH.prata, x0, y0, w, 0.4); ret('#EF4444', x0 + 0.5, y0 + 0.5, 0.9, 0.8);
+    ret('#374151', x0, y0, w, h); ret(A.SITH.prata, x0, y0, w, 0.4); ret(A.COR.lamina, x0 + 0.5, y0 + 0.5, 0.9, 0.8);
   } else if (p.id === 'emissor') {
     ret(A.SITH.prata, x0, y0, w, h); ret('#6B7280', x0 + w * 0.35, y0, w * 0.3, h * 0.6); ret('#F3F4F6', x0, y0, w, 0.5);
   } else {  // o cristal kyber: brilha e pulsa
@@ -92,10 +93,10 @@ function desenhaPeca(g, p, x, y, ang, t, brilho = 1) {
     if (brilho > 0) {
       g.save(); g.globalCompositeOperation = 'lighter';
       const gr = g.createRadialGradient(0, 0, 0, 0, 0, 5);
-      gr.addColorStop(0, rgba('#EF4444', 0.5 * pulsa * brilho)); gr.addColorStop(1, rgba('#EF4444', 0));
+      gr.addColorStop(0, rgba(A.COR.lamina, 0.5 * pulsa * brilho)); gr.addColorStop(1, rgba(A.COR.lamina, 0));
       g.fillStyle = gr; g.fillRect(-5, -5, 10, 10); g.restore();
     }
-    ret('#DC2626', -0.6, -h / 2, 1.2, h); ret('#EF4444', -1, -0.6, 2, 1.2); ret('#FECACA', -0.3, -0.6, 0.6, 1.2);
+    ret(A.COR.cristal, -0.6, -h / 2, 1.2, h); ret(A.COR.lamina, -1, -0.6, 2, 1.2); ret(A.COR.palida, -0.3, -0.6, 0.6, 1.2);
   }
   g.restore();
 }
@@ -105,11 +106,11 @@ function lamina(g, x, y, ang, len, t) {
   const L = LAMINA * len, treme = 1 + 0.08 * Math.sin(t * 47);
   g.save(); g.translate(x, y); g.rotate(ang * DEG);
   g.save(); g.globalCompositeOperation = 'lighter';
-  g.fillStyle = rgba(A.SITH.verm, 0.22 * treme); g.fillRect(-3.4, -L, 6.8, L + 0.6);
-  g.fillStyle = rgba(A.SITH.verm, 0.45 * treme); g.fillRect(-2.2, -L, 4.4, L + 0.3);
+  g.fillStyle = rgba(A.COR.lamina, 0.22 * treme); g.fillRect(-3.4, -L, 6.8, L + 0.6);
+  g.fillStyle = rgba(A.COR.lamina, 0.45 * treme); g.fillRect(-2.2, -L, 4.4, L + 0.3);
   g.restore();
-  g.fillStyle = A.SITH.verm; g.fillRect(-1.3, -L, 2.6, L);
-  g.fillStyle = '#FFE4E6'; g.fillRect(-0.6, -L + 0.5, 1.2, L - 0.5);
+  g.fillStyle = A.COR.lamina; g.fillRect(-1.3, -L, 2.6, L);
+  g.fillStyle = A.COR.nucleo; g.fillRect(-0.6, -L + 0.5, 1.2, L - 0.5);
   g.restore();
 }
 // a Força nas mãos: erguida enquanto ele monta e desmonta
@@ -134,17 +135,17 @@ function quadro(g, t, sem, lista) {
   desenhaPeca(g, cr, pos[CRISTAL].x, pos[CRISTAL].y, pos[CRISTAL].ang, t, 1 - pos[EMP].k);
   for (const p of lista) if (p.i !== CRISTAL) desenhaPeca(g, p, pos[p.i].x, pos[p.i].y, pos[p.i].ang, t);
   if (cc == null) return;
-  // a empunhadura fechando em volta do cristal: o cabo brilha vermelho
+  // a empunhadura fechando em volta do cristal: o cabo brilha da cor do lado
   const dc = cc - pousa(EMP);
   if (dc >= 0 && dc < 0.45) {
     const q = pos[CRISTAL], u = 1 - dc / 0.45;
     g.save(); g.globalCompositeOperation = 'lighter';
     const gr = g.createRadialGradient(q.x, q.y, 0, q.x, q.y, 9);
-    gr.addColorStop(0, rgba('#FCA5A5', 0.8 * u)); gr.addColorStop(1, rgba('#EF4444', 0));
+    gr.addColorStop(0, rgba(A.COR.clara, 0.8 * u)); gr.addColorStop(1, rgba(A.COR.lamina, 0));
     g.fillStyle = gr; g.fillRect(q.x - 9, q.y - 9, 18, 18); g.restore();
   }
   // uma faísca a cada encaixe
-  for (const p of lista) A.faiscas(g, pos[p.i].x, pos[p.i].y, cc - pousa(p.i), (sem + p.i * 31 + k * 977) >>> 0, 5, ['#FFFFFF', '#FECACA', '#FDE68A']);
+  for (const p of lista) A.faiscas(g, pos[p.i].x, pos[p.i].y, cc - pousa(p.i), (sem + p.i * 31 + k * 977) >>> 0, 5, ['#FFFFFF', A.COR.palida, '#FDE68A']);
   const pt = pontaDoCabo(cc);
   lamina(g, pt.x, pt.y, pt.balanco, pt.len, t);
   if (cc >= C.acende[0] && cc < C.acende[0] + 0.2) {  // o estalo de acender
