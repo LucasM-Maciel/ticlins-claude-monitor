@@ -14,7 +14,7 @@ const RAIZ = path.join(__dirname, "..", "..", "extensao");
 const manifesto = JSON.parse(fs.readFileSync(path.join(RAIZ, "package.json"), "utf8"));
 
 // --- VS Code de mentira ---
-function criarVscode(config, { clicar, focada }) {
+function criarVscode(config, { clicar, focada, remoto }) {
     const r = { comandos: new Map(), mensagens: [], terminais: [], executados: [], abertos: [], progresso: [], config: { ...config } };
     const msg = (tipo, respostas) => (texto, ...botoes) => {
         r.mensagens.push({ tipo, texto, botoes });
@@ -56,7 +56,7 @@ function criarVscode(config, { clicar, focada }) {
             registerCommand: (id, fn) => { r.comandos.set(id, fn); return { dispose() {} }; },
             executeCommand: async (...a) => { r.executados.push(a); },
         },
-        env: { openExternal: async (u) => { r.abertos.push(u.toString()); return true; } },
+        env: { remoteName: remoto, openExternal: async (u) => { r.abertos.push(u.toString()); return true; } },
     };
     r.vscode = vscode;
     return { vscode, r };
@@ -98,7 +98,7 @@ let ativa;  // { ext, contexto }
 let modLoad = Module._load;
 
 /** Ativa a extensão numa casa nova (ou na mesma, pra simular reabrir o VS Code). */
-async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true, semSons = false } = {}) {
+async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true, semSons = false, remoto, tela = ":0" } = {}) {
     casa ??= fs.mkdtempSync(path.join(os.tmpdir(), "cm-ext-"));
     if (!semSons) {
         // com os sons do Minecraft já baixados: a extensão não vai atrás da Mojang
@@ -107,6 +107,10 @@ async function ativar({ plataforma = "win32", config = {}, casa, versao = manife
     }
     process.env.HOME = casa;
     process.env.USERPROFILE = casa;
+    // a tela do Linux (X11); tela: null = sem tela nenhuma
+    if (tela) process.env.DISPLAY = tela;
+    else delete process.env.DISPLAY;
+    delete process.env.WAYLAND_DISPLAY;
     Object.defineProperty(process, "platform", { value: plataforma });
     if (hooks) {
         // hooks já instalados: sem a pergunta "Instalar?"
@@ -118,7 +122,7 @@ async function ativar({ plataforma = "win32", config = {}, casa, versao = manife
         }));
     }
     processos = [];
-    const { vscode, r } = criarVscode(config, { clicar, focada });
+    const { vscode, r } = criarVscode(config, { clicar, focada, remoto });
     Module._load = function (pedido, ...resto) {
         return pedido === "vscode" ? vscode : modLoad.call(this, pedido, ...resto);
     };
@@ -219,6 +223,27 @@ test("Linux sem GTK no Python: explica o apt install, sem abrir nada", async () 
     } finally {
         semGtk = false;
     }
+});
+
+test("Linux no VS Code remoto (WSL, SSH, contêiner): nem abre a janelinha nem pede o GTK", async () => {
+    const { pasta } = await ativar({ plataforma: "linux", remoto: "wsl" });
+    assert.strictEqual(spawns().length, 0, "abriu a janelinha do lado remoto");
+    assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), /não abri a janelinha: VS Code remoto \(wsl\)/);
+    desativar();
+    semGtk = true;  // o lado remoto costuma nem ter o GTK: mesmo assim, calada
+    try {
+        const { r } = await ativar({ plataforma: "linux", remoto: "ssh-remote" });
+        assert.ok(!r.mensagens.some((m) => m.texto.includes("GTK")), JSON.stringify(r.mensagens));
+        assert.strictEqual(spawns().length, 0);
+    } finally {
+        semGtk = false;
+    }
+});
+
+test("Linux sem tela (sem DISPLAY nem WAYLAND_DISPLAY): nada de janelinha", async () => {
+    const { r } = await ativar({ plataforma: "linux", tela: null });
+    assert.strictEqual(spawns().length, 0);
+    assert.ok(!r.mensagens.some((m) => m.texto.includes("GTK")), JSON.stringify(r.mensagens));
 });
 
 test("reabrir o VS Code na mesma versão NÃO apaga o que o amigo mexeu no overlay", async () => {
@@ -549,8 +574,9 @@ test("som da extensão: volume 0 não toca; no Mac e no Linux o volume vai pro a
     assert.deepStrictEqual(r.sons.map((p) => p.args.slice(0, 2)), [["-v", "0.3"]], r.linha);
     r = await somDaExtensao({ plataforma: "darwin" });
     assert.deepStrictEqual(r.sons.map((p) => p.args.slice(0, 2)), [["-v", "1"]], r.linha);
+    // o paplay é cúbico (65536 = 100%): 50% vai como 65536 x raiz cúbica de 0,5, senão soaria ~-18 dB
     r = await somDaExtensao({ plataforma: "linux", config: JSON.stringify({ volume: 0.5 }) });
-    assert.deepStrictEqual(r.sons.map((p) => p.args[0]), ["--volume=32768"], r.linha);
+    assert.deepStrictEqual(r.sons.map((p) => p.args[0]), ["--volume=52016"], r.linha);
 });
 
 process.on("exit", () => { cp.spawn = spawnReal; cp.execFile = execFileReal; });

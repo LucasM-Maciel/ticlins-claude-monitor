@@ -1,5 +1,5 @@
-# Monta o pacote UMA vez e testa ESSE pacote (o que os amigos baixam) num Mac e
-# num Windows de verdade. Numa tag v*, publica o .zip na página de download.
+# Monta o pacote UMA vez e testa ESSE pacote (o que os amigos baixam) num Mac, num
+# Windows e num Linux de verdade. Numa tag v*, publica o .zip na página de download.
 name: testes
 on:
   push:
@@ -15,8 +15,8 @@ jobs:
         with: { node-version: 22 }
       - run: npm ci
       - run: npm run empacotar
-      - name: shellcheck nos scripts do Mac
-        run: shellcheck -S warning instalar/*.sh testes/mac/*.sh
+      - name: shellcheck nos scripts do Mac e do Linux
+        run: shellcheck -S warning instalar/*.sh testes/mac/*.sh testes/linux/*.sh
       - run: npm run testar
       - uses: actions/upload-artifact@v4
         with: { name: dist, path: dist/ }
@@ -61,9 +61,27 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: prints-windows, path: "${{ runner.temp }}/saida" }
 
+  linux:
+    needs: pacote
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - name: Python com GTK 3 (o da janelinha) e uma tela de mentira (Xvfb)
+        run: sudo apt-get update && sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-3.0 xvfb
+      - run: xvfb-run -a bash testes/linux/testes.sh "$RUNNER_TEMP/saida"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: prints-linux, path: "${{ runner.temp }}/saida" }
+
   publicar:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [mac, windows]
+    needs: [mac, windows, linux]
     runs-on: ubuntu-latest
     permissions: { contents: write }
     steps:

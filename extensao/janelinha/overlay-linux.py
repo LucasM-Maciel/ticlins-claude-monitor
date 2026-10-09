@@ -72,10 +72,14 @@ from gi.repository import GLib, Pango, PangoCairo  # noqa: E402
 
 if arquivo_foto is None:
     # no Wayland o GTK não deixa a janela escolher onde fica nem ficar por cima: vai pelo XWayland
+    gdk_meu = "GDK_BACKEND" not in os.environ
     os.environ.setdefault("GDK_BACKEND", "x11")
     gi.require_version("Gtk", "3.0")
     gi.require_version("Gdk", "3.0")
     from gi.repository import Gdk, Gtk  # noqa: E402
+    # o import já abriu a tela no X11; o xdg-open, o navegador e o VS Code abrem com o ambiente do usuário
+    if gdk_meu:
+        del os.environ["GDK_BACKEND"]
 
 # --- diário em janelinha.log (o mesmo do Windows, do Mac e da extensão). O --foto conta no stderr.
 diario = os.path.join(pasta, "janelinha.log")
@@ -95,6 +99,24 @@ def anotar(texto):
             f.write(f"{hora} [{os.getpid()}] {limpo}\n")
     except OSError:
         pass
+
+
+def sem_cair(fn, normal):
+    """Pros timers do GLib: o que dá erro sai do laço pra sempre (a janelinha congelava). Aqui o erro
+    vai pro diário (só quando muda, pra não encher) e o timer segue (devolve `normal`)."""
+    visto = [None]
+
+    def rodar(*args):
+        try:
+            return fn(*args)
+        except Exception as e:
+            texto = f"erro em {fn.__name__}: {type(e).__name__}: {e}"
+            if texto != visto[0]:
+                visto[0] = texto
+                anotar(texto)
+            return normal
+
+    return rodar
 
 
 # --- botão direito: tema, Clawd, opacidade e volume, gravados em config.json (os outros leem o mesmo).
@@ -204,8 +226,9 @@ def abrir_som(arquivo):
     if not tocador:
         return None
     if os.path.basename(tocador) == "paplay":
-        args = [tocador, f"--volume={round(config['volume'] * 65536)}", arquivo]
-    else:
+        # o --volume do paplay é cúbico (65536 = 100%): a raiz cúbica deixa linear como no Mac e no Windows
+        args = [tocador, f"--volume={round(65536 * config['volume'] ** (1 / 3))}", arquivo]
+    else:  # o do pw-play já é linear
         args = [tocador, f"--volume={config['volume']:.2f}", arquivo]
     try:
         return subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -284,7 +307,7 @@ def pid_vivo(pid):
         return True
     except PermissionError:
         return True
-    except OSError:
+    except (OSError, OverflowError, ValueError):  # pid que o sistema nem aceita (json com defeito): morto
         return False
 
 
@@ -301,7 +324,9 @@ def ler_sessoes(agora):
         if d is None:
             continue
         pid = d.get("pid")
-        pid = int(pid) if isinstance(pid, (int, float)) and not isinstance(pid, bool) and pid == int(pid) else None
+        # NaN e Infinity (o json do Python aceita) não viram int: sem pid, como no Mac
+        pid = int(pid) if (isinstance(pid, int) and not isinstance(pid, bool)) or (
+            isinstance(pid, float) and pid.is_integer()) else None
         updated = numero(d.get("updated")) or 0
         # pid vivo; sem pid, atualizada nas últimas 6h
         if pid and pid > 0:
@@ -518,6 +543,16 @@ def token():
     return oauth.get("accessToken") if isinstance(oauth, dict) else None
 
 
+class SemRedirecionar(urllib.request.HTTPRedirectHandler):
+    """Redirecionou: vira erro, em vez de levar o token pra outro endereço."""
+
+    def redirect_request(self, *_):
+        return None
+
+
+abridor = urllib.request.build_opener(SemRedirecionar)
+
+
 def buscar_uso():
     global uso, proxima_busca, buscando
     if arquivo_foto is not None:  # teste: nada de internet
@@ -544,7 +579,7 @@ def buscar_uso():
             req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage", headers={
                 "Authorization": "Bearer " + tk, "anthropic-beta": "oauth-2025-04-20", "User-Agent": "claude-monitor"})
             try:
-                with urllib.request.urlopen(req, timeout=5) as r:
+                with abridor.open(req, timeout=5) as r:
                     status, dados = r.status, r.read()
             except urllib.error.HTTPError as e:
                 status = e.code
@@ -1198,7 +1233,7 @@ def ligar_motor():
         espera = [5, 30, 120][min(2, tentativas_do_motor - 1)]
         if tentativas_do_motor <= 5:
             anotar(f"motor saiu ({codigo}); tento de novo em {espera} s")
-            GLib.timeout_add_seconds(espera, ligar_motor)
+            GLib.timeout_add_seconds(espera, sem_cair(ligar_motor, False))
         else:
             anotar(f"motor saiu ({codigo}) de novo; desisti até reabrir")
 
@@ -1415,7 +1450,7 @@ def rodar_foto():
 
     atualizar()
     ligar_motor()
-    GLib.timeout_add(200, passo)
+    GLib.timeout_add(200, sem_cair(passo, True))
     laco.run()
 
 
@@ -1516,8 +1551,8 @@ def rodar_janela():
     janela.show_all()
     ajustar_entrada()
     ligar_motor()
-    GLib.timeout_add_seconds(2, atualizar)
-    GLib.timeout_add(33, tique)
+    GLib.timeout_add_seconds(2, sem_cair(atualizar, True))
+    GLib.timeout_add(33, sem_cair(tique, True))
     Gtk.main()
 
 
