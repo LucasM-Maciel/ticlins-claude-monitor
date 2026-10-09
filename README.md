@@ -7,7 +7,7 @@ você, ela avisa com um som.
 
 ![A janelinha: 4 sessões e o uso de 5h e 7 dias](docs/janelinha.png)
 
-**[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows e Mac no mesmo arquivo)
+**[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows, Mac e Linux no mesmo arquivo)
 
 > Projeto pessoal e não oficial, sem ligação com a Anthropic (Claude), com a
 > Mojang (Minecraft) nem com os donos de Dragon Ball.
@@ -67,6 +67,18 @@ comando**. Clique em Instalar, espere terminar (uns minutos) e repita o passo 3.
 
 Se o Mac perguntar se **"security" pode acessar "Claude Code-credentials"**,
 clique em **Permitir Sempre**. É só a janelinha lendo o seu usage.
+
+### Linux
+
+1. [Baixe o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)
+   e extraia.
+2. Abra o terminal dentro da pasta extraída e rode `bash instalar-linux.sh`.
+3. Feche e abra o VS Code.
+
+A janelinha usa Python + GTK 3 (já vêm no Ubuntu com GNOME). Se faltar a ponte
+com o cairo (`python3-gi-cairo`), o instalador baixa ela sem precisar de root;
+se faltar o resto, ele diz o `apt install` certo. Funciona no Xorg e no Wayland
+(pelo XWayland). Sem o motor (sem Node), aparece só o cartão, sem o Clawd.
 
 Pronto: a janelinha aparece no canto de baixo à direita. As sessões do Claude
 que já estavam abertas precisam ser reabertas pra aparecer; as novas aparecem

@@ -55,7 +55,7 @@ $zip = [IO.Compression.ZipFile]::OpenRead($vsix.FullName)
 try {
     # pastas inteiras (o motor das animações e os sons dos temas) ANTES do overlay.ps1: a
     # janelinha aberta se reabre ao ver o overlay novo e já acha o motor novo
-    foreach ($pastaDoVsix in 'motor', 'sons-padrao', 'sons-dragonball') {
+    foreach ($pastaDoVsix in 'motor', 'sons-padrao', 'sons-dragonball', 'sons-sith') {
         $entradas = @($zip.Entries | Where-Object { $_.FullName -like "extension/janelinha/$pastaDoVsix/*" -and $_.Name })
         if (-not $entradas) { Falhou "O .vsix está incompleto (falta janelinha/$pastaDoVsix/). Baixe de novo." }
         New-Item -ItemType Directory -Force "$pasta\$pastaDoVsix" | Out-Null

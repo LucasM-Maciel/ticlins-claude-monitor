@@ -29,6 +29,7 @@ async function main() {
     zip.addFile(instalar("COMO ATUALIZAR.txt"), "ClaudeMonitor/COMO ATUALIZAR.txt");
     zip.addFile(instalar("instalar-windows.cmd"), "ClaudeMonitor/instalar-windows.cmd");
     zip.addFile(instalar("instalar-mac.sh"), "ClaudeMonitor/instalar-mac.sh", { mode: 0o100755 });
+    zip.addFile(instalar("instalar-linux.sh"), "ClaudeMonitor/instalar-linux.sh", { mode: 0o100755 });
     zip.addFile(instalar("instalar-windows.ps1"), "ClaudeMonitor/arquivos/instalar-windows.ps1");
     zip.addFile(vsix, `ClaudeMonitor/arquivos/${path.basename(vsix)}`);
     zip.end();

@@ -101,13 +101,15 @@ class SessionsProvider {
 // --- Janelinha: fora do VS Code, sempre por cima, com sessões + usage + Clawd ---
 // Windows: overlay.ps1 (PowerShell/WPF, já vem no Windows). Mac: overlay.swift,
 // compilado aqui na 1ª vez (precisa das ferramentas de linha de comando da Apple).
+// Linux: overlay-linux.py (Python + GTK 3, já vem no Ubuntu/Fedora com GNOME).
 // Pastas inteiras (terminam em /): motor/ (as animações, docs/MOTOR.md), sons-padrao/ (feitos
-// pelo sons-padrao.py) e sons-dragonball/ (CC0); os do Minecraft vêm da Mojang. O overlay vai
+// pelo sons-padrao.py), sons-dragonball/ (CC0) e sons-sith/ (feitos pelo sons-sith.py); os do Minecraft vêm da Mojang. O overlay vai
 // por último: a janelinha aberta se reabre ao ver ele mudar e já acha o motor novo.
-const PASTAS_JANELINHA = ["motor/", "sons-padrao/", "sons-dragonball/"];
+const PASTAS_JANELINHA = ["motor/", "sons-padrao/", "sons-dragonball/", "sons-sith/"];
 const JANELINHA = {
     win32: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay.ps1"],
     darwin: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay.swift"],
+    linux: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay-linux.py"],
 };
 /** A lista com cada pasta trocada pelos arquivos de dentro dela (como estão em `raiz`). */
 function abrirPastas(raiz, lista) {
@@ -288,6 +290,24 @@ async function abrirJanelinha() {
         // o binário garante um só (trava em ~/.claude-monitor/overlay.lock)
         // CLAUDE_MONITOR_NODE: sem node no PATH, o motor das animações roda no do VS Code
         (0, child_process_1.spawn)(BINARIO_MAC, [], { detached: true, stdio: "ignore", env: { ...process.env, CLAUDE_MONITOR_NODE: process.execPath } }).unref();
+        janelinhaAberta = true;
+    }
+    else if (process.platform === "linux") {
+        const py = path.join(sessions_1.MONITOR_DIR, "overlay-linux.py");
+        if (!fs.existsSync(py))
+            return;
+        // GTK + a ponte com o cairo (o instalador baixa a ponte pra ~/.claude-monitor/gi-cairo se faltar)
+        const teste = "import gi,os,sys; gi.__path__.append(os.path.expanduser('~/.claude-monitor/gi-cairo')); gi.require_foreign('cairo'); gi.require_version('Gtk','3.0'); from gi.repository import Gtk";
+        if ((await (0, sessions_1.run)("python3", ["-c", teste])) === null) {
+            const escolha = await vscode.window.showWarningMessage("Claude Monitor: a janelinha no Linux precisa do Python com GTK 3 (sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0). Depois de instalar, reabra o VS Code.", "Não usar a janelinha");
+            if (escolha === "Não usar a janelinha")
+                vscode.workspace.getConfiguration("claudeMonitor").update("overlay", false, vscode.ConfigurationTarget.Global);
+            return;
+        }
+        // overlay-linux.py garante uma só (trava em ~/.claude-monitor/overlay.lock)
+        // CLAUDE_MONITOR_NODE: sem node no PATH, o motor das animações roda no do VS Code
+        (0, child_process_1.spawn)("python3", [py], { detached: true, stdio: "ignore", env: { ...process.env, CLAUDE_MONITOR_NODE: process.execPath } }).unref();
+        anotar("mandou abrir a janelinha");
         janelinhaAberta = true;
     }
 }

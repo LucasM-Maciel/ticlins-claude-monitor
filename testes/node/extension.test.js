@@ -65,6 +65,7 @@ function criarVscode(config, { clicar, focada }) {
 // --- processos de mentira ---
 let processos;  // [{ tipo, cmd, args }]
 let semFerramentasApple = false;
+let semGtk = false;
 let semNode = false;
 const spawnReal = cp.spawn, execFileReal = cp.execFile;
 cp.spawn = (cmd, args, opcoes) => {
@@ -76,6 +77,7 @@ cp.execFile = (cmd, args, opcoes, cb) => {
     processos.push({ tipo: "execFile", cmd, args });
     let erro = null;
     if (cmd === "xcode-select" && args[0] === "-p" && semFerramentasApple) erro = new Error("sem CLT");
+    if (cmd === "python3" && semGtk) erro = new Error("sem gi");
     if ((cmd === "where" || cmd === "which") && semNode) erro = new Error("não achou");
     if (cmd === "xcrun") fs.writeFileSync(args[args.indexOf("-o") + 1], "binário");  // "compila"
     setImmediate(() => cb?.(erro, erro ? "" : "/Library/Developer/CommandLineTools\n", ""));
@@ -194,10 +196,29 @@ test("Mac sem as ferramentas da Apple: explica e oferece instalar, sem abrir nad
     }
 });
 
-test("Linux: nada de janelinha (só a barra lateral)", async () => {
+test("Linux: copia a janelinha em Python e abre com o python3", async () => {
     const { pasta } = await ativar({ plataforma: "linux" });
+    assert.ok(fs.existsSync(path.join(pasta, "overlay-linux.py")), "não copiou o overlay-linux.py");
+    assert.ok(fs.existsSync(path.join(pasta, "motor", "motor.js")), "não copiou o motor");
     assert.ok(!fs.existsSync(path.join(pasta, "overlay.ps1")));
-    assert.strictEqual(spawns().length, 0);
+    assert.ok(!fs.existsSync(path.join(pasta, "overlay.swift")));
+    assert.strictEqual(spawns().length, 1);
+    assert.strictEqual(spawns()[0].cmd, "python3");
+    assert.deepStrictEqual(spawns()[0].args, [path.join(pasta, "overlay-linux.py")]);
+    assert.ok(spawns()[0].env.CLAUDE_MONITOR_NODE, "sem CLAUDE_MONITOR_NODE pro motor");
+});
+
+test("Linux sem GTK no Python: explica o apt install, sem abrir nada", async () => {
+    semGtk = true;
+    try {
+        const { r } = await ativar({ plataforma: "linux" });
+        const aviso = r.mensagens.find((m) => m.tipo === "aviso" && m.texto.includes("GTK"));
+        assert.ok(aviso, JSON.stringify(r.mensagens));
+        assert.deepStrictEqual(aviso.botoes, ["Não usar a janelinha"]);
+        assert.strictEqual(spawns().length, 0);
+    } finally {
+        semGtk = false;
+    }
 });
 
 test("reabrir o VS Code na mesma versão NÃO apaga o que o amigo mexeu no overlay", async () => {

@@ -20,5 +20,12 @@ MAC
       comando": clique em Instalar, espere e rode o passo 3 de novo.)
   4. Feche e abra o VS Code.
 
+LINUX (Ubuntu e parecidos, com Xorg ou Wayland)
+  1. Extraia o ClaudeMonitor.zip.
+  2. Abra o terminal dentro da pasta extraída e rode:  bash instalar-linux.sh
+     (a janelinha usa Python + GTK 3, que já vêm no Ubuntu; se faltar algo,
+      o instalador diz o comando pra instalar)
+  3. Feche e abra o VS Code.
+
 Pronto: a janelinha aparece no canto de baixo à direita.
 Tutorial completo: https://github.com/LucasM-Maciel/ticlins-claude-monitor

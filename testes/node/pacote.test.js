@@ -76,12 +76,12 @@ test("arquivos da janelinha que a extensão copia existem", () => {
     for (const n of nomes) assert.ok(fs.existsSync(path.join(EXT, "janelinha", n)), n);
     // e as pastas inteiras (motor/, sons): existem e não estão vazias
     const pastas = [...codigo.match(/const PASTAS_JANELINHA = \[([^\]]*)\]/)[1].matchAll(/"([\w-]+)\/"/g)].map((m) => m[1]);
-    assert.deepStrictEqual(pastas, ["motor", "sons-padrao", "sons-dragonball"]);
+    assert.deepStrictEqual(pastas, ["motor", "sons-padrao", "sons-dragonball", "sons-sith"]);
     for (const p of pastas) assert.ok(fs.readdirSync(path.join(EXT, "janelinha", p)).length > 0, p);
 });
 
 test("instaladores extraem do .vsix os mesmos arquivos que existem na extensão", () => {
-    for (const f of ["instalar-windows.ps1", "instalar-mac.sh"]) {
+    for (const f of ["instalar-windows.ps1", "instalar-mac.sh", "instalar-linux.sh"]) {
         const t = fs.readFileSync(path.join(RAIZ, "instalar", f), "utf8");
         const citados = [...t.matchAll(/(?:extension\/|')((?:out|janelinha)\/[\w./-]+)/g)].map((m) => m[1]);
         assert.ok(citados.length >= 4, `${f}: ${citados}`);
@@ -110,18 +110,20 @@ test("ClaudeMonitor.zip tem tudo, com o instalador do Mac executável", { skip: 
         "ClaudeMonitor/COMO INSTALAR.txt",
         `ClaudeMonitor/arquivos/claude-monitor-${manifesto.version}.vsix`,
         "ClaudeMonitor/arquivos/instalar-windows.ps1",
+        "ClaudeMonitor/instalar-linux.sh",
         "ClaudeMonitor/instalar-mac.sh",
         "ClaudeMonitor/instalar-windows.cmd",
     ]);
     assert.ok(lista.every((e) => !e.nome.includes("\\")), "barra invertida no zip vira nome de arquivo no Mac");
     assert.strictEqual(lista.find((e) => e.nome.endsWith("instalar-mac.sh")).modo, 0o755);
+    assert.strictEqual(lista.find((e) => e.nome.endsWith("instalar-linux.sh")).modo, 0o755);
 });
 
 test(".vsix leva a janelinha, os scripts e nada de sobra", { skip: !temDist && "rode npm run empacotar" }, async () => {
     const nomes = (await entradas(path.join(DIST, `claude-monitor-${manifesto.version}.vsix`))).map((e) => e.nome);
     for (const n of ["extension/package.json", "extension/readme.md", "extension/out/extension.js", "extension/out/hook.js",
         "extension/out/processes.js", "extension/out/install.js", "extension/out/sessions.js",
-        "extension/janelinha/overlay.ps1", "extension/janelinha/overlay.swift",
+        "extension/janelinha/overlay.ps1", "extension/janelinha/overlay.swift", "extension/janelinha/overlay-linux.py",
         "extension/janelinha/minecraft.js", "extension/janelinha/vorbis.min.js", "extension/janelinha/vorbis-licencas.txt",
         "extension/janelinha/sons-padrao/terminou.wav", "extension/janelinha/sons-padrao/esperando.wav", "extension/janelinha/sons-padrao/tudo.wav",
         "extension/janelinha/sons-dragonball/terminou.wav", "extension/janelinha/sons-dragonball/esperando.wav", "extension/janelinha/sons-dragonball/tudo.wav",
@@ -131,5 +133,5 @@ test(".vsix leva a janelinha, os scripts e nada de sobra", { skip: !temDist && "
     }
     // nada da Mojang no pacote: sons e texturas vêm do servidor dela na instalação (os .wav do
     // Padrão e do Dragon Ball são nossos / CC0)
-    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n) && !/^extension\/janelinha\/sons-(padrao|dragonball)\/[\w-]+\.wav$/.test(n)), nomes.join(", "));
+    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n) && !/^extension\/janelinha\/sons-(padrao|dragonball|sith)\/[\w-]+\.wav$/.test(n)), nomes.join(", "));
 });
