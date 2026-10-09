@@ -36,9 +36,12 @@ const TEXTURAS = Object.keys(require("../../extensao/janelinha/minecraft.js").TE
 test("baixa os sons (XP em 3 tons) e as texturas da versão mais nova, e cutuca a janelinha", async () => {
     await comMojang({}, async (m) => {
         const destino = pastaNova();
-        const overlay = path.join(destino, "overlay.ps1");
-        fs.writeFileSync(overlay, "");
-        fs.utimesSync(overlay, new Date(2020, 0, 1), new Date(2020, 0, 1));
+        // a janelinha de cada sistema: Windows, Mac e Linux
+        const janelinhas = ["overlay.ps1", "ClaudeMonitor", "overlay-linux.py"].map((f) => path.join(destino, f));
+        for (const f of janelinhas) {
+            fs.writeFileSync(f, "");
+            fs.utimesSync(f, new Date(2020, 0, 1), new Date(2020, 0, 1));
+        }
         const r = await baixarTudo({ destino });
         assert.deepStrictEqual(r, { versao: "1.99", sons: WAVS.length, texturas: TEXTURAS.length });
         assert.deepStrictEqual(fs.readdirSync(path.join(destino, "sons")).sort(), WAVS, "sobrou .novo ou faltou som");
@@ -53,7 +56,7 @@ test("baixa os sons (XP em 3 tons) e as texturas da versão mais nova, e cutuca 
         assert.ok(Math.abs(duracao("xp1.wav") - 0.25 / 0.8) < 0.001, duracao("xp1.wav"));
         assert.ok(Math.abs(duracao("xp3.wav") - 0.25 / 1.25) < 0.001, duracao("xp3.wav"));
         for (const t of TEXTURAS) assert.ok(fs.readFileSync(path.join(destino, `${t}.png`)).equals(mojang.MAGENTA), t);
-        assert.ok(fs.statSync(overlay).mtime.getFullYear() > 2020, "não cutucou a janelinha pra recarregar");
+        for (const f of janelinhas) assert.ok(fs.statSync(f).mtime.getFullYear() > 2020, `não cutucou ${path.basename(f)} pra recarregar`);
         const doJar = m.pedidos.filter((p) => p.startsWith("/client.jar"));
         assert.ok(doJar.length && doJar.every((p) => / bytes=\d+-\d+$/.test(p)), `baixou o jar inteiro: ${doJar}`);
         assert.ok(!m.pedidos.includes("/errada.json"), "pegou o snapshot em vez da versão mais nova");

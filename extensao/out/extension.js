@@ -296,6 +296,11 @@ async function abrirJanelinha() {
         const py = path.join(sessions_1.MONITOR_DIR, "overlay-linux.py");
         if (!fs.existsSync(py))
             return;
+        // VS Code remoto (WSL, SSH, contêiner: a extensão roda do lado Linux) ou sem tela: sem janelinha, calada
+        if (vscode.env.remoteName || (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY)) {
+            anotar(`não abri a janelinha: ${vscode.env.remoteName ? `VS Code remoto (${vscode.env.remoteName})` : "sem tela (DISPLAY)"}`);
+            return;
+        }
         // GTK + a ponte com o cairo (o instalador baixa a ponte pra ~/.claude-monitor/gi-cairo se faltar)
         const teste = "import gi,os,sys; gi.__path__.append(os.path.expanduser('~/.claude-monitor/gi-cairo')); gi.require_foreign('cairo'); gi.require_version('Gtk','3.0'); from gi.repository import Gtk";
         if ((await (0, sessions_1.run)("python3", ["-c", teste])) === null) {
@@ -435,7 +440,8 @@ function playSound() {
         (0, child_process_1.execFile)("powershell", ["-NoProfile", "-Command", `(New-Object Media.SoundPlayer '${arquivo.replace(/'/g, "''")}').PlaySync()`], { windowsHide: true }, ignore);
     }
     else {
-        (0, child_process_1.execFile)("paplay", [`--volume=${Math.round(volume * 65536)}`, "/usr/share/sounds/freedesktop/stereo/complete.oga"], ignore);
+        // o --volume do paplay é cúbico (65536 = 100%): a raiz cúbica deixa linear como no Mac e no Windows
+        (0, child_process_1.execFile)("paplay", [`--volume=${Math.round(65536 * Math.cbrt(volume))}`, "/usr/share/sounds/freedesktop/stereo/complete.oga"], ignore);
     }
 }
 /** Sessão rodando no Terminal.app — só ativa o app se achar a aba. */

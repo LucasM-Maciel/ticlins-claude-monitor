@@ -253,7 +253,7 @@ async function baixarTudo({ destino = path.join(os.homedir(), ".claude-monitor")
     }
     // a janelinha aberta vê o arquivo dela "mudar" e se reabre já com os sons
     if (sons || feitas.length) {
-        for (const f of ["overlay.ps1", "ClaudeMonitor"]) {
+        for (const f of ["overlay.ps1", "ClaudeMonitor", "overlay-linux.py"]) {
             const arquivo = path.join(destino, f);
             if (fs.existsSync(arquivo)) fs.utimesSync(arquivo, new Date(), new Date());
         }
