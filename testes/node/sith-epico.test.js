@@ -1,5 +1,5 @@
 'use strict';
-// motor/sith-epico.js: o épico do tema Sith (a batalha da frota, a cada 40 droides).
+// motor/sith-epico.js: o épico do tema Sith (a batalha da frota, a cada 30 droides).
 // A cena inteira quadro a quadro em 3 escalas e 2 cartões, mesmo instante = mesmos bytes, o
 // custo, o Clawd de volta no lugar no fim, a trilha, e o plano (pela semente) sempre dentro do
 // palco: todo caça cai antes do gigante, o gigante e a nave cabem, nada nasce em cima do Clawd.

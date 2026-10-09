@@ -2,10 +2,11 @@
 // Tema Sith (PR #3 do gjthec, 09/10/2026; acertado com os outros temas). O Clawd de lorde Sith: elmo, máscara,
 // painel no peito, capa e sabre vermelho. Andando, o sabre fica aceso; parado, o cabo vai pro
 // cinto; pergunta/permissão, pula com o sabre erguido. O cartão é um painel imperial: bolinha =
-// cristal kyber, barra do usage = sabre (instável a partir de 80%), números na fonte de visor.
+// cristal kyber, barra do usage = sabre que muda de cor com o gasto (violeta, roxo, magenta,
+// carmim, vermelho; instável a partir de 80%), números na fonte de visor.
 // Nas paradas da caminhada: rebate tiros de blaster, corta um droide ao meio, esgana um droide
 // com a Força ou só respira fundo. Acabou tudo: a nave triangular passa num painel acima do
-// cartão e salta pro hiperespaço (sem trilha: o aviso já toca). A cada 40 droides destruídos,
+// cartão e salta pro hiperespaço (sem trilha: o aviso já toca). A cada 30 droides destruídos,
 // o épico raro, a batalha da frota, com som (sith-epico.js). Parado há 1 min, uma vez cada:
 // medita flutuando, com a Força levantando pedrinhas (parado-sith-medita.js), ou monta um
 // sabre no ar com a Força (parado-sith-forja.js). Os desenhos estão em sith-*.js.
@@ -18,7 +19,7 @@ const { fatia } = A;
 const SORTEADAS = ['deflete', 'droide', 'esgana', 'respira'];
 const CHANCE = 0.6;  // das paradas da caminhada, quantas têm cena
 const MORTE = { droide: 1.75, esgana: 2.5 };  // s: quando o droide da cena é destruído
-const DROIDES = 40;  // droides destruídos por épico: ~30/h andando = 1 a cada ~1 h 20 (como o Padrão)
+const DROIDES = 30;  // droides destruídos por épico (dono, 09/10): ~30/h andando = 1 a cada ~1 h
 const COR = { rotulo: '#9CA3AF', falta: '#6B7280' };
 
 // ---------- as cenas da caminhada ----------
@@ -291,7 +292,7 @@ module.exports = {
     P.aoFimCena(m, cena, cortada);
     // épico cortado (pergunta, permissão, tudo pronto) não gasta a vez; quebrado não volta
     if (cena.epico && cortada && !m.ruins.has(cena.nome)) { m.salvo.sithEpico = true; m.salvar(); }
-    // droide destruído (cortada antes do golpe não conta); o 40º pede o épico
+    // droide destruído (cortada antes do golpe não conta); o 30º pede o épico
     if (MORTE[cena.nome] != null && m.T - cena.t0 >= MORTE[cena.nome]) {
       const antes = m.salvo.droides || 0;
       m.salvo.droides = antes + 1;
@@ -321,7 +322,7 @@ module.exports = {
       const nivel = K.nivelDe(u);
       if (u.rotulo) K.escrever(g, e, u.rotulo.txt, COR.rotulo, u.rotulo.caixa, false);
       if (u.barra) K.barra(g, u.barra, u.pct, nivel, t);
-      if (u.pctTxt) K.escrever(g, e, u.pctTxt.txt, K.CORES_PCT[nivel], u.pctTxt.caixa, true);
+      if (u.pctTxt) K.escrever(g, e, u.pctTxt.txt, K.corDoPct(u.pct, nivel), u.pctTxt.caixa, true);
       if (u.falta) K.escrever(g, e, u.falta.txt, COR.falta, u.falta.caixa, true);
     }
   },

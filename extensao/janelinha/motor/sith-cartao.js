@@ -1,7 +1,8 @@
 'use strict';
 // Tema Sith: o que enfeita o cartão. Moldura = painel imperial (fio vermelho aceso com cantoneiras
 // de metal), bolinha = cristal kyber com o brilho da cor da situação, barra do usage = sabre que
-// acende até o quanto foi gasto (a partir de 80% a lâmina fica instável; a partir de 95%
+// acende até o quanto foi gasto e muda de cor com ele, pelas cores do lado sombrio (violeta, roxo,
+// magenta, carmim; vermelho a partir de 80%, quando a lâmina fica instável; a partir de 95%
 // crepita), números = a fonte de visor do tema Dragon Ball. Coordenadas: as da janela, em DIPs.
 const { lim, arte, rgba, mistura, rng } = require('./comum');
 const { escrever } = require('./dragonball-cartao');
@@ -11,6 +12,18 @@ const corHex = (c, reserva) => (/^#[0-9a-f]{6}$/i.test(c) ? c : reserva);
 const pulso = t => 0.65 + 0.35 * Math.cos(2 * Math.PI * t / 1.6);  // o do "trabalhando" da janelinha
 const nivelDe = u => (u.nivel != null ? lim(u.nivel | 0, 0, 2) : u.pct >= 95 ? 2 : u.pct >= 80 ? 1 : 0);
 const CORES_PCT = ['#FCA5A5', '#F59E0B', '#EF4444'];  // o % do usage: normal, >= 80%, >= 95%
+// a cor da lâmina pelo %: entre duas paradas, a mistura das duas
+const CORES_LAMINA = [[0, '#5B21B6'], [30, '#9333EA'], [50, '#C026D3'], [65, '#BE123C'], [80, SITH.verm]];
+function corDaLamina(pct) {
+  const p = lim(Number(pct) || 0, 0, 100);
+  for (let i = 1; i < CORES_LAMINA.length; i++) {
+    const [p0, c0] = CORES_LAMINA[i - 1], [p1, c1] = CORES_LAMINA[i];
+    if (p <= p1) return mistura(c0, c1, (p - p0) / (p1 - p0));
+  }
+  return SITH.verm;
+}
+// o número do %: abaixo de 80, um tom claro da lâmina; daí pra cima, o âmbar e o vermelho de todo tema
+const corDoPct = (pct, nivel) => (nivel ? CORES_PCT[nivel] : mistura(corDaLamina(pct), '#FFFFFF', 0.5));
 
 // ---------- moldura: fio vermelho aceso em volta e cantoneiras de metal ----------
 function moldura(g, [x, y, w, h], t) {
@@ -54,19 +67,20 @@ function kyber(g, linha, t) {
 // cabo de 12 px na esquerda da caixa; a lâmina vai até pct% do resto. Trilho escuro por baixo.
 function barra(g, [x, y, w, h], pct, nivel, t) {
   const cy = y + h / 2, cabo = 12, x0 = x + cabo, livre = w - cabo, cheio = livre * lim(pct, 0, 100) / 100;
+  const cor = corDaLamina(pct);
   g.fillStyle = '#1F2128'; g.fillRect(x0, cy - 1, livre, 2);
-  // cabo: preto com anéis de metal e um botão vermelho
+  // cabo: preto com anéis de metal e um botão da cor da lâmina
   g.fillStyle = '#111827'; g.fillRect(x, cy - 2, cabo, 4);
   g.fillStyle = SITH.prata; g.fillRect(x, cy - 2, 2, 4); g.fillRect(x + cabo - 2, cy - 2.5, 2, 5); g.fillRect(x + 5, cy - 2, 1, 4);
-  g.fillStyle = '#EF4444'; g.fillRect(x + 7, cy - 2.5, 2, 1);
+  g.fillStyle = cor; g.fillRect(x + 7, cy - 2.5, 2, 1);
   if (cheio < 0.5) return;
   const treme = nivel >= 1 ? 0.15 * Math.sin(t * 37) + 0.1 * Math.sin(t * 83) : 0.05 * Math.sin(t * 9);
   g.save(); g.globalCompositeOperation = 'lighter';
-  g.fillStyle = rgba(SITH.verm, 0.25 + treme * 0.5); g.fillRect(x0, cy - 3, cheio + 1.5, 6);
-  g.fillStyle = rgba(SITH.verm, 0.45 + treme * 0.5); g.fillRect(x0, cy - 2, cheio + 0.5, 4);
+  g.fillStyle = rgba(cor, 0.25 + treme * 0.5); g.fillRect(x0, cy - 3, cheio + 1.5, 6);
+  g.fillStyle = rgba(cor, 0.45 + treme * 0.5); g.fillRect(x0, cy - 2, cheio + 0.5, 4);
   g.restore();
-  g.fillStyle = SITH.verm; g.fillRect(x0, cy - 1.5, cheio, 3);
-  g.fillStyle = '#FFE4E6'; g.fillRect(x0, cy - 0.5, Math.max(0, cheio - 1), 1);
+  g.fillStyle = cor; g.fillRect(x0, cy - 1.5, cheio, 3);
+  g.fillStyle = mistura(cor, '#FFFFFF', 0.85); g.fillRect(x0, cy - 0.5, Math.max(0, cheio - 1), 1);
   if (nivel >= 1) {  // instável: a lâmina solta faíscas pelos lados (mais no limite)
     const r = rng(Math.floor(t * 18) * 104729 + Math.round(x));
     const n = nivel >= 2 ? 5 : 2;
@@ -78,4 +92,4 @@ function barra(g, [x, y, w, h], pct, nivel, t) {
   }
 }
 
-module.exports = { moldura, kyber, barra, nivelDe, escrever, CORES_PCT };
+module.exports = { moldura, kyber, barra, nivelDe, escrever, CORES_PCT, corDaLamina, corDoPct };

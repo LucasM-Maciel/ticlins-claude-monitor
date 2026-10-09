@@ -132,10 +132,11 @@ a janelinha antes dos temas continua no Minecraft.
   tudo quieto, ele medita flutuando ou treina (uma vez cada).
 - **Star Wars** (feito pelo [gjthec](https://github.com/gjthec)): o Clawd de
   armadura preta, capa e sabre vermelho; cristais kyber no lugar das bolinhas e
-  o usage em sabres de luz. Andando, ele rebate tiros de blaster, corta um
+  o usage em sabres de luz que mudam de cor com o gasto (violeta, roxo, magenta,
+  vermelho). Andando, ele rebate tiros de blaster, corta um
   droide ao meio, ergue outro com a Força ou só respira fundo; quando fica tudo
   quieto, medita levitando pedras ou monta um sabre no ar (uma vez cada); quando
-  acaba tudo, salta pro hiperespaço. A cada 40 droides destruídos vem um evento
+  acaba tudo, salta pro hiperespaço. A cada 30 droides destruídos vem um evento
   especial, com som: **A Batalha da Frota**. Os avisos são bipes de droide e o
   sabre acendendo.
 

@@ -1,5 +1,5 @@
 'use strict';
-// Evento épico raro do tema Sith (a cada 40 droides destruídos), ~19 s: A BATALHA DA FROTA.
+// Evento épico raro do tema Sith (a cada 30 droides destruídos), ~19 s: A BATALHA DA FROTA.
 // A área acima do cartão vira o espaço (abre de baixo pra cima, a partir da borda do cartão).
 // A nave-mãe do lorde entra pela esquerda e para no alto; caças droides chegam: as torres da
 // nave derrubam uns, outros mergulham atirando no Clawd, que rebate os tiros com o sabre de

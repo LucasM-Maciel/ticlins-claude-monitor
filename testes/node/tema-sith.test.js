@@ -1,7 +1,7 @@
 'use strict';
 // motor/tema-sith.js: toda cena quadro a quadro nas 3 escalas, o quadro como função do tempo, o
 // custo, o salto pro hiperespaço quando acaba tudo (sem trilha: o aviso já toca), o épico a cada
-// 40 droides, a meditação de parado (a cena até 3 h, a saída terminando no Clawd do tema), e os
+// 30 droides, a meditação de parado (a cena até 3 h, a saída terminando no Clawd do tema), e os
 // sons do tema existindo. O épico em si: sith-epico.test.js.
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -13,6 +13,7 @@ const { Mundo } = require(path.join(MOTOR, 'mundo'));
 const { layoutDe } = require(path.join(MOTOR, 'comum'));
 const { lerWav } = require(path.join(MOTOR, 'som'));
 const tema = require(path.join(MOTOR, 'tema-sith'));
+const K = require(path.join(MOTOR, 'sith-cartao'));
 const { estadoDeMentira } = require('../motor-foto');
 
 const ESCALAS = [1, 1.25, 2];
@@ -150,7 +151,31 @@ test('layout: enfeites do tema, moldura de 3 px e as colunas de sempre', () => {
   assert.deepStrictEqual(l.colunas, { tempo: 36, pct: 38, falta: 48, rotulo: 18 });
 });
 
-test('épico: a cada 40 droides destruídos, na próxima parada na reta de cima; cortado volta, quebrado não', () => {
+test('o sabre do usage muda de cor com o %: violeta, roxo, magenta, carmim e vermelho a partir de 80%', () => {
+  const { corDaLamina, corDoPct, barra, CORES_PCT } = K;
+  assert.strictEqual(corDaLamina(0), '#5B21B6');
+  assert.strictEqual(corDaLamina(30), '#9333EA');
+  assert.strictEqual(corDaLamina(50), '#C026D3');
+  assert.strictEqual(corDaLamina(65), '#BE123C');
+  for (const p of [80, 95, 100, 140]) assert.strictEqual(corDaLamina(p), '#EF4444', `${p}%`);
+  for (const p of [-5, NaN, undefined]) assert.strictEqual(corDaLamina(p), '#5B21B6', `${p}`);
+  // o número: um tom claro da lâmina abaixo de 80%; daí pra cima, o âmbar e o vermelho de todo tema
+  assert.strictEqual(corDoPct(85, 1), CORES_PCT[1]);
+  assert.strictEqual(corDoPct(97, 2), CORES_PCT[2]);
+  assert.notStrictEqual(corDoPct(20, 0), corDoPct(60, 0));
+  // no desenho: a lâmina puxa pro azul (roxo) em 20% e pro vermelho em 88% (linha de baixo da lâmina, longe das faíscas)
+  const px = pct => {
+    const tela = new Tela(130, 8), g = tela.getContext('2d');
+    barra(g, [0, 1, 118, 6], pct, pct >= 80 ? 1 : 0, 0);
+    const b = tela.bgra(), i = (5 * 130 + 20) * 4;
+    return { r: b[i + 2], g: b[i + 1], b: b[i] };
+  };
+  const roxo = px(20), verm = px(88);
+  assert.ok(roxo.b > roxo.r && roxo.r > roxo.g, `20%: ${JSON.stringify(roxo)}`);
+  assert.ok(verm.r > 2 * verm.b && verm.r > 2 * verm.g, `88%: ${JSON.stringify(verm)}`);
+});
+
+test('épico: a cada 30 droides destruídos, na próxima parada na reta de cima; cortado volta, quebrado não', () => {
   const falso = { cena: () => ({ nome: 'epico', dur: 2, espaco: { frente: 0, tras: 0 }, modos: ['andando'], quadro() {} }) };
   const naReta = (m, lado) => { const g = m.geometria(); m.dist = lado === 'cima' ? (g.w - 2 * g.r) / 2 : (g.w - 2 * g.r) + Math.PI * g.r / 2 + 10; };
   const ateOFim = m => { for (let T = m.T + 0.1; m.cena; T += 0.1) { m.proxima = Infinity; m.passo(T); } };
@@ -162,20 +187,20 @@ test('épico: a cada 40 droides destruídos, na próxima parada na reta de cima;
     if (m.cena) m.receber({ modo: 'pulando' });
     m.receber({ modo: 'andando' });
   };
-  assert.strictEqual(tema.droidesPorEpico, 40);
+  assert.strictEqual(tema.droidesPorEpico, 30);
   try {
     tema.trocarEpico(falso);
     const { m, erros } = montar();
-    m.salvo.droides = 37;
+    m.salvo.droides = 27;
     cena(m, 'droide', 1.0);
-    assert.strictEqual(m.salvo.droides, 37, 'cortada antes do golpe: não conta');
+    assert.strictEqual(m.salvo.droides, 27, 'cortada antes do golpe: não conta');
     cena(m, 'deflete'); cena(m, 'respira');
-    assert.strictEqual(m.salvo.droides, 37, 'só cortar e esganar contam');
+    assert.strictEqual(m.salvo.droides, 27, 'só cortar e esganar contam');
     cena(m, 'droide'); cena(m, 'esgana');
-    assert.strictEqual(m.salvo.droides, 39);
+    assert.strictEqual(m.salvo.droides, 29);
     assert.ok(!m.salvo.sithEpico);
     cena(m, 'droide');
-    assert.strictEqual(m.salvo.sithEpico, true, 'o 40º pede o épico');
+    assert.strictEqual(m.salvo.sithEpico, true, 'o 30º pede o épico');
     naReta(m, 'lado');
     assert.strictEqual(tema.naParada(m), undefined, 'no lado do cartão: espera chegar na reta de cima');
     naReta(m, 'cima');
@@ -194,7 +219,7 @@ test('épico: a cada 40 droides destruídos, na próxima parada na reta de cima;
     m.comecarCena(tema.naParada(m));
     ateOFim(m);
     assert.strictEqual(m.salvo.sithEpico, false, 'até o fim: gasta');
-    assert.strictEqual(m.salvo.droides, 40, 'o épico não mexe na conta');
+    assert.strictEqual(m.salvo.droides, 30, 'o épico não mexe na conta');
     // quebrou: não volta, e a parada segue normal
     m.salvo.sithEpico = true;
     naReta(m, 'cima');
