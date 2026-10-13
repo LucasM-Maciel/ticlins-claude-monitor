@@ -8,6 +8,7 @@ const path = require("path");
 
 // casa com espaço e acento: o comando do hook tem que sair entre aspas
 const casa = fs.mkdtempSync(path.join(os.tmpdir(), "cm install ção-"));
+test.after(() => { try { fs.rmSync(casa, { recursive: true, force: true, maxRetries: 5 }); } catch {} });  // preso no Windows: fica
 process.env.HOME = casa;
 process.env.USERPROFILE = casa;
 const install = require("../../extensao/out/install.js");

@@ -21,6 +21,7 @@ const pesca = require(path.join(MOTOR, 'parado-minecraft-pesca'));
 const { estadoDeMentira } = require('../motor-foto');
 
 const VAZIA = fs.mkdtempSync(path.join(os.tmpdir(), 'cm-pesca-'));
+test.after(() => { try { fs.rmSync(VAZIA, { recursive: true, force: true, maxRetries: 5 }); } catch {} });  // preso no Windows: fica
 const PASTA = process.env.CM_TEXTURAS && fs.existsSync(process.env.CM_TEXTURAS) ? process.env.CM_TEXTURAS : VAZIA;
 // a de mentira (a mesma ideia do tema-minecraft.test.js): pixels opacos que mudam a cada pixel,
 // no tamanho da de verdade (a água é a tira de 32 quadros; a boia, 8x8)

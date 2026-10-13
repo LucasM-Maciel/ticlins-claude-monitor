@@ -97,9 +97,18 @@ const plataformaReal = process.platform;
 let ativa;  // { ext, contexto }
 let modLoad = Module._load;
 
+// pastas de mentira no %TEMP%: apagadas no fim do arquivo (arquivo preso no Windows não derruba o teste)
+const temporarias = [];
+function pastaTemp(prefixo) {
+    const p = fs.mkdtempSync(path.join(os.tmpdir(), prefixo));
+    temporarias.push(p);
+    return p;
+}
+test.after(() => { for (const p of temporarias) try { fs.rmSync(p, { recursive: true, force: true, maxRetries: 5 }); } catch {} });
+
 /** Ativa a extensão numa casa nova (ou na mesma, pra simular reabrir o VS Code). */
 async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true, semSons = false, remoto, tela = ":0" } = {}) {
-    casa ??= fs.mkdtempSync(path.join(os.tmpdir(), "cm-ext-"));
+    casa ??= pastaTemp("cm-ext-");
     if (!semSons) {
         // com os sons do Minecraft já baixados: a extensão não vai atrás da Mojang
         fs.mkdirSync(path.join(casa, ".claude-monitor", "sons"), { recursive: true });
@@ -519,7 +528,7 @@ function wav(amostras, bits = 16) {
  */
 async function somDaExtensao({ plataforma = "win32", config = null, notify = wav([1000, -2000, 32767]) } = {}) {
     const windirReal = process.env.WINDIR;
-    process.env.WINDIR = fs.mkdtempSync(path.join(os.tmpdir(), "cm-windir-"));
+    process.env.WINDIR = pastaTemp("cm-windir-");
     fs.mkdirSync(path.join(process.env.WINDIR, "Media"));
     fs.writeFileSync(path.join(process.env.WINDIR, "Media", "Windows Notify.wav"), notify);
     try {

@@ -22,6 +22,7 @@ const { TEXTURAS } = require(path.join(__dirname, '..', '..', 'extensao', 'janel
 const { estadoDeMentira } = require('../motor-foto');
 
 const VAZIA = fs.mkdtempSync(path.join(os.tmpdir(), 'cm-cama-'));
+test.after(() => { try { fs.rmSync(VAZIA, { recursive: true, force: true, maxRetries: 5 }); } catch {} });  // preso no Windows: fica
 const PASTA = process.env.CM_TEXTURAS && fs.existsSync(process.env.CM_TEXTURAS) ? process.env.CM_TEXTURAS : VAZIA;
 // a de mentira: pixels opacos que mudam a cada pixel (como no tema-minecraft.test.js)
 function deMentira(nome) {

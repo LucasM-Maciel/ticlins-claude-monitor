@@ -7,6 +7,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const casa = fs.mkdtempSync(path.join(os.tmpdir(), "cm-sessions-"));
+test.after(() => { try { fs.rmSync(casa, { recursive: true, force: true, maxRetries: 5 }); } catch {} });  // preso no Windows: fica
 process.env.HOME = casa;
 process.env.USERPROFILE = casa;
 const sessions = require("../../extensao/out/sessions.js");

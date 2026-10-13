@@ -11,7 +11,9 @@ const mojang = require("../mojang-falso");
 const MINECRAFT = path.join(__dirname, "..", "..", "extensao", "janelinha", "minecraft.js");
 const { baixarTudo, wav, SONS } = require(MINECRAFT);
 
-const pastaNova = () => fs.mkdtempSync(path.join(os.tmpdir(), "cm-mc-"));
+const pastas = [];  // apagadas no fim do arquivo (arquivo preso no Windows não derruba o teste)
+const pastaNova = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), "cm-mc-")); pastas.push(p); return p; };
+test.after(() => { for (const p of pastas) try { fs.rmSync(p, { recursive: true, force: true, maxRetries: 5 }); } catch {} });
 function lerWav(dados) {
     const b = Buffer.isBuffer(dados) ? dados : fs.readFileSync(dados);
     return {

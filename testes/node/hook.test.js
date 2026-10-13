@@ -9,9 +9,13 @@ const { spawnSync } = require("child_process");
 
 const HOOK = path.join(__dirname, "..", "..", "extensao", "out", "hook.js");
 
+const casas = [];  // apagadas no fim do arquivo (arquivo preso no Windows não derruba o teste)
 function casaNova() {
-    return fs.mkdtempSync(path.join(os.tmpdir(), "cm hook ção-"));  // espaço e acento de propósito
+    const casa = fs.mkdtempSync(path.join(os.tmpdir(), "cm hook ção-"));  // espaço e acento de propósito
+    casas.push(casa);
+    return casa;
 }
+test.after(() => { for (const c of casas) try { fs.rmSync(c, { recursive: true, force: true, maxRetries: 5 }); } catch {} });
 function rodar(casa, evento, dados, env = {}) {
     const r = spawnSync(process.execPath, [HOOK, evento], {
         input: typeof dados === "string" ? dados : JSON.stringify(dados),

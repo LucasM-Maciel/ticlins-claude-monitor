@@ -29,6 +29,9 @@ function deMentira(nome) {
   return t;
 }
 const VAZIA = fs.mkdtempSync(path.join(os.tmpdir(), 'cm-parado-'));
+// apaga a pasta no fim (arquivo preso no Windows não derruba o teste)
+const apagar = (p) => { try { fs.rmSync(p, { recursive: true, force: true, maxRetries: 5 }); } catch {} };
+test.after(() => apagar(VAZIA));
 const PASTA = process.env.CM_TEXTURAS && fs.existsSync(process.env.CM_TEXTURAS) ? process.env.CM_TEXTURAS : VAZIA;
 carregarTexturas(PASTA, tema('minecraft').texturas);
 for (const n of tema('minecraft').texturas) if (!IMG[n]) IMG[n] = deMentira(n);
@@ -102,8 +105,9 @@ for (const [nome, ids] of Object.entries(TEMAS)) {
     assert.deepStrictEqual(m.erros, []);
   });
 
-  test(`${nome}: a vez sobrevive a reabrir; saída com defeito vira o Clawd normal e anota`, () => {
+  test(`${nome}: a vez sobrevive a reabrir; saída com defeito vira o Clawd normal e anota`, (t) => {
     const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'cm-parado-salvo-'));
+    t.after(() => apagar(pasta));
     let m = novoMundo(nome, { pasta });
     assert.strictEqual(esperarCena(m), ids[0]);
     m = novoMundo(nome, { pasta });
