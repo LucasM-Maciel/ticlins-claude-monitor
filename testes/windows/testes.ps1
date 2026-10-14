@@ -406,7 +406,7 @@ Teste 'com a janelinha aberta segurando um som: fecha ela, troca tudo e anota no
         $r = ComAmbiente $ambiente { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $instalador, '-SemAtalho', '-SemAbrir') 120 }
         Verdade ($r.codigo -eq 0) $r.saida
         Verdade $janelinha.HasExited "a janelinha continuou aberta: $($r.saida)"
-        foreach ($f in 'overlay.ps1', 'sons-dragonball\tudo.wav', 'sons-sith\tudo.wav') {
+        foreach ($f in 'overlay.ps1', 'sons-dragonball\tudo.wav', 'sons-sith\tudo.wav', 'sons-akatsuki\tudo.wav') {
             Igual (Hash "$tmp\vsix\extension\janelinha\$f") (Hash "$mon\$f") "$f não foi trocado"
         }
         Verdade ((Get-Content "$mon\janelinha.log" -Raw) -match "\[instalador \d+\] fechei a janelinha \[$($janelinha.Id)\]") 'não anotou no diário que fechou a janelinha'

@@ -92,6 +92,11 @@ $sonsDoTema = @{
         terminou  = SonsOuWindows "$Pasta\sons-sith\terminou.wav" 'Windows Notify System Generic.wav'
         tudo      = SonsOuWindows "$Pasta\sons-sith\tudo.wav" 'tada.wav'
     }
+    akatsuki = @{  # kunai na corda, o puf da fumaça e a frase do tambor (feitos pelo sons-akatsuki.py)
+        esperando = SonsOuWindows "$Pasta\sons-akatsuki\esperando.wav" 'Windows Notify Messaging.wav'
+        terminou  = SonsOuWindows "$Pasta\sons-akatsuki\terminou.wav" 'Windows Notify System Generic.wav'
+        tudo      = SonsOuWindows "$Pasta\sons-akatsuki\tudo.wav" 'tada.wav'
+    }
 }
 # tudo = a última terminou e não sobrou nada rodando nem esperando
 $avisoDaSituacao = @{ permission = 'esperando'; question = 'esperando'; finished = 'terminou'; tudo = 'tudo' }
@@ -100,11 +105,12 @@ $nomeDoSom = @{  # pro diário e pro .txt do -Foto
     padrao    = @{ esperando = 'sino-esperando'; terminou = 'sino-terminou'; tudo = 'sino-tudo' }
     dragonball = @{ esperando = 'esferas-esperando'; terminou = 'esferas-terminou'; tudo = 'esferas-tudo' }
     sith      = @{ esperando = 'droide-bipes'; terminou = 'sabre-liga'; tudo = 'acorde-sith' }
+    akatsuki  = @{ esperando = 'kunai-corda'; terminou = 'puf-acorde'; tudo = 'frase-tambor' }
 }
 # botão direito: tema, Clawd, opacidade e volume, gravados em config.json (o Mac lê o mesmo).
 # Sem o arquivo, tudo como antes do menu existir: Minecraft, Clawd ligado, opaca, volume
 # cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
-$temas = [ordered]@{ padrao = 'Padrão'; minecraft = 'Minecraft'; dragonball = 'Dragon Ball'; sith = 'Star Wars' }
+$temas = [ordered]@{ padrao = 'Padrão'; minecraft = 'Minecraft'; dragonball = 'Dragon Ball'; sith = 'Star Wars'; akatsuki = 'Akatsuki' }
 $configArquivo = Join-Path $Pasta 'config.json'
 $config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft' }
 # Exists antes: arquivo que não existe soma no $Error mesmo pego no try (o "fechou (1 erros)" do diário)
@@ -346,7 +352,7 @@ if ($xpFundo -and $xpBarra -and $xpFundo.PixelWidth -eq 182 -and $xpBarra.PixelW
         $barraXP[$tinta[0]] = Bitmap $px 182 5
     }
 }
-$coresDoUso = @{ padrao = '#D1D5DB', '#F59E0B', '#EF4444'; minecraft = '#80FF20', '#FFAA00', '#FF5555'; dragonball = '#FDE047', '#F59E0B', '#EF4444'; sith = '#FCA5A5', '#F59E0B', '#EF4444' }  # normal, >= 80%, >= 95%
+$coresDoUso = @{ padrao = '#D1D5DB', '#F59E0B', '#EF4444'; minecraft = '#80FF20', '#FFAA00', '#FF5555'; dragonball = '#FDE047', '#F59E0B', '#EF4444'; sith = '#FCA5A5', '#F59E0B', '#EF4444'; akatsuki = '#FCA5A5', '#F59E0B', '#EF4444' }  # normal, >= 80%, >= 95%
 
 # letra do Minecraft (font/ascii.png: 16x16 letras de 8x8), com a sombra do jogo (cor/4,
 # 1 px pra direita e pra baixo). Cada letra vai até a última coluna pintada, como no jogo.

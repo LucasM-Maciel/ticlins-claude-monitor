@@ -20,7 +20,8 @@ enfeites dela (no Windows, os do Minecraft em WPF; o resto, como o Padrão).
   {nome: layout}}`), `S` som da cena épica (`{tocar: <.wav na pasta>, cena}` ou
   `{parar: true}`, quando ela é cortada).
 - Som: só os épicos têm (Invaders/Kaiju no Padrão, Ender Dragon, Shenlong (com o pedido), a lua cheia do SSJ 4, a Batalha da Frota e a
-  Defesa da Floresta no Sith, uma de cada lado da Força). A cena diz o que
+  Defesa da Floresta no Sith, uma de cada lado da Força; a Juubi e o Time 7 completo na Akatsuki, um de cada
+  lado). A cena diz o que
   toca e quando (`sons`, abaixo); quando ela começa, o motor junta tudo num .wav só
   (`som.js`: mono, 16 bits, 44100, gravado como `som-cena-0.wav`/`som-cena-1.wav`, revezando)
   e a janelinha toca do começo com o volume do botão direito. No `-Foto`/`--foto` ela não
@@ -144,7 +145,7 @@ começo da cena, `arquivo` relativo à pasta (`sons-padrao/...`, `sons-dragonbal
 `sons-sith/...` ou `sons/...`, os da Mojang), `tom` > 1 = mais agudo e mais curto, `dur` = corta ali (some em até
 0,25 s). Arquivo que falta fica de fora (uma linha no diário) e o resto toca. Cada épico tem um
 `VOLUME` que deixa a trilha no nível dos avisos (−17 dB; as trilhas mixadas dão de −21 a −23
-LUFS); os .wav do Padrão, do Shenlong, do pedido e do SSJ 4 saem do `sons-epicos.py`, os do Sith do `sons-sith.py`.
+LUFS); os .wav do Padrão, do Shenlong, do pedido e do SSJ 4 saem do `sons-epicos.py`, os do Sith do `sons-sith.py`, os da Akatsuki do `sons-akatsuki.py`.
 
 Dentro do `fundo`, `frente` e `atras` as coordenadas já são as da janela (DIPs).
 

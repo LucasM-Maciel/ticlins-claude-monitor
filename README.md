@@ -10,7 +10,7 @@ você, ela avisa com um som.
 **[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows, Mac e Linux no mesmo arquivo)
 
 > Projeto pessoal e não oficial, sem ligação com a Anthropic (Claude), com a
-> Mojang (Minecraft) nem com os donos de Dragon Ball e de Star Wars (Lucasfilm).
+> Mojang (Minecraft) nem com os donos de Dragon Ball, de Naruto e de Star Wars (Lucasfilm).
 
 ## O que ela mostra
 
@@ -145,6 +145,22 @@ a janelinha antes dos temas continua no Minecraft.
   30 droides destruídos vem um evento especial, com som, um de cada lado:
   **A Batalha da Frota** (no espaço) e **A Defesa da Floresta**. Os avisos são
   bipes de droide e o sabre acendendo.
+- **Akatsuki** (Naruto): o Clawd ninja de manto preto com nuvens vermelhas; as
+  nuvens correm a borda do cartão deixando rastro, nuvenzinhas no lugar das
+  bolinhas e o usage numa barra com uma kunai na ponta. Andando, ele solta
+  clones de fumaça, vira uma revoada de corvos, troca de lugar com um tronco ou
+  cospe uma bola de fogo, contra um bug, um ANBU, um ninja da Folha ou o
+  Kakashi; quando fica tudo quieto, come um lámen ou treina jogando kunais (uma
+  vez cada); quando acaba tudo, a lua vermelha sobe atrás do cartão. A cada 50
+  voltas no cartão ele **troca de lado**: vira o **Time 7**, com o cartão
+  azul-marinho e laranja e folhas no lugar das nuvens, e luta com o Gamabunta e
+  o Rasenshuriken, o Rasengan, o Chidori e um rio de folhas, contra o Zetsu
+  Branco, um ninja renegado ou uma marionete. Cada lado tem 3 roupas, uma a cada
+  troca (na Akatsuki, uma delas é a máscara laranja em espiral). A cada 30
+  inimigos derrubados vem um evento especial, com som, um de cada lado: a **fera
+  de dez caudas** e **o Time 7 completo** (o Susanoo, a Kurama e o soco da
+  Sakura). Os avisos são kunais tilintando e corda dedilhada, todos feitos do
+  zero.
 
 As animações precisam do Node.js (que a instalação já pede); sem ele a
 janelinha mostra o Clawd simples, sem as cenas.

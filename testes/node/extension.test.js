@@ -160,7 +160,7 @@ const spawns = () => processos.filter((p) => p.tipo === "spawn");
 test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", async () => {
     const { pasta } = await ativar({ plataforma: "win32" });
     for (const f of ["hook.js", "processes.js", "overlay.ps1", "minecraft.js", "vorbis.min.js", "sons-padrao/terminou.wav", "sons-padrao/esperando.wav", "sons-padrao/tudo.wav",
-        "sons-dragonball/tudo.wav", "motor/motor.js", "motor/Motor.cs", "motor/raster.js", "motor/tema-padrao.js"]) {
+        "sons-dragonball/tudo.wav", "sons-akatsuki/tudo.wav", "motor/motor.js", "motor/Motor.cs", "motor/raster.js", "motor/tema-padrao.js"]) {
         assert.ok(fs.existsSync(path.join(pasta, f)), f);
     }
     // a pasta motor/ inteira, do jeito que está na extensão
@@ -179,7 +179,7 @@ test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", asyn
 
 test("Mac: copia o .swift, compila com swift 5 e abre o binário", async () => {
     const { pasta } = await ativar({ plataforma: "darwin" });
-    for (const f of ["overlay.swift", "minecraft.js", "vorbis.min.js", "sons-padrao/tudo.wav", "sons-dragonball/tudo.wav", "motor/motor.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
+    for (const f of ["overlay.swift", "minecraft.js", "vorbis.min.js", "sons-padrao/tudo.wav", "sons-dragonball/tudo.wav", "sons-akatsuki/tudo.wav", "motor/motor.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
     const compilou = processos.find((p) => p.cmd === "xcrun");
     assert.ok(compilou, "não chamou o xcrun swiftc");
     assert.deepStrictEqual(compilou.args.slice(0, 4), ["swiftc", "-swift-version", "5", "-O"]);

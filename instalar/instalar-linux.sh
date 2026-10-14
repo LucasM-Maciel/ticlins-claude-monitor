@@ -47,7 +47,7 @@ TEMP=$(mktemp -d)
 mkdir -p "$PASTA"
 # instalação nova começa no tema Padrão; quem já usava (tem versao-janelinha) fica no que tinha
 [ -f "$PASTA/versao-janelinha" ] || [ -f "$PASTA/config.json" ] || printf '{"tema":"padrao"}' > "$PASTA/config.json"
-for p in motor sons-padrao sons-dragonball sons-sith; do
+for p in motor sons-padrao sons-dragonball sons-sith sons-akatsuki; do
   mkdir -p "$PASTA/$p"
   unzip -o -j -q "$VSIX" "extension/janelinha/$p/*" -d "$PASTA/$p" || falhou "O .vsix está incompleto (falta janelinha/$p/). Baixe de novo."
 done

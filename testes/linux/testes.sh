@@ -94,7 +94,7 @@ t_instala() {
       || falha "$e recebeu: $(cat "$BIN/$e.log" 2>/dev/null)" || return 1
   done
   local f
-  for f in hook.js processes.js overlay-linux.py minecraft.js vorbis.min.js sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav sons-sith/terminou.wav sons-sith/esperando.wav sons-sith/tudo.wav motor/motor.js motor/raster.js; do
+  for f in hook.js processes.js overlay-linux.py minecraft.js vorbis.min.js sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav sons-sith/terminou.wav sons-sith/esperando.wav sons-sith/tudo.wav sons-akatsuki/tudo.wav motor/motor.js motor/raster.js; do
     [ -f "$MONITOR/$f" ] || falha "falta $f" || return 1
   done
   [ -f "$MONITOR/sons/levelup.wav" ] || falha "não baixou os sons do Minecraft: $saida" || return 1
@@ -108,7 +108,7 @@ t_instala() {
   # a mensagem final só sai com o GTK achado (sem ele: "a janelinha espera o GTK")
   echo "$saida" | grep -q "canto de baixo à direita" || falha "não terminou com a mensagem final: $saida"
 }
-teste "instala: extensão no VS Code e no Cursor, arquivos (com sons-sith/ e overlay-linux.py) e hooks" t_instala
+teste "instala: extensão no VS Code e no Cursor, arquivos (com sons-sith/, sons-akatsuki/ e overlay-linux.py) e hooks" t_instala
 t_de_novo() {
   com_prazo 300 instalar >/dev/null 2>&1 || falha "2ª instalação falhou" || return 1
   local n

@@ -120,7 +120,7 @@ def sem_cair(fn, normal):
 
 
 # --- botão direito: tema, Clawd, opacidade e volume, gravados em config.json (os outros leem o mesmo).
-temas = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars")]
+temas = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars"), ("akatsuki", "Akatsuki")]
 arquivo_config = os.path.join(pasta, "config.json")
 config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft"}
 
@@ -211,6 +211,8 @@ sons_do_tema = {
     "dragonball": {"esperando": ["sons-dragonball/esperando"], "terminou": ["sons-dragonball/terminou"],
                    "tudo": ["sons-dragonball/tudo"]},
     "sith": {"esperando": ["sons-sith/esperando"], "terminou": ["sons-sith/terminou"], "tudo": ["sons-sith/tudo"]},
+    "akatsuki": {"esperando": ["sons-akatsuki/esperando"], "terminou": ["sons-akatsuki/terminou"],
+                 "tudo": ["sons-akatsuki/tudo"]},
 }
 som_do_sistema = {"esperando": "window-question", "terminou": "complete", "tudo": "bell"}
 nome_do_som = {  # pro diário e pro .txt do --foto
@@ -218,6 +220,7 @@ nome_do_som = {  # pro diário e pro .txt do --foto
     "padrao": {"esperando": "sino-esperando", "terminou": "sino-terminou", "tudo": "sino-tudo"},
     "dragonball": {"esperando": "esferas-esperando", "terminou": "esferas-terminou", "tudo": "esferas-tudo"},
     "sith": {"esperando": "droide-bipes", "terminou": "sabre-liga", "tudo": "acorde-sith"},
+    "akatsuki": {"esperando": "kunai-corda", "terminou": "puf-acorde", "tudo": "frase-tambor"},
 }
 tocador = shutil.which("paplay") or shutil.which("pw-play")
 
@@ -725,6 +728,7 @@ def opacidade_do_pulso():
 cores_do_uso = {
     "padrao": ["#D1D5DB", "#F59E0B", "#EF4444"], "minecraft": ["#80FF20", "#FFAA00", "#FF5555"],
     "dragonball": ["#FDE047", "#F59E0B", "#EF4444"], "sith": ["#FCA5A5", "#F59E0B", "#EF4444"],
+    "akatsuki": ["#FCA5A5", "#F59E0B", "#EF4444"],
 }
 
 

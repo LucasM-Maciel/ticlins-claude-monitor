@@ -76,7 +76,7 @@ test("arquivos da janelinha que a extensão copia existem", () => {
     for (const n of nomes) assert.ok(fs.existsSync(path.join(EXT, "janelinha", n)), n);
     // e as pastas inteiras (motor/, sons): existem e não estão vazias
     const pastas = [...codigo.match(/const PASTAS_JANELINHA = \[([^\]]*)\]/)[1].matchAll(/"([\w-]+)\/"/g)].map((m) => m[1]);
-    assert.deepStrictEqual(pastas, ["motor", "sons-padrao", "sons-dragonball", "sons-sith"]);
+    assert.deepStrictEqual(pastas, ["motor", "sons-padrao", "sons-dragonball", "sons-sith", "sons-akatsuki"]);
     for (const p of pastas) assert.ok(fs.readdirSync(path.join(EXT, "janelinha", p)).length > 0, p);
 });
 
@@ -132,6 +132,6 @@ test(".vsix leva a janelinha, os scripts e nada de sobra", { skip: !temDist && "
         assert.ok(nomes.some((x) => x.toLowerCase() === n), `falta ${n} (tem: ${nomes.join(", ")})`);
     }
     // nada da Mojang no pacote: sons e texturas vêm do servidor dela na instalação (os .wav do
-    // Padrão e do Dragon Ball são nossos / CC0)
-    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n) && !/^extension\/janelinha\/sons-(padrao|dragonball|sith)\/[\w-]+\.wav$/.test(n)), nomes.join(", "));
+    // Padrão, do Dragon Ball, do Sith e da Akatsuki são nossos / CC0)
+    assert.ok(!nomes.some((n) => /node_modules|\.map$|\.wav$|\.ogg$|\.png$/.test(n) && !/^extension\/janelinha\/sons-(padrao|dragonball|sith|akatsuki)\/[\w-]+\.wav$/.test(n)), nomes.join(", "));
 });

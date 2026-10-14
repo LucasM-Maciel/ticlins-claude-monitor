@@ -51,7 +51,7 @@ mkdir -p "$PASTA"
 # instalação nova começa no tema Padrão; quem já usava (tem versao-janelinha) fica no Minecraft
 [ -f "$PASTA/versao-janelinha" ] || [ -f "$PASTA/config.json" ] || printf '{"tema":"padrao"}' > "$PASTA/config.json"
 # pastas inteiras: o motor das animações e os sons dos temas
-for p in motor sons-padrao sons-dragonball sons-sith; do
+for p in motor sons-padrao sons-dragonball sons-sith sons-akatsuki; do
   mkdir -p "$PASTA/$p"
   unzip -o -j -q "$VSIX" "extension/janelinha/$p/*" -d "$PASTA/$p" || falhou "O .vsix está incompleto (falta janelinha/$p/). Baixe de novo."
 done

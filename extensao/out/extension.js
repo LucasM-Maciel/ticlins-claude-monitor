@@ -103,9 +103,9 @@ class SessionsProvider {
 // compilado aqui na 1ª vez (precisa das ferramentas de linha de comando da Apple).
 // Linux: overlay-linux.py (Python + GTK 3, já vem no Ubuntu/Fedora com GNOME).
 // Pastas inteiras (terminam em /): motor/ (as animações, docs/MOTOR.md), sons-padrao/ (feitos
-// pelo sons-padrao.py), sons-dragonball/ (CC0) e sons-sith/ (feitos pelo sons-sith.py); os do Minecraft vêm da Mojang. O overlay vai
+// pelo sons-padrao.py), sons-dragonball/ (CC0) sons-sith/ (feitos pelo sons-sith.py) e sons-akatsuki/ (pelo sons-akatsuki.py); os do Minecraft vêm da Mojang. O overlay vai
 // por último: a janelinha aberta se reabre ao ver ele mudar e já acha o motor novo.
-const PASTAS_JANELINHA = ["motor/", "sons-padrao/", "sons-dragonball/", "sons-sith/"];
+const PASTAS_JANELINHA = ["motor/", "sons-padrao/", "sons-dragonball/", "sons-sith/", "sons-akatsuki/"];
 const JANELINHA = {
     win32: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay.ps1"],
     darwin: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay.swift"],
