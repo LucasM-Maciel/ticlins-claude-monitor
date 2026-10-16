@@ -30,7 +30,8 @@ test("bash do Mac quebra com CRLF: .sh sem \\r e com #!/bin/bash", () => {
     for (const f of comExtensao(".sh")) {
         const t = fs.readFileSync(f, "utf8");
         assert.ok(!t.includes("\r"), `${path.relative(RAIZ, f)} tem CRLF`);
-        assert.ok(t.startsWith("#!/bin/bash\n"), path.relative(RAIZ, f));
+        // o sem-node.sh é do hook (roda pelo `sh` do Claude Code, no WSL/Linux sem bash garantido): #!/bin/sh
+        assert.ok(t.startsWith(f.endsWith("sem-node.sh") ? "#!/bin/sh\n" : "#!/bin/bash\n"), path.relative(RAIZ, f));
     }
 });
 
@@ -122,7 +123,7 @@ test("ClaudeMonitor.zip tem tudo, com o instalador do Mac executável", { skip: 
 test(".vsix leva a janelinha, os scripts e nada de sobra", { skip: !temDist && "rode npm run empacotar" }, async () => {
     const nomes = (await entradas(path.join(DIST, `claude-monitor-${manifesto.version}.vsix`))).map((e) => e.nome);
     for (const n of ["extension/package.json", "extension/readme.md", "extension/out/extension.js", "extension/out/hook.js",
-        "extension/out/processes.js", "extension/out/install.js", "extension/out/sessions.js",
+        "extension/out/processes.js", "extension/out/sem-node.sh", "extension/out/install.js", "extension/out/sessions.js",
         "extension/janelinha/overlay.ps1", "extension/janelinha/overlay.swift", "extension/janelinha/overlay-linux.py",
         "extension/janelinha/minecraft.js", "extension/janelinha/vorbis.min.js", "extension/janelinha/vorbis-licencas.txt",
         "extension/janelinha/sons-padrao/terminou.wav", "extension/janelinha/sons-padrao/esperando.wav", "extension/janelinha/sons-padrao/tudo.wav",

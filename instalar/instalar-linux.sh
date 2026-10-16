@@ -51,7 +51,7 @@ for p in motor sons-padrao sons-dragonball sons-sith sons-akatsuki; do
   mkdir -p "$PASTA/$p"
   unzip -o -j -q "$VSIX" "extension/janelinha/$p/*" -d "$PASTA/$p" || falhou "O .vsix está incompleto (falta janelinha/$p/). Baixe de novo."
 done
-unzip -o -j -q "$VSIX" extension/out/hook.js extension/out/processes.js \
+unzip -o -j -q "$VSIX" extension/out/hook.js extension/out/processes.js extension/out/sem-node.sh \
   extension/janelinha/overlay-linux.py extension/janelinha/minecraft.js extension/janelinha/vorbis.min.js -d "$PASTA" \
   || falhou "O .vsix está incompleto. Baixe de novo."
 unzip -o -j -q "$VSIX" extension/out/install.js -d "$TEMP" || falhou "O .vsix está incompleto. Baixe de novo."

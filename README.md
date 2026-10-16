@@ -80,6 +80,11 @@ com o cairo (`python3-gi-cairo`), o instalador baixa ela sem precisar de root;
 se faltar o resto, ele diz o `apt install` certo. Funciona no Xorg e no Wayland
 (pelo XWayland). Sem o motor (sem Node), aparece só o cartão, sem o Clawd.
 
+**VS Code conectado ao WSL** (Windows): a janelinha abre no Windows e mostra as
+sessões do WSL junto com as do Windows. O Claude Code rodando num terminal do
+WSL com o VS Code aberto no Windows (sem estar conectado ao WSL) ainda não
+aparece.
+
 Pronto: a janelinha aparece no canto de baixo à direita. As sessões do Claude
 que já estavam abertas precisam ser reabertas pra aparecer; as novas aparecem
 sozinhas.
@@ -181,7 +186,8 @@ pacote. Instalou sem internet? A extensão baixa sozinha depois, ou, no VS Code:
 
 **Nenhuma sessão aparece.** Reabra as sessões do Claude (a janelinha só vê as
 abertas depois da instalação). Se continuar, confira se o Node.js está
-instalado: abra um terminal e rode `node -v`.
+instalado: abra um terminal e rode `node -v`. Sem `node` no PATH o monitor usa
+o do próprio VS Code.
 
 **"usage indisponível".** Só aparece se ela nunca conseguiu ler o usage
 (depois da 1ª vez, mostra o último que viu). Espere 2 minutos, que ela tenta de novo. Se não

@@ -91,7 +91,7 @@ t_instala() {
       || falha "$e recebeu: $(cat "$BIN/$e.log" 2>/dev/null)" || return 1
   done
   local f
-  for f in hook.js processes.js overlay.swift minecraft.js vorbis.min.js ClaudeMonitor sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav sons-akatsuki/tudo.wav motor/motor.js motor/raster.js; do
+  for f in hook.js processes.js sem-node.sh overlay.swift minecraft.js vorbis.min.js ClaudeMonitor sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav sons-akatsuki/tudo.wav motor/motor.js motor/raster.js; do
     [ -f "$MONITOR/$f" ] || falha "falta $f" || return 1
   done
   [ -f "$MONITOR/sons/levelup.wav" ] || falha "não baixou os sons do Minecraft: $saida" || return 1

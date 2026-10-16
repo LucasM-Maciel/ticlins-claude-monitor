@@ -82,7 +82,7 @@ try {
         foreach ($entrada in $entradas) { Extrair $entrada (Join-Path "$pasta\$pastaDoVsix" $entrada.Name) }
     }
     $copias = @{
-        'out/hook.js' = $pasta; 'out/processes.js' = $pasta; 'out/install.js' = $temp
+        'out/hook.js' = $pasta; 'out/processes.js' = $pasta; 'out/sem-node.sh' = $pasta; 'out/install.js' = $temp
         'janelinha/overlay.ps1' = $pasta; 'janelinha/minecraft.js' = $pasta; 'janelinha/vorbis.min.js' = $pasta
     }
     foreach ($nome in $copias.Keys) {

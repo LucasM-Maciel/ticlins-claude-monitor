@@ -126,6 +126,8 @@ function abrirPastas(raiz, lista) {
 }
 const BINARIO_MAC = path.join(sessions_1.MONITOR_DIR, "ClaudeMonitor");
 let janelinhaAberta = false; // com ela aberta quem toca o som é ela
+let contextoExt = null; // guardado no activate: abrirJanelinha roda também sem argumentos (comando)
+let wsl = null; // VS Code no WSL: { ponteiro, dados, ultimo } (o ponteiro que a janelinha do Windows lê)
 /** Diário da janelinha (a do Windows também anota nele): quem copiou, quem abriu. */
 function anotar(texto) {
     const diario = path.join(sessions_1.MONITOR_DIR, "janelinha.log");
@@ -148,11 +150,11 @@ function janelinhaLigada() {
  * de versão (entre uma versão e outra dá pra mexer neles lá). A janelinha
  * aberta vê o arquivo novo e se reabre sozinha.
  */
-function copiarJanelinha(context) {
-    if (!JANELINHA[process.platform])
+function copiarJanelinha(context, destinoDir = sessions_1.MONITOR_DIR, lista = JANELINHA[process.platform]) {
+    if (!lista)
         return;
-    const arquivos = abrirPastas(path.join(context.extensionPath, "janelinha"), JANELINHA[process.platform]);
-    const marca = path.join(sessions_1.MONITOR_DIR, "versao-janelinha");
+    const arquivos = abrirPastas(path.join(context.extensionPath, "janelinha"), lista);
+    const marca = path.join(destinoDir, "versao-janelinha");
     const versao = context.extension.packageJSON.version;
     let copiada = "";
     try {
@@ -161,11 +163,11 @@ function copiarJanelinha(context) {
     catch {
         // 1ª vez
     }
-    if (copiada === versao && arquivos.every((f) => fs.existsSync(path.join(sessions_1.MONITOR_DIR, f))))
+    if (copiada === versao && arquivos.every((f) => fs.existsSync(path.join(destinoDir, f))))
         return;
     const agora = new Date();
     for (const f of arquivos) {
-        const destino = path.join(sessions_1.MONITOR_DIR, f);
+        const destino = path.join(destinoDir, f);
         fs.mkdirSync(path.dirname(destino), { recursive: true });
         fs.copyFileSync(path.join(context.extensionPath, "janelinha", f), destino);
         fs.utimesSync(destino, agora, agora);
@@ -293,6 +295,9 @@ async function abrirJanelinha() {
         janelinhaAberta = true;
     }
     else if (process.platform === "linux") {
+        // VS Code no WSL: a extensão roda do lado Linux, mas a janelinha é a do Windows (interop)
+        if (vscode.env.remoteName === "wsl")
+            return abrirJanelinhaWsl();
         const py = path.join(sessions_1.MONITOR_DIR, "overlay-linux.py");
         if (!fs.existsSync(py))
             return;
@@ -314,6 +319,74 @@ async function abrirJanelinha() {
         (0, child_process_1.spawn)("python3", [py], { detached: true, stdio: "ignore", env: { ...process.env, CLAUDE_MONITOR_NODE: process.execPath } }).unref();
         anotar("mandou abrir a janelinha");
         janelinhaAberta = true;
+    }
+}
+/** execFile que devolve o stdout (ou null), com cwd: o run() do sessions.js não tem. */
+function saida(cmd, args, cwd) {
+    return new Promise((resolve) => {
+        (0, child_process_1.execFile)(cmd, args, { cwd }, (err, stdout) => resolve(err ? null : String(stdout)));
+    });
+}
+/**
+ * VS Code conectado ao WSL: copia a janelinha pra pasta do Windows (via /mnt/c), deixa lá um
+ * "ponteiro" dizendo onde estão as sessões do WSL (a janelinha lê pelo \\wsl.localhost) e abre
+ * o overlay.ps1 pelo cmd.exe. Qualquer erro vai pro diário, sem popup.
+ */
+async function abrirJanelinhaWsl() {
+    try {
+        const distro = process.env.WSL_DISTRO_NAME || "wsl";
+        const winHome = ((await saida("cmd.exe", ["/c", "echo", "%USERPROFILE%"], "/mnt/c")) ?? "").trim();
+        if (!winHome || winHome.includes("%")) {
+            anotar("não abri a janelinha: WSL sem o cmd.exe do Windows (interop desligado?)");
+            return;
+        }
+        // o wslpath da pasta do usuário (que sempre existe): a .claude-monitor pode nem existir ainda
+        const winCasa = ((await saida("wslpath", ["-u", winHome])) ?? "").trim();
+        if (!winCasa) {
+            anotar("não abri a janelinha: o wslpath não achou a pasta do Windows");
+            return;
+        }
+        const winDir = path.join(winCasa, ".claude-monitor");
+        copiarJanelinha(contextoExt, winDir, JANELINHA.win32);
+        const paraWin = async (p) => ((await saida("wslpath", ["-w", p])) ?? "").trim();
+        const dados = {
+            distro,
+            sessoes: await paraWin(sessions_1.SESS_DIR),
+            raiz: await paraWin("/"),
+            credenciais: await paraWin(path.join(require("os").homedir(), ".claude", ".credentials.json")),
+            vivos: [],
+            atualizado: Date.now() / 1000,
+        };
+        const ponteiro = path.join(winDir, "wsl", `${distro}.json`);
+        fs.mkdirSync(path.dirname(ponteiro), { recursive: true });
+        fs.writeFileSync(ponteiro, JSON.stringify(dados));
+        wsl = { ponteiro, dados, ultimo: Date.now() };
+        // sem CLAUDE_MONITOR_NODE: o execPath daqui é caminho de Linux (a janelinha acha o node do VS Code do Windows).
+        // Sem o "" do título: o interop do WSL escapa aspas com \, que o cmd não entende (o 1º não é aspas, então não é título)
+        (0, child_process_1.spawn)("cmd.exe", ["/c", "start", "/min", "powershell.exe", "-WindowStyle", "Hidden", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", `${winHome}\\.claude-monitor\\overlay.ps1`], { cwd: "/mnt/c", detached: true, stdio: "ignore" }).unref();
+        anotar(`mandou abrir a janelinha do Windows (WSL ${distro})`);
+        janelinhaAberta = true;
+    }
+    catch (err) {
+        anotar(`não abri a janelinha do Windows (WSL): ${err.message}`);
+    }
+}
+/** Atualiza o ponteiro com as sessões vivas: ao mudar, e a cada 10 s (a janelinha ignora ponteiro com mais de 30 s). */
+function atualizarPonteiroWsl(ids) {
+    if (!wsl)
+        return;
+    try {
+        const vivos = [...ids].sort();
+        const mudou = JSON.stringify(vivos) !== JSON.stringify(wsl.dados.vivos);
+        if (!mudou && Date.now() - wsl.ultimo < 10000)
+            return;
+        wsl.dados.vivos = vivos;
+        wsl.dados.atualizado = Date.now() / 1000;
+        fs.writeFileSync(wsl.ponteiro, JSON.stringify(wsl.dados));
+        wsl.ultimo = Date.now();
+    }
+    catch {
+        // pasta do Windows sumiu ou ocupada: tenta no próximo ciclo
     }
 }
 /** Sons e texturas do Minecraft, do servidor da Mojang (não precisa do jogo nem do ffmpeg). */
@@ -358,14 +431,12 @@ function garantirMinecraft() {
     }
     baixarMinecraft().then((r) => anotar(`baixou os sons do Minecraft ${r.versao} sozinha (${r.sons} sons, ${r.texturas} texturas)`), (err) => anotar(`não baixei os sons do Minecraft: ${err.message}`));
 }
-/** Os hooks rodam `node`: sem Node.js instalado o Claude Code não avisa ninguém. */
+/** Sem node no PATH o hook cai no plano B (sem-node.sh, no node do VS Code): só anota no diário, sem alarme. */
 async function conferirNode() {
     const achou = await new Promise((resolve) => (0, child_process_1.execFile)(process.platform === "win32" ? "where" : "which", ["node"], { windowsHide: true }, (err) => resolve(!err)));
     if (achou)
         return;
-    const escolha = await vscode.window.showWarningMessage("Claude Monitor: falta o Node.js — sem ele o Claude Code não consegue avisar quais sessões estão rodando. Instale (versão LTS) e reinicie o VS Code.", "Baixar Node.js");
-    if (escolha)
-        vscode.env.openExternal(vscode.Uri.parse("https://nodejs.org/"));
+    anotar("sem node no PATH: os hooks rodam no node do VS Code (plano B)");
 }
 /** Volume do botão direito da janelinha (config.json, de 0 a 1); sem o arquivo, cheio. */
 function lerVolume() {
@@ -552,9 +623,11 @@ async function runInstall() {
     }
 }
 function activate(context) {
+    contextoExt = context;
     fs.mkdirSync(sessions_1.SESS_DIR, { recursive: true });
     try {
         (0, install_1.copyHookFiles)(context.extensionPath);
+        (0, install_1.gravarNodeReserva)(process.execPath); // o sem-node.sh (plano B do hook) roda neste node
     }
     catch (err) {
         vscode.window.showErrorMessage(`Claude Monitor: não consegui copiar o hook (${err.message})`);
@@ -570,6 +643,17 @@ function activate(context) {
     garantirMinecraft();
     if ((0, install_1.hooksInstalled)())
         conferirNode();
+    else if ((0, install_1.temHooksAntigos)()) {
+        // já tinha aceitado os hooks de uma versão sem o plano B: atualiza calado
+        try {
+            (0, install_1.installHooks)();
+            anotar("atualizei os hooks (plano B sem node no PATH)");
+            conferirNode();
+        }
+        catch (err) {
+            anotar(`não consegui atualizar os hooks: ${err.message}`);
+        }
+    }
     else {
         vscode.window
             .showInformationMessage("Claude Monitor: instalar os hooks no Claude Code pra acompanhar as sessões?", "Instalar")
@@ -639,6 +723,7 @@ function activate(context) {
                 if (!ids.has(id))
                     seen.delete(id);
             fresh.sort((a, b) => PRIORITY[displayState(a)] - PRIORITY[displayState(b)] || b.since - a.since);
+            atualizarPonteiroWsl(fresh.map((s) => s.id));
             sessions = fresh;
             render();
         }
@@ -683,5 +768,14 @@ function activate(context) {
     }));
     tick();
 }
-function deactivate() { }
+function deactivate() {
+    try {
+        if (wsl)
+            fs.unlinkSync(wsl.ponteiro);
+    }
+    catch {
+        // já apagado
+    }
+    wsl = null;
+}
 //# sourceMappingURL=extension.js.map

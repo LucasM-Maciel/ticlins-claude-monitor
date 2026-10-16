@@ -132,3 +132,56 @@ test("hook é rápido (o UserPromptSubmit segura o Claude enquanto roda)", () =>
     rodar(casa, "working", { session_id: "s1", cwd: casa });
     assert.ok(Date.now() - inicio < 3000, `demorou ${Date.now() - inicio} ms`);
 });
+
+// --- sem-node.sh: o plano B do hook, de verdade (no sh do Git no Windows, no /bin/sh no resto) ---
+function acharSh() {
+    const candidatos = [process.env.CM_SH, "C:/Program Files/Git/usr/bin/sh.exe", "C:/Program Files (x86)/Git/usr/bin/sh.exe", "/bin/sh", "/usr/bin/sh"].filter(Boolean);
+    const achado = candidatos.find((c) => fs.existsSync(c));
+    if (achado) return achado;
+    const w = spawnSync(process.platform === "win32" ? "where" : "which", ["sh"], { encoding: "utf8" });
+    return w.status === 0 ? w.stdout.split(/\r?\n/)[0].trim() || null : null;
+}
+const SH = acharSh();
+const SEM_NODE = path.join(__dirname, "..", "..", "extensao", "out", "sem-node.sh");
+
+/** Roda o sem-node.sh como o Claude Code roda (sh "<caminho>" working, JSON no stdin), com o PATH dado. */
+function rodarSemNode(casa, pathDoTeste, nodeReserva) {
+    const dir = path.join(casa, ".claude-monitor");
+    fs.mkdirSync(dir, { recursive: true });
+    for (const f of ["hook.js", "processes.js", "sem-node.sh"]) fs.copyFileSync(path.join(path.dirname(SEM_NODE), f), path.join(dir, f));
+    if (nodeReserva) fs.writeFileSync(path.join(dir, "node-reserva"), nodeReserva.split(path.sep).join("/"));
+    // o PATH do teste vira o único (no Windows a variável se chama "Path": tira todas as grafias)
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k.toLowerCase() !== "path"));
+    Object.assign(env, { PATH: pathDoTeste, HOME: casa, USERPROFILE: casa, CLAUDE_PID: String(process.pid) });
+    return spawnSync(SH, [path.join(dir, "sem-node.sh").split(path.sep).join("/"), "working"], {
+        input: JSON.stringify({ session_id: "sn1", cwd: path.join(casa, "projeto").split(path.sep).join("/") }),
+        env, encoding: "utf8", timeout: 20000,
+    });
+}
+const pastaDoSh = SH && path.dirname(SH);
+const semNodeNoPath = SH && spawnSync(SH, ["-c", "command -v node"], { env: { PATH: pastaDoSh }, encoding: "utf8" }).status !== 0;
+
+test("sem-node.sh com node no PATH: sai 0 sem fazer nada (quem roda é o outro hook)", { skip: !SH && "sem sh nesta máquina" }, () => {
+    const casa = casaNova();
+    const r = rodarSemNode(casa, [pastaDoSh, path.dirname(process.execPath)].join(path.delimiter), process.execPath);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(!fs.existsSync(path.join(casa, ".claude-monitor", "sessions", "sn1.json")), "gravou a sessão mesmo com node no PATH");
+});
+
+test("sem-node.sh sem node no PATH: roda o hook.js no node do node-reserva e grava a sessão", { skip: (!SH && "sem sh nesta máquina") || (!semNodeNoPath && "o sh vive na mesma pasta de um node") }, () => {
+    const casa = casaNova();
+    const r = rodarSemNode(casa, pastaDoSh, process.execPath);
+    assert.strictEqual(r.status, 0, r.stderr);
+    const s = sessao(casa, "sn1");
+    assert.strictEqual(s.state, "working");
+    assert.strictEqual(s.name, "projeto");
+});
+
+test("sem-node.sh sem node no PATH e sem node-reserva (ou com caminho morto): sai 0 calado, sem gravar", { skip: (!SH && "sem sh nesta máquina") || (!semNodeNoPath && "o sh vive na mesma pasta de um node") }, () => {
+    const casa = casaNova();
+    for (const reserva of [null, path.join(casa, "nao-existe", "node")]) {
+        const r = rodarSemNode(casa, pastaDoSh, reserva);
+        assert.strictEqual(r.status, 0, r.stderr);
+    }
+    assert.ok(!fs.existsSync(path.join(casa, ".claude-monitor", "sessions", "sn1.json")));
+});

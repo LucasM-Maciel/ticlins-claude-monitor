@@ -36,6 +36,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.copyHookFiles = copyHookFiles;
 exports.hooksInstalled = hooksInstalled;
 exports.installHooks = installHooks;
+exports.temHooksAntigos = temHooksAntigos;
+exports.gravarNodeReserva = gravarNodeReserva;
 /**
  * Instala o hook no Claude Code: copia hook.js pra ~/.claude-monitor/ e
  * registra os eventos no ~/.claude/settings.json, preservando os outros hooks.
@@ -45,7 +47,7 @@ const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const HOOK_DIR = path.join(os.homedir(), ".claude-monitor");
 const SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
-const HOOK_FILES = ["hook.js", "processes.js"];
+const HOOK_FILES = ["hook.js", "processes.js", "sem-node.sh"];
 const EVENTS = [
     ["UserPromptSubmit", "working"],
     ["Stop", "waiting"],
@@ -53,11 +55,17 @@ const EVENTS = [
     ["SessionEnd", "end"],
 ];
 // hooks antigos deste monitor (inclusive a versão em Python) que a instalação substitui
-const OURS = /claude-monitor-hook|\.claude-monitor[\\/]hook\.js/;
+const OURS = /claude-monitor-hook|\.claude-monitor[\\/](hook\.js|sem-node\.sh)/;
 function hookCommand(arg) {
     // barra normal funciona no bash, zsh, PowerShell e cmd
     const hookPath = path.join(HOOK_DIR, "hook.js").split(path.sep).join("/");
     return `node "${hookPath}" ${arg}`;
+}
+// plano B: sem node no PATH o sem-node.sh roda o hook.js no node do VS Code. Hook separado do
+// de cima de propósito: se algum Claude Code rodar o hook fora do bash, o `node ...` segue sozinho
+function hookCommandSemNode(arg) {
+    const shPath = path.join(HOOK_DIR, "sem-node.sh").split(path.sep).join("/");
+    return `sh "${shPath}" ${arg}`;
 }
 /** Mantém o hook instalado sempre na mesma versão da extensão. */
 function copyHookFiles(extensionPath) {
@@ -79,7 +87,8 @@ function readSettings() {
 function hooksInstalled() {
     try {
         const hooks = readSettings().hooks ?? {};
-        return EVENTS.every(([event, arg]) => (hooks[event] ?? []).some((group) => (group.hooks ?? []).some((h) => h.command === hookCommand(arg))));
+        return EVENTS.every(([event, arg]) => (hooks[event] ?? []).some((group) => (group.hooks ?? []).some((h) => h.command === hookCommand(arg)))
+            && (hooks[event] ?? []).some((group) => (group.hooks ?? []).some((h) => h.command === hookCommandSemNode(arg))));
     }
     catch {
         return false;
@@ -94,10 +103,30 @@ function installHooks() {
         const groups = (settings.hooks[event] ?? [])
             .map((group) => ({ ...group, hooks: (group.hooks ?? []).filter((h) => !OURS.test(h.command ?? "")) }))
             .filter((group) => group.hooks.length > 0);
-        groups.push({ hooks: [{ type: "command", command: hookCommand(arg) }] });
+        groups.push({ hooks: [{ type: "command", command: hookCommand(arg) }, { type: "command", command: hookCommandSemNode(arg) }] });
         settings.hooks[event] = groups;
     }
     fs.mkdirSync(path.dirname(SETTINGS), { recursive: true });
     fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + "\n");
+}
+/** Já instalou alguma versão nossa (mesmo que velha, sem o plano B)? Então atualizar é calado. */
+function temHooksAntigos() {
+    try {
+        const hooks = readSettings().hooks ?? {};
+        return EVENTS.some(([event]) => (hooks[event] ?? []).some((group) => (group.hooks ?? []).some((h) => OURS.test(h.command ?? ""))));
+    }
+    catch {
+        return false;
+    }
+}
+/** Grava onde está o node do VS Code (o sem-node.sh lê). Sem lançar erro. */
+function gravarNodeReserva(execPath) {
+    try {
+        fs.mkdirSync(HOOK_DIR, { recursive: true });
+        fs.writeFileSync(path.join(HOOK_DIR, "node-reserva"), execPath.split(path.sep).join("/"));
+    }
+    catch {
+        // sem o arquivo, o plano B só não roda
+    }
 }
 //# sourceMappingURL=install.js.map

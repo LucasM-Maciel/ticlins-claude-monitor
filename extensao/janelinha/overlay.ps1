@@ -453,6 +453,18 @@ function PidVivo($id) {
     [bool](Get-Process -Id $id -ErrorAction Ignore)  # Ignore: sessão morta não conta nos erros do "fechou"
 }
 
+# VS Code conectado ao WSL: a extensão (do lado Linux) deixa um ponteiro em wsl\<distro>.json com a
+# distro, onde estão as sessões, a raiz do Linux, as credenciais e quais sessões estão vivas.
+# Ponteiro sem atualização há mais de 30 s é de janela que fechou. O catch tira o erro do $Error
+# (ponteiro lido no meio da gravação): senão vira "fechou (N erros)" no diário.
+function PonteirosWsl($agora) {
+    foreach ($arquivoDoPonteiro in @(Get-ChildItem (Join-Path $Pasta 'wsl') -Filter *.json -ErrorAction Ignore)) {
+        $lidoDoPonteiro = $null
+        try { $lidoDoPonteiro = Get-Content -LiteralPath $arquivoDoPonteiro.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $Error.RemoveAt(0) }
+        if ($lidoDoPonteiro -and ($agora - $lidoDoPonteiro.atualizado) -le 30) { $lidoDoPonteiro }
+    }
+}
+
 function Sessoes($agora) {
     $vistas = @{}
     Get-ChildItem $dir -Filter *.json -ErrorAction Ignore | ForEach-Object {
@@ -465,6 +477,26 @@ function Sessoes($agora) {
         if ($titulo) { $s.name = $titulo }
         $chave = if ($s.pid) { $s.pid } else { $s.id }
         if (-not $vistas[$chave] -or $vistas[$chave].updated -lt $s.updated) { $vistas[$chave] = $s }
+    }
+    # sessões do WSL: só as que o ponteiro diz que estão vivas (o pid é do Linux, PidVivo não vale)
+    foreach ($ponteiroWsl in @(PonteirosWsl $agora)) {
+        $raizWsl = ([string]$ponteiroWsl.raiz).TrimEnd('\')
+        foreach ($idWsl in @($ponteiroWsl.vivos)) {
+            $arquivoWsl = Join-Path $ponteiroWsl.sessoes "$idWsl.json"
+            if (-not [IO.File]::Exists($arquivoWsl)) { continue }
+            $sessaoWsl = $null
+            try { $sessaoWsl = Get-Content -LiteralPath $arquivoWsl -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $Error.RemoveAt(0) }
+            if (-not $sessaoWsl) { continue }
+            $sessaoWsl | Add-Member -NotePropertyName id -NotePropertyValue "$idWsl"
+            # transcript de Linux (/home/...) vira caminho de Windows pela raiz da distro
+            if (([string]$sessaoWsl.transcript).StartsWith('/')) { $sessaoWsl.transcript = $raizWsl + ([string]$sessaoWsl.transcript).Replace('/', '\') }
+            if ([IO.File]::Exists($sessaoWsl.transcript)) {
+                $tituloWsl = Titulo $sessaoWsl.transcript
+                if ($tituloWsl) { $sessaoWsl.name = $tituloWsl }
+            }
+            $chaveWsl = "wsl:$($ponteiroWsl.distro):$(if ($sessaoWsl.pid) { $sessaoWsl.pid } else { $idWsl })"
+            if (-not $vistas[$chaveWsl] -or $vistas[$chaveWsl].updated -lt $sessaoWsl.updated) { $vistas[$chaveWsl] = $sessaoWsl }
+        }
     }
     $vistas.Values | ForEach-Object { $_ | Add-Member -NotePropertyName situacao -NotePropertyValue (Situacao $_) -PassThru } |
         Sort-Object updated -Descending
@@ -686,7 +718,15 @@ function BuscarUso {
             $uso.http = [Net.Http.HttpClient]::new()
             $uso.http.Timeout = [TimeSpan]::FromSeconds(5)
         }
-        $token = (Get-Content $cred -Raw | ConvertFrom-Json).claudeAiOauth.accessToken
+        $credenciaisDaConta = $cred
+        if (-not [IO.File]::Exists($cred)) {
+            # só usa o Claude no WSL: as credenciais do primeiro ponteiro WSL fresco
+            $agoraDoUso = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000
+            foreach ($ponteiroDoUso in @(PonteirosWsl $agoraDoUso)) {
+                if ($ponteiroDoUso.credenciais -and [IO.File]::Exists($ponteiroDoUso.credenciais)) { $credenciaisDaConta = $ponteiroDoUso.credenciais; break }
+            }
+        }
+        $token = (Get-Content $credenciaisDaConta -Raw | ConvertFrom-Json).claudeAiOauth.accessToken
         $pergunta = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $uso.url)
         $pergunta.Headers.Authorization = [Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $token)
         [void]$pergunta.Headers.TryAddWithoutValidation('anthropic-beta', 'oauth-2025-04-20')
@@ -1244,6 +1284,10 @@ function AcharNode {
     $noPath = Get-Command node.exe -ErrorAction Ignore | Select-Object -First 1
     if ($noPath) { return @($noPath.Source, $false) }
     if ($env:CLAUDE_MONITOR_NODE -and [IO.File]::Exists($env:CLAUDE_MONITOR_NODE)) { return @($env:CLAUDE_MONITOR_NODE, $true) }
+    # aberta pelo WSL (sem CLAUDE_MONITOR_NODE) ou pelo atalho: o VS Code nos lugares de sempre
+    foreach ($lugarDoCode in "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe", "$env:ProgramFiles\Microsoft VS Code\Code.exe", "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe") {
+        if ([IO.File]::Exists($lugarDoCode)) { return @($lugarDoCode, $true) }
+    }
     $null
 }
 # Motor.cs compilado 1x e guardado (o Add-Type leva ~1 s); o nome leva o hash do .cs,

@@ -67,20 +67,22 @@ let processos;  // [{ tipo, cmd, args }]
 let semFerramentasApple = false;
 let semGtk = false;
 let semNode = false;
+let respostaExec = null;  // (cmd, args, opcoes) => stdout falso, ou undefined pra seguir o padrão
 const spawnReal = cp.spawn, execFileReal = cp.execFile;
 cp.spawn = (cmd, args, opcoes) => {
-    processos.push({ tipo: "spawn", cmd, args, env: opcoes && opcoes.env });
+    processos.push({ tipo: "spawn", cmd, args, env: opcoes && opcoes.env, cwd: opcoes && opcoes.cwd });
     return { unref() {} };
 };
 cp.execFile = (cmd, args, opcoes, cb) => {
     if (typeof opcoes === "function") cb = opcoes;
-    processos.push({ tipo: "execFile", cmd, args });
+    processos.push({ tipo: "execFile", cmd, args, cwd: typeof opcoes === "object" ? opcoes.cwd : undefined });
+    const falsa = respostaExec && respostaExec(cmd, args);
     let erro = null;
     if (cmd === "xcode-select" && args[0] === "-p" && semFerramentasApple) erro = new Error("sem CLT");
     if (cmd === "python3" && semGtk) erro = new Error("sem gi");
     if ((cmd === "where" || cmd === "which") && semNode) erro = new Error("não achou");
     if (cmd === "xcrun") fs.writeFileSync(args[args.indexOf("-o") + 1], "binário");  // "compila"
-    setImmediate(() => cb?.(erro, erro ? "" : "/Library/Developer/CommandLineTools\n", ""));
+    setImmediate(() => cb?.(erro, erro ? "" : (falsa ?? "/Library/Developer/CommandLineTools\n"), ""));
     return {};
 };
 
@@ -93,6 +95,7 @@ global.fetch = async () => {
     return { ok: true, json: async () => ({ tag_name: publicada }) };
 };
 
+const BS = String.fromCharCode(92);  // barra invertida
 const plataformaReal = process.platform;
 let ativa;  // { ext, contexto }
 let modLoad = Module._load;
@@ -124,10 +127,13 @@ async function ativar({ plataforma = "win32", config = {}, casa, versao = manife
     if (hooks) {
         // hooks já instalados: sem a pergunta "Instalar?"
         fs.mkdirSync(path.join(casa, ".claude"), { recursive: true });
-        const cmd = (a) => `node "${path.join(casa, ".claude-monitor", "hook.js").split(path.sep).join("/")}" ${a}`;
+        const arq = (n) => path.join(casa, ".claude-monitor", n).split(path.sep).join("/");
+        const cmd = (a) => `node "${arq("hook.js")}" ${a}`;
+        const cmdSemNode = (a) => `sh "${arq("sem-node.sh")}" ${a}`;
+        // hooks: "antigos" = instalados por uma versão sem o plano B (só o comando node)
         fs.writeFileSync(path.join(casa, ".claude", "settings.json"), JSON.stringify({
             hooks: Object.fromEntries([["UserPromptSubmit", "working"], ["Stop", "waiting"], ["Notification", "notification"], ["SessionEnd", "end"]]
-                .map(([e, a]) => [e, [{ hooks: [{ type: "command", command: cmd(a) }] }]])),
+                .map(([e, a]) => [e, [{ hooks: [{ type: "command", command: cmd(a) }, ...(hooks === "antigos" ? [] : [{ type: "command", command: cmdSemNode(a) }])] }]])),
         }));
     }
     processos = [];
@@ -150,6 +156,7 @@ async function ativar({ plataforma = "win32", config = {}, casa, versao = manife
 function desativar() {
     if (!ativa) return;
     for (const d of ativa.contexto.subscriptions) d.dispose?.();
+    ativa.ext.deactivate?.();
     ativa = null;
     Module._load = modLoad;
     Object.defineProperty(process, "platform", { value: plataformaReal });
@@ -234,18 +241,97 @@ test("Linux sem GTK no Python: explica o apt install, sem abrir nada", async () 
     }
 });
 
-test("Linux no VS Code remoto (WSL, SSH, contêiner): nem abre a janelinha nem pede o GTK", async () => {
-    const { pasta } = await ativar({ plataforma: "linux", remoto: "wsl" });
+test("Linux no VS Code remoto (SSH, contêiner): nem abre a janelinha nem pede o GTK", async () => {
+    const { pasta } = await ativar({ plataforma: "linux", remoto: "ssh-remote" });
     assert.strictEqual(spawns().length, 0, "abriu a janelinha do lado remoto");
-    assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), /não abri a janelinha: VS Code remoto \(wsl\)/);
+    assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), /não abri a janelinha: VS Code remoto \(ssh-remote\)/);
     desativar();
     semGtk = true;  // o lado remoto costuma nem ter o GTK: mesmo assim, calada
     try {
-        const { r } = await ativar({ plataforma: "linux", remoto: "ssh-remote" });
+        const { r } = await ativar({ plataforma: "linux", remoto: "dev-container" });
         assert.ok(!r.mensagens.some((m) => m.texto.includes("GTK")), JSON.stringify(r.mensagens));
         assert.strictEqual(spawns().length, 0);
     } finally {
         semGtk = false;
+    }
+});
+
+/** WSL de mentira: cmd.exe, wslpath -u e wslpath -w respondem como o Windows responderia. */
+function comWsl(fn) {
+    return async () => {
+        const winDir = path.join(pastaTemp("cm-win-"), ".claude-monitor");  // a "pasta do Windows" (vista de /mnt/c)
+        const unc = (resto) => `${BS}${BS}wsl.localhost${BS}Ubuntu${resto}`;
+        respostaExec = (cmd, args) => {
+            if (cmd === "cmd.exe") return `C:${BS}Users${BS}Fulano\r\n`;
+            if (cmd === "wslpath" && args[0] === "-u") return `${path.dirname(winDir)}\n`;  // a pasta do usuário, vista do Linux
+            if (cmd === "wslpath" && args[0] === "-w") {
+                if (args[1] === "/") return unc(BS) + "\n";
+                const resto = args[1].endsWith("sessions") ? `.claude-monitor${BS}sessions` : `.claude${BS}.credentials.json`;
+                return unc(`${BS}home${BS}fulano${BS}${resto}`) + "\n";
+            }
+        };
+        process.env.WSL_DISTRO_NAME = "Ubuntu";
+        try {
+            await fn(winDir);
+        } finally {
+            respostaExec = null;
+            delete process.env.WSL_DISTRO_NAME;
+        }
+    };
+}
+
+test("Linux no VS Code do WSL: abre a janelinha do WINDOWS pelo cmd.exe, com ponteiro pras sessões", comWsl(async (winDir) => {
+    const { casa, pasta, r } = await ativar({ plataforma: "linux", remoto: "wsl" });
+    await noDiario(pasta, /mandou abrir a janelinha do Windows/);  // a cópia pelo /mnt/c leva um tempo
+    // a janelinha do Windows foi copiada pra pasta do Windows (via /mnt/c), com a marca da versão
+    for (const f of ["overlay.ps1", "minecraft.js", "motor/motor.js", "motor/Motor.cs"]) assert.ok(fs.existsSync(path.join(winDir, f)), f);
+    assert.ok(!fs.existsSync(path.join(winDir, "overlay-linux.py")), "copiou a janelinha do Linux pro Windows");
+    assert.strictEqual(fs.readFileSync(path.join(winDir, "versao-janelinha"), "utf8"), manifesto.version);
+    // o ponteiro: onde estão as sessões do WSL, vistas do Windows
+    const ponteiro = path.join(winDir, "wsl", "Ubuntu.json");
+    const p = JSON.parse(fs.readFileSync(ponteiro, "utf8"));
+    assert.strictEqual(p.distro, "Ubuntu");
+    const base = `${BS}${BS}wsl.localhost${BS}Ubuntu${BS}`;
+    assert.strictEqual(p.sessoes, `${base}home${BS}fulano${BS}.claude-monitor${BS}sessions`);
+    assert.strictEqual(p.raiz, base);
+    assert.strictEqual(p.credenciais, `${base}home${BS}fulano${BS}.claude${BS}.credentials.json`);
+    assert.deepStrictEqual(p.vivos, []);
+    // abriu pelo cmd.exe de lá, com o -File no caminho do Windows e sem o node do Linux
+    const [s] = spawns();
+    assert.strictEqual(s.cmd, "cmd.exe");
+    assert.strictEqual(s.cwd, "/mnt/c");
+    assert.ok(s.args.includes("powershell.exe") && s.args.includes("Bypass"), s.args.join(" "));
+    assert.ok(!s.args.includes('""'), "o interop do WSL escapa as aspas do título com \\, que o cmd não entende");
+    assert.strictEqual(s.args.at(-2), "-File");
+    assert.strictEqual(s.args.at(-1), `C:${BS}Users${BS}Fulano${BS}.claude-monitor${BS}overlay.ps1`);
+    assert.ok(!s.env || !s.env.CLAUDE_MONITOR_NODE, "passou o node do Linux pro Windows");
+    assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), /mandou abrir a janelinha do Windows \(WSL Ubuntu\)/);
+    // depois de um ciclo, o ponteiro lista as sessões vivas
+    fs.writeFileSync(path.join(pasta, "sessions", "abc-123.json"), JSON.stringify({
+        name: "Sessão do WSL", cwd: "/home/fulano/proj", state: "working", pid: process.pid, since: Date.now() / 1000, updated: Date.now() / 1000,
+    }));
+    await r.comandos.get("claudeMonitor.refresh")();
+    const depois = JSON.parse(fs.readFileSync(ponteiro, "utf8"));
+    assert.deepStrictEqual(depois.vivos, ["abc-123"]);
+    assert.ok(depois.atualizado >= p.atualizado);
+    // fechar o VS Code apaga o ponteiro
+    ativa.ext.deactivate();
+    assert.ok(!fs.existsSync(ponteiro), "o ponteiro ficou");
+    assert.ok(casa);
+}));
+
+test("WSL sem o cmd.exe do Windows (interop desligado): anota no diário, sem janelinha nem popup", async () => {
+    respostaExec = (cmd) => (cmd === "cmd.exe" ? "%USERPROFILE%\n" : undefined);
+    process.env.WSL_DISTRO_NAME = "Ubuntu";
+    try {
+        const { pasta, r } = await ativar({ plataforma: "linux", remoto: "wsl" });
+        await noDiario(pasta, /WSL sem o cmd/);
+        assert.strictEqual(spawns().length, 0);
+        assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), /WSL sem o cmd\.exe do Windows/);
+        assert.ok(!r.mensagens.some((m) => /janelinha|cmd\.exe/.test(m.texto)), JSON.stringify(r.mensagens));
+    } finally {
+        respostaExec = null;
+        delete process.env.WSL_DISTRO_NAME;
     }
 });
 
@@ -379,11 +465,27 @@ test("sem hooks: pergunta se instala; com hooks: não pergunta", async () => {
     assert.ok(!com.r.mensagens.some((m) => m.texto.includes("instalar os hooks")));
 });
 
-test("sem Node.js: avisa (os hooks rodam node)", async () => {
+test("hooks de uma versão sem o plano B: atualiza calado (sem perguntar de novo) e anota no diário", async () => {
+    const { casa, pasta, r } = await ativar({ hooks: "antigos" });
+    assert.ok(!r.mensagens.some((m) => m.texto.includes("instalar os hooks")), JSON.stringify(r.mensagens));
+    const stop = JSON.parse(fs.readFileSync(path.join(casa, ".claude", "settings.json"), "utf8")).hooks.Stop;
+    assert.strictEqual(stop.length, 1);
+    assert.deepStrictEqual(stop[0].hooks.map((h) => h.command.split(" ")[0]), ["node", "sh"]);
+    assert.match(fs.readFileSync(path.join(pasta, "janelinha.log"), "utf8"), /atualizei os hooks \(plano B sem node no PATH\)/);
+});
+
+test("a extensão grava o node-reserva (o node do VS Code, com barra normal) e leva o sem-node.sh", async () => {
+    const { pasta } = await ativar();
+    assert.strictEqual(fs.readFileSync(path.join(pasta, "node-reserva"), "utf8"), process.execPath.split(path.sep).join("/"));
+    assert.ok(fs.existsSync(path.join(pasta, "sem-node.sh")));
+});
+
+test("sem Node.js no PATH: sem alarme (o plano B cobre), só uma linha no diário", async () => {
     semNode = true;
     try {
-        const { r } = await ativar();
-        assert.ok(r.mensagens.some((m) => m.texto.includes("Node.js")), JSON.stringify(r.mensagens));
+        const { r, pasta } = await ativar();
+        assert.ok(!r.mensagens.some((m) => m.texto.includes("Node.js")), JSON.stringify(r.mensagens));
+        await noDiario(pasta, /sem node no PATH: os hooks rodam no node do VS Code \(plano B\)/);
     } finally {
         semNode = false;
     }

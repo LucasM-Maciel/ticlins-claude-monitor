@@ -255,6 +255,38 @@ Teste "bolinha verde pulsa e a vermelha não (cenário 'xp-rodando', fase 0 e 0.
 Teste "barra vermelha quando o 5h passa de 95% (cenário 'andando')" {
     Verdade ([Pixels]::Contar("$Saida\windows-andando.png", 239, 68, 68, 25) -gt 10) 'barra não ficou vermelha'
 }
+# VS Code no WSL: o ponteiro wsl\<distro>.json aponta pras sessões do Linux (aqui, outra pasta
+# temporária). Só aparece quem está em "vivos"; ponteiro com mais de 30 s de idade é de janela fechada.
+Teste 'sessões do WSL: só as vivas do ponteiro fresco, com o título do transcript pela raiz da distro; ponteiro velho some' {
+    $pasta = "$tmp\cenario wsl ção"
+    $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, 'vazio', "$PID")
+    Verdade ($r.codigo -eq 0) $r.saida
+    $linux = "$tmp\linux fake"
+    New-Item -ItemType Directory -Force "$linux\home\fulano", "$linux\sessions", "$linux\velho\sessions", "$pasta\wsl" | Out-Null
+    $agoraDoTeste = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000
+    function SessaoWsl($arquivo, $nome, $transcript) {
+        $json = [ordered]@{ name = $nome; cwd = '/home/fulano/proj'; state = 'waiting'; pid = 4242; since = $agoraDoTeste; updated = $agoraDoTeste; entrypoint = 'claude-vscode' }
+        if ($transcript) { $json.transcript = $transcript }
+        [IO.File]::WriteAllText($arquivo, ($json | ConvertTo-Json), $utf8)
+    }
+    [IO.File]::WriteAllText("$linux\home\fulano\t1.jsonl", '{"type":"ai-title","aiTitle":"Título vindo do WSL"}' + "`n", $utf8)
+    SessaoWsl "$linux\sessions\vivo.json" 'nome do hook' '/home/fulano/t1.jsonl'
+    SessaoWsl "$linux\sessions\fora.json" 'Sessão fora dos vivos' $null
+    SessaoWsl "$linux\velho\sessions\velha.json" 'Sessão de ponteiro velho' $null
+    $fresco = [ordered]@{ distro = 'Ubuntu'; sessoes = "$linux\sessions"; raiz = "$linux\"; credenciais = "$linux\.credentials.json"; vivos = @('vivo'); atualizado = $agoraDoTeste }
+    $velho = [ordered]@{ distro = 'Debian'; sessoes = "$linux\velho\sessions"; raiz = "$linux\"; credenciais = ''; vivos = @('velha'); atualizado = $agoraDoTeste - 3600 }
+    [IO.File]::WriteAllText("$pasta\wsl\Ubuntu.json", ($fresco | ConvertTo-Json), $utf8)
+    [IO.File]::WriteAllText("$pasta\wsl\Debian.json", ($velho | ConvertTo-Json), $utf8)
+    $foto = "$Saida\windows-wsl.png"
+    Remove-Item "$foto*" -ErrorAction SilentlyContinue
+    $r = Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', $overlay, '-Foto', $foto, '-Pasta', $pasta) 60
+    Verdade ($r.codigo -eq 0 -and (Test-Path "$foto.txt")) "a janelinha não terminou direito: $($r.saida)"
+    $mostrou = Ler "$foto.txt"
+    Verdade ($mostrou -match 'sessao: Título vindo do WSL \|') "a sessão viva do WSL não apareceu com o título do transcript:`n$mostrou"
+    Verdade ($mostrou -notmatch 'fora dos vivos') "apareceu sessão que o ponteiro não lista em vivos:`n$mostrou"
+    Verdade ($mostrou -notmatch 'ponteiro velho') "apareceu sessão de ponteiro com 1 h de idade:`n$mostrou"
+    Verdade (@([regex]::Matches($mostrou, '(?m)^sessao:')).Count -eq 1) "devia ter só 1 sessão:`n$mostrou"
+}
 # O DragMove roda os timers do Clawd dentro do clique e o PowerShell acha variável pela
 # pilha: um $alvo no clique trocou a pedra da cena e derrubou a janelinha (29/09, 0.5.2)
 Teste 'nomes do clique: nenhuma variável do clique tem o nome de uma do script' {
@@ -372,7 +404,7 @@ Teste 'instala: extensão no VS Code e no Cursor, arquivos, versão e hooks' {
         $log = Get-Content "$bin\$editor.log" -Raw
         Verdade ($log -match '--install-extension' -and $log -match [regex]::Escape("claude-monitor-$versao.vsix") -and $log -match '--force') "$editor recebeu: $log"
     }
-    foreach ($f in 'hook.js', 'processes.js', 'overlay.ps1', 'minecraft.js', 'vorbis.min.js', 'sons-padrao\terminou.wav', 'sons-padrao\esperando.wav', 'sons-padrao\tudo.wav', 'sons-dragonball\tudo.wav', 'motor\motor.js', 'motor\Motor.cs', 'motor\raster.js') { Verdade (Test-Path "$casa\.claude-monitor\$f") "falta $f" }
+    foreach ($f in 'hook.js', 'processes.js', 'sem-node.sh', 'overlay.ps1', 'minecraft.js', 'vorbis.min.js', 'sons-padrao\terminou.wav', 'sons-padrao\esperando.wav', 'sons-padrao\tudo.wav', 'sons-dragonball\tudo.wav', 'motor\motor.js', 'motor\Motor.cs', 'motor\raster.js') { Verdade (Test-Path "$casa\.claude-monitor\$f") "falta $f" }
     # instalação nova começa no tema Padrão
     Igual '{"tema":"padrao"}' ([IO.File]::ReadAllText("$casa\.claude-monitor\config.json")) 'config.json da instalação nova' 
     Verdade (Test-Path "$casa\.claude-monitor\sons\levelup.wav") "não baixou os sons do Minecraft: $($r.saida)"
@@ -380,7 +412,7 @@ Teste 'instala: extensão no VS Code e no Cursor, arquivos, versão e hooks' {
     Igual $versao ([IO.File]::ReadAllText("$casa\.claude-monitor\versao-janelinha")) 'versão marcada'
     Verdade ((Get-Content "$casa\.claude-monitor\janelinha.log" -Raw) -match "\[instalador \d+\] copiou a janelinha $([regex]::Escape($versao))") 'não anotou no diário da janelinha'
     $hooks = (Get-Content "$casa\.claude\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json).hooks
-    foreach ($e in 'UserPromptSubmit', 'Stop', 'Notification', 'SessionEnd') { Verdade (@($hooks.$e).Count -eq 1) "hook $e" }
+    foreach ($e in 'UserPromptSubmit', 'Stop', 'Notification', 'SessionEnd') { Verdade (@($hooks.$e).Count -eq 1) "hook $e"; Verdade (@($hooks.$e[0].hooks).Count -eq 2) "hook $e sem os 2 comandos (node e sem-node.sh)" }
 }
 Teste 'rodar o instalador de novo não duplica os hooks' {
     $r = ComAmbiente $ambiente { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $instalador, '-SemAtalho', '-SemAbrir') 120 }
