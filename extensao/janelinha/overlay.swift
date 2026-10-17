@@ -69,7 +69,11 @@ func anotar(_ texto: String) {
 // cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
 let temas: [(id: String, nome: String)] = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars"), ("akatsuki", "Akatsuki")]
 let arquivoConfig = pasta + "/config.json"
-var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft", uso: "claude")
+// mostrar: "abas" (o padrão), "agentes" (sessões automáticas: claude -p, codex exec) ou "tudo"
+var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft", uso: "claude", mostrar: "abas")
+// a lista mostra 10 sessões por vez; a página só vive na memória (começa na 1, volta pra última que existe)
+let sessoesPorPagina = 10
+var paginaDaLista = 1
 func lerJSON(_ caminho: String) -> [String: Any]? {
     guard let dados = FileManager.default.contents(atPath: caminho) else { return nil }
     return (try? JSONSerialization.jsonObject(with: dados)) as? [String: Any]
@@ -80,6 +84,7 @@ if let o = lerJSON(arquivoConfig) {
     if let v = (o["volume"] as? NSNumber)?.doubleValue { config.volume = min(1, max(0, v)) }
     if let v = o["tema"] as? String, temas.contains(where: { $0.id == v }) { config.tema = v }
     if let v = o["uso"] as? String, ["claude", "codex", "ambos"].contains(v) { config.uso = v }
+    if let v = o["mostrar"] as? String, ["abas", "agentes", "tudo"].contains(v) { config.mostrar = v }
 }
 func salvarConfig() {
     // por cima do que já tinha: chave que esta versão não conhece continua lá
@@ -89,6 +94,7 @@ func salvarConfig() {
     o["volume"] = config.volume
     o["tema"] = config.tema
     o["uso"] = config.uso
+    o["mostrar"] = config.mostrar
     if let d = try? JSONSerialization.data(withJSONObject: o) { try? d.write(to: URL(fileURLWithPath: arquivoConfig)) }
 }
 func nomeDoTema() -> String { temas.first(where: { $0.id == config.tema })?.nome ?? config.tema }
@@ -217,6 +223,7 @@ struct Sessao {
     var situacao = ""
     var codex = false      // sessão do Codex (sem hook, sem transcript do Claude)
     var pergunta = false   // o Codex terminou com uma pergunta
+    var automatica = false // não é uma aba (claude -p, codex exec): o hook e a extensão decidem e gravam no arquivo
 }
 
 func numero(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
@@ -240,7 +247,7 @@ func lerSessoes(agora: Double) -> [Sessao] {
         let s = Sessao(id: id, nome: (ehCodex ? nil : titulo(transcript)) ?? (d["name"] as? String ?? "sessão"),
                        estado: d["state"] as? String ?? "waiting", since: numero(d["since"]) ?? updated,
                        updated: updated, pid: pid, transcript: transcript,
-                       codex: ehCodex, pergunta: d["pergunta"] as? Bool == true)
+                       codex: ehCodex, pergunta: d["pergunta"] as? Bool == true, automatica: d["automatica"] as? Bool == true)
         let chave = pid.map { "pid:\($0)" } ?? "id:\(id)"
         if let v = vistas[chave], v.updated >= s.updated { continue }
         vistas[chave] = s
@@ -250,6 +257,8 @@ func lerSessoes(agora: Double) -> [Sessao] {
         s.situacao = situacao(s)
         return s
     }.sorted { $0.updated > $1.updated }
+    // Mostrar: abas (as não automáticas), agentes (as automáticas) ou tudo
+    .filter { config.mostrar == "tudo" || $0.automatica == (config.mostrar == "agentes") }
 }
 
 // Título da aba: o do /rename ("custom-title") ganha do automático ("ai-title").
@@ -534,6 +543,7 @@ func versaoNova() -> String? {
 let zip = "https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip"
 func clicar(_ alvo: String) {
     if alvo.hasPrefix("sessao:") { abrirSessao(String(alvo.dropFirst(7))); return }
+    if alvo.hasPrefix("pagina:") { paginaDaLista += Int(alvo.dropFirst(7)) ?? 0; atualizar(); return }
     guard alvo == "baixar" else { return }
     if arquivoFoto != nil { cliqueDaVez = zip; return }
     if let u = URL(string: zip) { NSWorkspace.shared.open(u) }
@@ -556,6 +566,15 @@ let L: CGFloat = 380, A: CGFloat = 440
 let M: CGFloat = 34                      // espaço em volta do cartão, por onde o Clawd anda
 let fonte = NSFont.systemFont(ofSize: 12)
 
+// o nome do agente dentro da pílula: letra pequena e escura, igual em todo tema
+func escreverNaPilula(_ s: String, _ r: NSRect) {
+    let p = NSMutableParagraphStyle()
+    p.alignment = .center
+    let f = NSFont.systemFont(ofSize: 10, weight: .semibold)
+    let h = ceil(f.ascender - f.descender)
+    (s as NSString).draw(in: NSRect(x: r.minX, y: r.minY + (r.height - h) / 2, width: r.width, height: h + 1),
+                         withAttributes: [.font: f, .foregroundColor: hex("#111827"), .paragraphStyle: p])
+}
 func escrever(_ s: String, _ c: NSColor, _ r: NSRect, _ alinhamento: NSTextAlignment = .left) {
     let p = NSMutableParagraphStyle()
     p.lineBreakMode = .byTruncatingTail
@@ -721,6 +740,44 @@ final class Preferencias: NSObject {
         item.view = caixa
         return item
     }
+    // "Mostrar ◀ Abas ▶": quais sessões aparecem (abas, agentes ou tudo)
+    static let modosDeMostrar: [(id: String, nome: String)] = [("abas", "Abas"), ("agentes", "Agentes"), ("tudo", "Tudo")]
+    func nomeDoModoMostrar() -> String { Preferencias.modosDeMostrar.first(where: { $0.id == config.mostrar })?.nome ?? config.mostrar }
+    @objc func trocarMostrar(_ b: NSButton) {
+        let modos = Preferencias.modosDeMostrar
+        guard let i = modos.firstIndex(where: { $0.id == config.mostrar }) else { return }
+        config.mostrar = modos[(i + b.tag + modos.count) % modos.count].id
+        (b.superview?.viewWithTag(2) as? NSTextField)?.stringValue = nomeDoModoMostrar()
+        paginaDaLista = 1
+        salvarConfig()
+        anotar("mostrar: \(config.mostrar)")
+        atualizar()
+    }
+    func itemDoMostrar() -> NSMenuItem {
+        let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
+        let rotulo = NSTextField(labelWithString: "Mostrar")
+        rotulo.font = NSFont.menuFont(ofSize: 0)
+        rotulo.frame = NSRect(x: 20, y: 4, width: 72, height: 18)
+        caixa.addSubview(rotulo)
+        let nome = NSTextField(labelWithString: nomeDoModoMostrar())
+        nome.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        nome.alignment = .center
+        nome.tag = 2
+        nome.frame = NSRect(x: 112, y: 4, width: 86, height: 18)
+        caixa.addSubview(nome)
+        let setas: [(String, Int, CGFloat)] = [("◀", -1, 92), ("▶", 1, 198)]
+        for (simbolo, direcao, x) in setas {
+            let b = NSButton(title: simbolo, target: self, action: #selector(trocarMostrar(_:)))
+            b.isBordered = false
+            b.font = NSFont.menuFont(ofSize: 11)
+            b.tag = direcao
+            b.frame = NSRect(x: x, y: 4, width: 20, height: 18)
+            caixa.addSubview(b)
+        }
+        let item = NSMenuItem()
+        item.view = caixa
+        return item
+    }
     // "Opacidade ——o—— 90%": item de menu com um slider dentro
     func itemComSlider(_ nome: String, _ minimo: Double, _ valor: Double, _ acao: Selector) -> NSMenuItem {
         let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
@@ -753,18 +810,19 @@ struct LinhaDoCartao {
     var nome: String
     var tempo: String
     var rotulo: String  // o tooltip
-    var codex = false   // sessão do Codex: ganha a marquinha "codex" ao lado do nome
+    var codex = false   // sessão do Codex: a pílula do nome é "codex" (verde); senão "claude" (laranja)
 }
 
 final class Cartao: NSView {
     var linhas: [LinhaDoCartao] = []
     var dicas: [NSString] = []  // o tooltip não segura o dono
     var aviso: String?  // saiu versão nova: a linha roxa embaixo
+    var pagina = 1, paginas = 1  // a lista mostra 10 por vez; com mais de uma página, embaixo vem a linha "◀  1/3  ▶"
     // onde fica cada coisa (coordenadas do cartão, y pra baixo); refeito no arrumar
     var ap = Aparencia()
     var x0: CGFloat = 10, y0: CGFloat = 6, largura: CGFloat = 222  // começo e largura do conteúdo
-    var alturaLinha: CGFloat = 20, alturaUso: CGFloat = 20
-    var yUso: CGFloat = 0, yAviso: CGFloat = 0
+    var alturaLinha: CGFloat = 20, alturaUso: CGFloat = 20, alturaPaginas: CGFloat = 16
+    var yPaginas: CGFloat = 0, yUso: CGFloat = 0, yAviso: CGFloat = 0
     override var isFlipped: Bool { true }
 
     // preso no canto de baixo à direita, cresce pra cima
@@ -777,7 +835,8 @@ final class Cartao: NSView {
         // a do usage: com enfeites só tem os lugares do motor; sem, o texto daqui (16)
         alturaUso = max(ap.enfeites ? CGFloat(0) : CGFloat(16), ap.letra, ap.barra.height) + 4
         largura = max(186 + ap.colTempo, ap.colRotulo + ap.barra.width + ap.colPct + ap.colFalta)
-        yUso = y0 + (linhas.isEmpty ? 20 : CGFloat(linhas.count) * alturaLinha) + 10
+        yPaginas = y0 + (linhas.isEmpty ? 20 : CGFloat(linhas.count) * alturaLinha)
+        yUso = yPaginas + (paginas > 1 ? alturaPaginas : 0) + 10
         let linhasUso = linhasDoUso()
         let soTexto = soUmTexto(linhasUso)
         let alturaDoUso: CGFloat = soTexto ? 20 : CGFloat(linhasUso.count) * alturaUso
@@ -826,14 +885,17 @@ final class Cartao: NSView {
                 NSBezierPath(ovalIn: NSRect(x: x0, y: y + (alturaLinha - 8) / 2, width: 8, height: 8)).fill()
                 escrever(l.tempo, cor, NSRect(x: x0 + 186, y: y, width: ap.colTempo, height: alturaLinha), .right)
             }
-            if l.codex {
-                // a marquinha "codex" ao lado do nome, na cor do tema (a mesma do usage normal)
-                escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 130, height: alturaLinha))
-                escrever("codex", hex((coresDoUso[config.tema] ?? ["#D1D5DB"])[0]), NSRect(x: x0 + 146, y: y, width: 40, height: alturaLinha))
-            } else {
-                escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 170, height: alturaLinha))
-            }
+            // toda linha tem a pílula do agente (claude laranja, codex verde), então o nome tem sempre 130
+            escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 130, height: alturaLinha))
+            let caixaDaPilula = NSRect(x: x0 + 145, y: y + (alturaLinha - 15) / 2, width: 40, height: 15)
+            hex(l.codex ? "#10A37F" : "#D97757").setFill()
+            NSBezierPath(roundedRect: caixaDaPilula, xRadius: 7, yRadius: 7).fill()
+            escreverNaPilula(l.codex ? "codex" : "claude", caixaDaPilula)
             y += alturaLinha
+        }
+        if paginas > 1 {
+            escrever("◀  \(pagina)/\(paginas)  ▶", hex("#9CA3AF"), NSRect(x: x0, y: y, width: largura, height: alturaPaginas), .center)
+            y += alturaPaginas
         }
         y += 5
         hex("#33FFFFFF").setFill()
@@ -915,10 +977,12 @@ final class Cartao: NSView {
     }
 
     // a linha nesse ponto (coordenadas do cartão: sessões a partir de y0, o aviso em
-    // yAviso): "sessao:<id>" ou "baixar", como o Tag do Windows
+    // yAviso, a linha das páginas em yPaginas): "sessao:<id>", "pagina:-1"/"pagina:+1" (metade
+    // esquerda/direita) ou "baixar", como o Tag do Windows
     func alvoNoPonto(_ p: NSPoint) -> String? {
         guard bounds.contains(p), p.y >= y0 else { return nil }
         if aviso != nil, p.y >= yAviso, p.y < yAviso + 20 { return "baixar" }
+        if paginas > 1, p.y >= yPaginas, p.y < yPaginas + alturaPaginas { return p.x < x0 + largura / 2 ? "pagina:-1" : "pagina:+1" }
         let i = Int((p.y - y0) / alturaLinha)
         return i < linhas.count ? "sessao:" + linhas[i].id : nil
     }
@@ -949,6 +1013,7 @@ final class Cartao: NSView {
         let menu = NSMenu()
         menu.addItem(preferencias.itemDosTemas())
         menu.addItem(preferencias.itemDoUso())
+        menu.addItem(preferencias.itemDoMostrar())
         let clawd = NSMenuItem(title: "Clawd", action: #selector(Preferencias.alternarClawd(_:)), keyEquivalent: "")
         clawd.target = preferencias
         clawd.state = config.clawd ? .on : .off
@@ -1808,7 +1873,13 @@ func atualizar() {
     let agora = Date().timeIntervalSince1970
     let sessoes = lerSessoes(agora: agora)
     avisar(sessoes)
-    cartao.linhas = sessoes.map { s -> LinhaDoCartao in
+    // fatia a lista uma vez só: o cartão e o motor usam as mesmas linhas
+    let totalDePaginas = max(1, (sessoes.count + sessoesPorPagina - 1) / sessoesPorPagina)
+    paginaDaLista = min(totalDePaginas, max(1, paginaDaLista))
+    let daPagina = Array(sessoes.dropFirst((paginaDaLista - 1) * sessoesPorPagina).prefix(sessoesPorPagina))
+    cartao.pagina = paginaDaLista
+    cartao.paginas = totalDePaginas
+    cartao.linhas = daPagina.map { s -> LinhaDoCartao in
         let e = estados[s.situacao] ?? (cor: "#9CA3AF", rotulo: s.situacao)
         return LinhaDoCartao(id: s.id, sit: s.situacao, cor: e.cor, nome: s.nome, tempo: tempo((agora - s.since) / 60),
                              rotulo: e.rotulo, codex: s.codex)
@@ -1834,6 +1905,8 @@ func atualizar() {
         let clawd = config.clawd ? palco.modo + (palco.luta.map { " (\($0))" } ?? "") : "desligado"
         let som = somDaVez.flatMap { avisoDaSituacao[$0] }.flatMap { nomeDoSom[config.tema]?[$0] } ?? "nenhum"
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" + ($0.codex ? " | agente=codex" : "") }
+            + (config.mostrar == "abas" ? [] : ["mostrar: \(config.mostrar)"])
+            + (totalDePaginas > 1 ? ["pagina: \(paginaDaLista)/\(totalDePaginas)"] : [])
             + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")"]
             + (config.uso == "claude" ? [] : ["uso: \(config.uso)", "barras: \(barrasComGrupo())"])
             + ["som: \(som)", "som da cena: \(somDaCenaVisto ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",

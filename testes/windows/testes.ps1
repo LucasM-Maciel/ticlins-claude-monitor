@@ -162,7 +162,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
@@ -192,11 +192,11 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
             return
         }
         Verdade ([Pixels]::Contar($foto, 24, 24, 24, 6) -gt 5000) 'cadê o cartão escuro?'
-        Verdade ([Pixels]::Contar($foto, 215, 119, 87, 12) -gt 30) 'cadê o Clawd (laranja)?'
+        Verdade ([Pixels]::Contar($foto, 215, 119, 87, 1) -gt 30) 'cadê o Clawd (laranja)?'
         if ($cenario -eq 'andando') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'não usou a picareta.png' }
         # o diamante tem 11 px e sai suavizado: só 5-7 pixels ficam magenta puro (0 sem o diamante.png)
         elseif ($cenario -eq 'pedra') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 2) 'cadê o diamante (diamante.png) subindo?' }
-        elseif ($cenario -in 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
+        elseif ($cenario -in 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
         else { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -gt 5) 'cadê a ferramenta desenhada (ciano)?' }
         # tema Minecraft com as texturas de mentira do cenarios.js; o Padrão tem elas na pasta e não usa
         if ($cenario -in 'minecraft', 'padrao') {
@@ -222,8 +222,9 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         if ($cenario -eq 'bug') { Verdade ([Pixels]::Contar($foto, 239, 68, 68, 20) -gt 20) 'o bug não ficou vermelho com a espadada' }
         if ($cenario -eq 'atualizar') { Verdade ([Pixels]::Contar($foto, 167, 139, 250, 25) -gt 10) 'cadê o aviso roxo da versão nova?' }
         if ($cenario -eq 'misto') { Verdade ([Pixels]::Contar($foto, 167, 139, 250, 25) -lt 3) 'aviso roxo sem versão nova' }
-        # a marquinha "codex" (3 sessões do Codex) está na cor do usage normal do Padrão (#D1D5DB), que sem barras não aparece em mais nada
-        if ($cenario -eq 'codex') { Verdade ([Pixels]::Contar($foto, 209, 213, 219, 4) -gt 8) 'cadê a marquinha "codex" na lista?' }
+        # a pílula "codex" (verde, 3 sessões do Codex) e a "claude" (laranja, em toda sessão do Claude)
+        if ($cenario -eq 'codex') { Verdade ([Pixels]::Contar($foto, 16, 163, 127, 2) -gt 8) 'cadê a pílula "codex" (verde) na lista?' }
+        if ($cenario -in 'misto', 'codex') { Verdade ([Pixels]::Contar($foto, 217, 119, 87, 1) -gt 8) 'cadê a pílula "claude" (laranja) na lista?' }
         if ($cenario -eq 'uso-codex-sem') { Verdade ([Pixels]::Contar($foto, 209, 213, 219, 4) -lt 3) 'barra de usage de alguém no "Codex: sem uso ainda"' }
         # Uso = Codex: nenhuma barra do Claude (38% no padrão cinza claro / 85% laranja); Uso = os dois: a do Claude volta (laranja a 85%)
         if ($cenario -in 'uso-codex', 'uso-codex-sem') { Verdade ([Pixels]::Contar($foto, 245, 158, 11, 25) -lt 5) 'a barra de 85% do Claude apareceu com Uso = Codex' }

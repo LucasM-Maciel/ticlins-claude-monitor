@@ -20,6 +20,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const sessions_1 = require("./sessions");
+const processes_1 = require("./processes");
 const ABERTA_ATE_SEC = 6 * 60 * 60; // mesma ideia do STALE_AFTER_SEC do sessions.js
 const DIAS_PARA_TRAS = 3; // pastas AAAA/MM/DD varridas
 const LIMITE_PRIMEIRA_LEITURA = 4 * 1024 * 1024; // rollout maior que isso: só o final
@@ -273,6 +274,8 @@ function lerSessoesCodex(agora = Date.now() / 1000) {
             transcript: arquivo,
             entrypoint: e.originator || null,
         };
+        if ((0, processes_1.ehAutomatica)(e.originator, "codex"))
+            sessao.automatica = true;
         if (e.pergunta && e.state === "waiting")
             sessao.pergunta = true;
         const id = `codex-${e.id}`;

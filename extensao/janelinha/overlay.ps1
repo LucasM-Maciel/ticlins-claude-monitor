@@ -114,7 +114,9 @@ $temas = [ordered]@{ padrao = 'Padrão'; minecraft = 'Minecraft'; dragonball = '
 $configArquivo = Join-Path $Pasta 'config.json'
 # Uso (botão direito): quais barras de usage aparecem; o padrão é só as do Claude (nada muda sem pedir)
 $modosDeUso = [ordered]@{ claude = 'Claude'; codex = 'Codex'; ambos = 'Os dois' }
-$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft'; uso = 'claude' }
+# Mostrar (botão direito): abas (o padrão), agentes (sessões automáticas: claude -p, codex exec) ou tudo
+$modosDeMostrar = [ordered]@{ abas = 'Abas'; agentes = 'Agentes'; tudo = 'Tudo' }
+$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft'; uso = 'claude'; mostrar = 'abas' }
 # Exists antes: arquivo que não existe soma no $Error mesmo pego no try (o "fechou (1 erros)" do diário)
 if ([IO.File]::Exists($configArquivo)) {
     try {
@@ -125,6 +127,7 @@ if ([IO.File]::Exists($configArquivo)) {
         if ($null -ne $configLido.volume) { $config.volume = [math]::Min(1.0, [math]::Max(0.0, [double]$configLido.volume)) }
         if ($temas.Contains("$($configLido.tema)")) { $config.tema = "$($configLido.tema)" }
         if ($modosDeUso.Contains("$($configLido.uso)")) { $config.uso = "$($configLido.uso)" }
+        if ($modosDeMostrar.Contains("$($configLido.mostrar)")) { $config.mostrar = "$($configLido.mostrar)" }
     } catch { Anotar "config.json com defeito, fiquei com o padrão: $_" }
 }
 function SalvarConfig {
@@ -413,7 +416,7 @@ function Rotulo($texto, $hex, $largura, $alinhar, $larguraMC) {
     $letreiro = New-Object Windows.Controls.Image
     $letreiro.Source = TextoMC $texto $hex
     $letreiro.Width = [math]::Round($letreiro.Source.PixelWidth * 11 / 9); $letreiro.Height = 11
-    $letreiro.HorizontalAlignment = $(if ($alinhar -eq 'Right') { 'Right' } else { 'Left' })
+    $letreiro.HorizontalAlignment = $(if ($alinhar -eq 'Right') { 'Right' } elseif ($alinhar -eq 'Center') { 'Center' } else { 'Left' })
     $letreiro.UseLayoutRounding = $true
     [Windows.Media.RenderOptions]::SetBitmapScalingMode($letreiro, 'HighQuality')
     $caixa = New-Object Windows.Controls.Border
@@ -504,8 +507,10 @@ function Sessoes($agora) {
             if (-not $vistas[$chaveWsl] -or $vistas[$chaveWsl].updated -lt $sessaoWsl.updated) { $vistas[$chaveWsl] = $sessaoWsl }
         }
     }
+    # Mostrar: o campo `automatica` vem pronto no arquivo (o hook e a extensão decidem; aqui não há regra)
     $vistas.Values | ForEach-Object { $_ | Add-Member -NotePropertyName situacao -NotePropertyValue (Situacao $_) -PassThru } |
-        Sort-Object updated -Descending
+        Sort-Object updated -Descending |
+        Where-Object { $config.mostrar -eq 'tudo' -or ([bool]$_.automatica) -eq ($config.mostrar -eq 'agentes') }
 }
 
 # Título da aba: o do /rename ("custom-title") ganha do automático ("ai-title").
@@ -751,6 +756,48 @@ function BuscarUso {
 # no 1º quadro, e refazer a cada 2 s piscava os nomes (filmado 06/10). A chave de cada
 # painel é o que ele mostra; os lugares são onde ficou cada coisa que o motor desenha.
 $listaFeita = @{ sessoes = $null; uso = $null; aviso = $null; lugaresDasSessoes = @(); lugaresDoUso = @() }
+# a lista mostra 10 sessões por vez; a página só vive na memória (começa na 1, volta pra última que existe)
+$sessoesPorPagina = 10
+$paginaDaLista = @{ atual = 1; total = 1 }
+function MudarPagina($passoDaPagina) {
+    $paginaDaLista.atual += $passoDaPagina
+    Atualizar
+}
+# a pílula do agente ao lado do nome: "claude" laranja, "codex" verde, texto escuro igual em todo tema
+function PilulaDoAgente($nomeDoAgente) {
+    $fundoDaPilula = $(if ($nomeDoAgente -eq 'codex') { '#10A37F' } else { '#D97757' })
+    $textoDaPilula = Rotulo $nomeDoAgente '#111827' 40 'Center' 40
+    if ($textoDaPilula -is [Windows.Controls.TextBlock]) { $textoDaPilula.FontSize = 10; $textoDaPilula.FontWeight = 'SemiBold' }
+    $pilula = New-Object Windows.Controls.Border
+    $pilula.Width = 44; $pilula.Height = 15
+    $pilula.CornerRadius = [Windows.CornerRadius]::new(7)
+    $pilula.Background = Cor $fundoDaPilula
+    $pilula.Margin = [Windows.Thickness]::new(0, 0, 6, 0)
+    $pilula.VerticalAlignment = 'Center'
+    $pilula.Child = $textoDaPilula
+    $pilula
+}
+# a linha "◀  1/3  ▶": clicar na metade da esquerda volta uma página, na da direita avança
+function LinhaDasPaginas {
+    $gradeDasPaginas = New-Object Windows.Controls.Grid
+    $gradeDasPaginas.Width = 222
+    $gradeDasPaginas.Margin = [Windows.Thickness]::new(0, 2, 0, 0)
+    for ($iColunaDaPagina = 0; $iColunaDaPagina -lt 2; $iColunaDaPagina++) { [void]$gradeDasPaginas.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition)) }
+    $ladosDaPagina = @(@("◀  $($paginaDaLista.atual)/$($paginaDaLista.total)", 'pagina:-1', 'Right'), @('  ▶', 'pagina:+1', 'Left'))
+    for ($iLadoDaPagina = 0; $iLadoDaPagina -lt 2; $iLadoDaPagina++) {
+        $textoDoLado = Texto $ladosDaPagina[$iLadoDaPagina][0] '#9CA3AF'
+        $textoDoLado.FontSize = 10
+        $textoDoLado.HorizontalAlignment = $ladosDaPagina[$iLadoDaPagina][2]
+        $caixaDoLado = New-Object Windows.Controls.Border
+        $caixaDoLado.Background = [Windows.Media.Brushes]::Transparent
+        $caixaDoLado.Tag = $ladosDaPagina[$iLadoDaPagina][1]
+        $caixaDoLado.Cursor = [Windows.Input.Cursors]::Hand
+        $caixaDoLado.Child = $textoDoLado
+        [Windows.Controls.Grid]::SetColumn($caixaDoLado, $iLadoDaPagina)
+        [void]$gradeDasPaginas.Children.Add($caixaDoLado)
+    }
+    $gradeDasPaginas
+}
 # Uso do Codex: a extensão grava as janelas de limite (5h, 7d ou 30d, conforme o plano) em
 # uso-codex.json, sem rede. Relê só quando o arquivo muda. O catch tira o erro do $Error
 # (arquivo lido no meio da gravação): senão vira "fechou (N erros)" no diário.
@@ -774,13 +821,17 @@ function Atualizar {
     $script:caixasDoMotor = @{ linhas = [Collections.ArrayList]::new(); uso = [Collections.ArrayList]::new() }
     $layoutDoTema = LayoutDoMotor
     $doMotor = [bool]$layoutDoTema.enfeites  # o motor desenha bolinha, tempo e barra
-    $linhasDaLista = @(foreach ($s in $sessoes) {
+    # fatia a lista uma vez só: os dois loops abaixo (desenho e caixas do motor) usam o mesmo índice
+    $paginaDaLista.total = [int][math]::Max(1, [math]::Ceiling($sessoes.Count / $sessoesPorPagina))
+    $paginaDaLista.atual = [int][math]::Min($paginaDaLista.total, [math]::Max(1, $paginaDaLista.atual))
+    $sessoesDaPagina = @($sessoes | Select-Object -Skip (($paginaDaLista.atual - 1) * $sessoesPorPagina) -First $sessoesPorPagina)
+    $linhasDaLista = @(foreach ($s in $sessoesDaPagina) {
         $cor, $rotulo = $estados[$s.situacao]
         if (-not $cor) { $cor, $rotulo = '#9CA3AF', $s.situacao }
         @{ s = $s; cor = $cor; rotulo = $rotulo; tempo = Tempo (($agora - $s.since) / 60) }
     })
     # o tempo não entra: cada sessão vira o minuto num segundo diferente (TrocarTexto, abaixo)
-    $chaveDaLista = "$($config.tema) $doMotor`n" + (@($linhasDaLista | ForEach-Object { "$($_.s.id) $($_.s.situacao) $($_.s.name)" }) -join "`n")
+    $chaveDaLista = "$($config.tema) $doMotor $($paginaDaLista.atual)/$($paginaDaLista.total)`n" + (@($linhasDaLista | ForEach-Object { "$($_.s.id) $($_.s.agente) $($_.s.situacao) $($_.s.name)" }) -join "`n")
     if ($chaveDaLista -ne $listaFeita.sessoes) {
         $listaFeita.sessoes = $chaveDaLista
         $listaFeita.lugaresDasSessoes = @()
@@ -802,24 +853,19 @@ function Atualizar {
             $bola.Width = 8; $bola.Height = 8
             $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
             $bola.VerticalAlignment = 'Center'
-            $ehDoCodex = $s.agente -eq 'codex'
-            $nomeSessao = Texto $s.name '#E5E7EB' $(if ($ehDoCodex) { 130 } else { 170 })
+            $nomeSessao = Texto $s.name '#E5E7EB' 130
             $nomeSessao.TextTrimming = 'CharacterEllipsis'
             $tempo = $(if ($doMotor) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
             $listaFeita.lugaresDasSessoes += , @($bola, $tempo, $tempoTexto)
-            if ($ehDoCodex) {
-                # a marquinha "codex" ao lado do nome, na cor do tema (a mesma do usage normal)
-                $etiquetaDoCodex = Rotulo 'codex' $coresDoUso[$config.tema][0] 40 $null 40
-                $linha = Linha $bola $nomeSessao $etiquetaDoCodex $tempo
-            } else {
-                $linha = Linha $bola $nomeSessao $tempo
-            }
+            # toda linha tem a pílula do agente (claude ou codex), então o nome tem sempre 130 px
+            $linha = Linha $bola $nomeSessao (PilulaDoAgente $(if ($s.agente -eq 'codex') { 'codex' } else { 'claude' })) $tempo
             $linha.Background = [Windows.Media.Brushes]::Transparent
             $linha.ToolTip = $rotulo
             $linha.Tag = "sessao:$($s.id)"  # o clique acha a sessão por aqui
             $linha.Cursor = [Windows.Input.Cursors]::Hand
             [void]$painelSessoes.Children.Add($linha)
         }
+        if ($paginaDaLista.total -gt 1) { [void]$painelSessoes.Children.Add((LinhaDasPaginas)) }
     }
     for ($iLinha = 0; $iLinha -lt $linhasDaLista.Count; $iLinha++) {
         $linhaDaLista, $lugares = $linhasDaLista[$iLinha], $listaFeita.lugaresDasSessoes[$iLinha]
@@ -1463,12 +1509,12 @@ function TrazerVSCode {
     $shell = New-Object -ComObject WScript.Shell
     if (-not $shell.AppActivate('Visual Studio Code')) { [void]$shell.AppActivate('Cursor') }
 }
-# a linha nesse ponto da janela: "sessao:<id>" (sessão) ou "baixar" (versão nova), guardado no Tag; ou nada
+# a linha nesse ponto da janela: "sessao:<id>" (sessão), "pagina:-1"/"pagina:+1" (setas da lista) ou "baixar" (versão nova), guardado no Tag; ou nada
 function AlvoNoPonto($ponto) {
     # InputHitTest, não VisualTreeHelper.HitTest: esse acerta o Palco do motor (a janela
     # inteira) mesmo com IsHitTestVisible=False, e o clique não achava a sessão
     for ($e = $win.InputHitTest($ponto); $e; $e = [Windows.Media.VisualTreeHelper]::GetParent($e)) {
-        if ("$($e.Tag)" -like 'sessao:*' -or "$($e.Tag)" -eq 'baixar') { return "$($e.Tag)" }
+        if ("$($e.Tag)" -like 'sessao:*' -or "$($e.Tag)" -like 'pagina:*' -or "$($e.Tag)" -eq 'baixar') { return "$($e.Tag)" }
     }
 }
 # a extensão recebe o link e abre a aba (ou o terminal) da sessão, como o clique na lista dela
@@ -1481,6 +1527,7 @@ function AbrirSessao($id) {
 $zip = 'https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip'
 function Clicar($qual) {
     if ($qual -like 'sessao:*') { AbrirSessao $qual.Substring(7); return }
+    if ($qual -like 'pagina:*') { MudarPagina ([int]$qual.Substring(7)); return }
     if ($qual -ne 'baixar') { return }
     if ($Foto) { $script:cliqueDaVez = $zip; return }
     try { Start-Process $zip -ErrorAction Stop; Anotar "baixando a versão nova pelo aviso" } catch { Anotar "não abri $zip ($_)" }
@@ -1627,6 +1674,35 @@ SetaDoModoUso '◀' -1
 [void]$painelModoUso.Children.Add($nomeDoModoUso)
 SetaDoModoUso '▶' 1
 [void]$menu.Items.Add($painelModoUso)
+
+# Mostrar: Mostrar ◀ Abas / Agentes / Tudo ▶ (quais sessões aparecem; fica em config.json > "mostrar")
+$painelModoMostrar = New-Object Windows.Controls.StackPanel
+$painelModoMostrar.Orientation = 'Horizontal'
+$painelModoMostrar.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
+[void]$painelModoMostrar.Children.Add((Texto 'Mostrar' '#D1D5DB' 70))
+$nomeDoModoMostrar = Texto $modosDeMostrar[$config.mostrar] '#FFFFFF' 70
+$nomeDoModoMostrar.TextAlignment = 'Center'
+$nomeDoModoMostrar.FontWeight = 'SemiBold'
+function TrocarModoMostrar($direcaoDoModoMostrar) {
+    $chavesDosModosMostrar = @($modosDeMostrar.Keys)
+    $config.mostrar = $chavesDosModosMostrar[($chavesDosModosMostrar.IndexOf($config.mostrar) + $direcaoDoModoMostrar + $chavesDosModosMostrar.Count) % $chavesDosModosMostrar.Count]
+    $nomeDoModoMostrar.Text = $modosDeMostrar[$config.mostrar]
+    $paginaDaLista.atual = 1
+    SalvarConfig
+    Anotar "mostrar: $($config.mostrar)"
+    Atualizar
+}
+function SetaDoModoMostrar($simboloDoModoMostrar, $direcaoDoModoMostrar) {
+    $botaoDoModoMostrar = New-Object Windows.Controls.Button
+    $botaoDoModoMostrar.Content = $simboloDoModoMostrar
+    $botaoDoModoMostrar.Tag = $direcaoDoModoMostrar
+    $botaoDoModoMostrar.Add_Click({ TrocarModoMostrar $this.Tag })
+    [void]$painelModoMostrar.Children.Add($botaoDoModoMostrar)
+}
+SetaDoModoMostrar '◀' -1
+[void]$painelModoMostrar.Children.Add($nomeDoModoMostrar)
+SetaDoModoMostrar '▶' 1
+[void]$menu.Items.Add($painelModoMostrar)
 
 # toggle do Clawd
 $itemClawd = New-Object Windows.Controls.MenuItem
@@ -1777,7 +1853,8 @@ if ($Foto) {
         }
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)$(if ($_.agente -eq 'codex') { ' | agente=codex' })"
-        }) + "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
+        }) + @(if ($config.mostrar -ne 'abas') { "mostrar: $($config.mostrar)" }) + @(if ($paginaDaLista.total -gt 1) { "pagina: $($paginaDaLista.atual)/$($paginaDaLista.total)" }) +
+            "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
             @(if ($config.uso -ne 'claude') { "uso: $($config.uso)"; "barras: $($listaFeita.barras)" }) +
             "som: $(if ($somDaVez) { $nomeDoSom[$config.tema][$avisoDaSituacao[$somDaVez]] } else { 'nenhum' })" +
             "som da cena: $(if ($somDaCena) { $somDaCena } else { 'nenhum' })" +

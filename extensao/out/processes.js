@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.processTable = processTable;
 exports.processTableAsync = processTableAsync;
 exports.ancestors = ancestors;
+exports.ehAutomatica = ehAutomatica;
 /**
  * Tabela de processos (pid -> pai, nome, tty) usada pelo hook pra achar o
  * Claude e pela extensão pra achar o terminal dono de uma sessão.
@@ -66,3 +67,15 @@ function ancestors(table, pid) {
     return chain;
 }
 //# sourceMappingURL=processes.js.map
+/**
+ * A sessão é automática (agente, não uma aba que o dono abriu)? Regra única: as 3 janelinhas só
+ * leem o campo `automatica` que o hook e o codex.js gravam.
+ * Codex: automática se o originator não for codex_vscode nem codex-tui (vazio conta como aba).
+ * Claude: automática se o CLAUDE_CODE_ENTRYPOINT começar com "sdk" (claude -p, Agent SDK).
+ */
+function ehAutomatica(entrypoint, agente) {
+    const e = String(entrypoint || "");
+    if (agente === "codex")
+        return !!e && e !== "codex_vscode" && e !== "codex-tui";
+    return e.startsWith("sdk");
+}

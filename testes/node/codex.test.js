@@ -229,3 +229,13 @@ test("readSessions: sessão do Codex sem pid segue na lista (o título do arquiv
     fs.writeFileSync(arquivoDaSessao(ID1), JSON.stringify({ ...velho, updated: agora() - 7 * 3600 }));
     assert.deepStrictEqual(await sessions.readSessions(), []);
 });
+
+test("automatica: só o que não é aba (codex_exec, Claude Code) grava automatica:true", () => {
+    rollout(ID1, [meta(ID1, undefined, "codex_vscode"), comecou()]);
+    rollout(ID2, [meta(ID2, undefined, "codex_exec"), comecou()]);
+    rollout(ID3, [meta(ID3, undefined, "Claude Code"), comecou()]);
+    assert.strictEqual(codex.lerSessoesCodex().length, 3);
+    assert.strictEqual(lerSessao(ID1).automatica, undefined);
+    assert.strictEqual(lerSessao(ID2).automatica, true);
+    assert.strictEqual(lerSessao(ID3).automatica, true);
+});

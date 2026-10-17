@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao|epico|codex|uso-codex|uso-codex-sem|uso-ambos> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao|epico|codex|uso-codex|uso-codex-sem|uso-ambos|agentes|agentes-tudo|paginas> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -59,7 +59,7 @@ let ordem = 0;
  * (null = não pode aparecer). Quanto antes criada, mais em cima (updated maior).
  * `antes` = situação que a janelinha tinha visto antes (pra testar o som da mudança).
  */
-function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuEm, semTranscript, mostra, antes: situacaoAntes }) {
+function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuEm, semTranscript, mostra, automatica, antes: situacaoAntes }) {
     fs.mkdirSync(dirSessoes, { recursive: true });
     ordem += 1;
     if (situacaoAntes) antes[id] = situacaoAntes;
@@ -76,7 +76,8 @@ function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuE
         since: since ?? u,
         updated: u,
         ...(pid ? { pid } : {}),
-        entrypoint: "claude-vscode",
+        entrypoint: automatica ? "sdk-cli" : "claude-vscode",
+        ...(automatica ? { automatica: true } : {}),
         transcript,
     }));
     if (mostra) esperado.push({ updated: u, linha: `sessao: ${mostra[0]} | hook=${estado} | janelinha=${mostra[1]}` });
@@ -87,7 +88,7 @@ function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuE
  * título já pronto e, no lugar do transcript do Claude, um rollout do Codex (formato que a
  * janelinha NÃO lê: o estado e a pergunta vêm do arquivo da sessão).
  */
-function sessaoCodex(id, { estado, pergunta: perguntou, nome, mostra }) {
+function sessaoCodex(id, { estado, pergunta: perguntou, nome, mostra, automatica }) {
     fs.mkdirSync(dirSessoes, { recursive: true });
     ordem += 1;
     const rollout = path.join(dirTranscripts, `rollout-${id}.jsonl`);
@@ -95,9 +96,10 @@ function sessaoCodex(id, { estado, pergunta: perguntou, nome, mostra }) {
     const u = agora - ordem;
     fs.writeFileSync(path.join(dirSessoes, `codex-${id}.json`), JSON.stringify({
         agente: "codex", name: nome, cwd: "C:\\Users\\amigo\\projetos\\meu-projeto", state: estado,
-        since: u, updated: u, transcript: rollout, entrypoint: "codex_vscode", ...(perguntou ? { pergunta: true } : {}),
+        since: u, updated: u, transcript: rollout, entrypoint: automatica ? "codex_exec" : "codex_vscode", ...(perguntou ? { pergunta: true } : {}),
+        ...(automatica ? { automatica: true } : {}),
     }));
-    esperado.push({ updated: u, linha: `sessao: ${nome} | hook=${estado} | janelinha=${mostra} | agente=codex` });
+    if (mostra) esperado.push({ updated: u, linha: `sessao: ${nome} | hook=${estado} | janelinha=${mostra} | agente=codex` });
 }
 
 function pidMorto() {
@@ -160,6 +162,7 @@ function texturasDoMinecraft() {
 let clawd;
 let temUso = false;
 let usoMostrado = "claude";  // o item "Uso" do botão direito (config.json > uso); só vai pro .txt quando não é o padrão
+let mostrarDoCenario = "abas";  // o item "Mostrar" do botão direito (config.json > mostrar); só vai pro .txt quando não é o padrão
 let barras = "";  // as barras que a janelinha mostra, "Agente janela %", separadas por " | "
 let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup (no Padrão: sino-terminou, sino-esperando, sino-tudo)
 let somDaCena = "nenhum";  // a cena épica cuja trilha o motor mandou tocar (mensagem S)
@@ -298,7 +301,8 @@ if (cenario === "misto") {
     clique = "https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip";
     clawd = "parado";
 } else if (cenario === "preferencias") {  // botão direito (config.json): Clawd desligado, cartão a 50%, volume 0
-    sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
+    // sessão do Codex: a pílula do "claude" é laranja quase igual ao Clawd, e o teste procura o laranja dele sumido
+    sessaoCodex("a", { estado: "working", nome: "Rodando testes", mostra: "working" });
     fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ opacidade: 0.5, clawd: false, volume: 0 }));
     clawd = "desligado";
 } else if (cenario === "minecraft") {  // tema Minecraft com as texturas: orbe, terra com grama, barra de XP e a letra
@@ -327,6 +331,23 @@ if (cenario === "misto") {
     sessaoCodex("b3", { estado: "working", nome: "Rodando a migração", mostra: "working" });
     fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao" }));
     clawd = "pulando";
+} else if (cenario === "agentes" || cenario === "agentes-tudo") {
+    // Mostrar (botão direito): 2 abas e 2 automáticas (claude -p, codex exec); o padrão (abas) esconde as automáticas
+    const tudo = cenario === "agentes-tudo";
+    sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
+    sessaoCodex("b1", { estado: "waiting", nome: "Revisar o PR", mostra: "finished" });
+    sessao("c", { estado: "working", automatica: true, mostra: tudo ? ["Agente do claude -p", "working"] : null, linhas: [titulo("Agente do claude -p"), ferramenta("Bash")] });
+    sessaoCodex("b2", { estado: "working", nome: "Agente do codex exec", automatica: true, mostra: tudo ? "working" : null });
+    mostrarDoCenario = tudo ? "tudo" : "abas";
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao", mostrar: mostrarDoCenario }));
+    clawd = "andando";
+} else if (cenario === "paginas") {  // 12 abas: a lista mostra 10 e a linha ◀ 1/2 ▶ leva às outras 2
+    for (let i = 1; i <= 12; i++) {
+        const nome = `Sessão ${String(i).padStart(2, "0")}`;
+        sessao(`p${i}`, { estado: "waiting", mostra: [nome, "finished"], linhas: [titulo(nome), texto("Feito.")] });
+    }
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao" }));
+    clawd = "parado";
 } else if (cenario === "uso-codex" || cenario === "uso-codex-sem" || cenario === "uso-ambos") {
     // Uso (botão direito): só o Codex, o Codex sem arquivo ainda, ou as barras do Claude e do Codex
     sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
@@ -358,6 +379,9 @@ if (cenario === "misto") {
 
 if (Object.keys(antes).length) fs.writeFileSync(path.join(pasta, "antes.json"), JSON.stringify(antes));
 const linhas = esperado.sort((a, b) => b.updated - a.updated).map((e) => e.linha);
+const paginasDaLista = Math.max(1, Math.ceil(esperado.length / 10));  // a lista mostra 10 por vez; o .txt traz todas as sessões
+if (mostrarDoCenario !== "abas") linhas.push(`mostrar: ${mostrarDoCenario}`);
+if (paginasDaLista > 1) linhas.push(`pagina: 1/${paginasDaLista}`);
 linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`);
 if (usoMostrado !== "claude") linhas.push(`uso: ${usoMostrado}`, `barras: ${barras}`);
 linhas.push(`som: ${som}`, `som da cena: ${somDaCena}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);

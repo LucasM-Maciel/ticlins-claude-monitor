@@ -185,3 +185,22 @@ test("sem-node.sh sem node no PATH e sem node-reserva (ou com caminho morto): sa
     }
     assert.ok(!fs.existsSync(path.join(casa, ".claude-monitor", "sessions", "sn1.json")));
 });
+
+test("automatica: CLAUDE_CODE_ENTRYPOINT sdk-* grava automatica:true; claude-vscode e vazio não", () => {
+    const casa = casaNova();
+    rodar(casa, "working", { session_id: "sdk1", cwd: casa }, { CLAUDE_CODE_ENTRYPOINT: "sdk-cli" });
+    rodar(casa, "working", { session_id: "aba1", cwd: casa }, { CLAUDE_CODE_ENTRYPOINT: "claude-vscode" });
+    rodar(casa, "working", { session_id: "vazio1", cwd: casa }, { CLAUDE_CODE_ENTRYPOINT: "" });
+    assert.strictEqual(sessao(casa, "sdk1").automatica, true);
+    assert.strictEqual(sessao(casa, "aba1").automatica, undefined);
+    assert.strictEqual(sessao(casa, "vazio1").automatica, undefined);
+});
+
+test("ehAutomatica: a regra única das duas fontes", () => {
+    const { ehAutomatica } = require("../../extensao/out/processes.js");
+    for (const o of ["codex_exec", "Claude Code"]) assert.strictEqual(ehAutomatica(o, "codex"), true, o);
+    for (const o of ["codex_vscode", "codex-tui", "", null, undefined]) assert.strictEqual(ehAutomatica(o, "codex"), false, String(o));
+    assert.strictEqual(ehAutomatica("sdk-cli", "claude"), true);
+    assert.strictEqual(ehAutomatica("sdk-ts"), true);
+    for (const o of ["claude-vscode", "cli", "", null, undefined]) assert.strictEqual(ehAutomatica(o, "claude"), false, String(o));
+});

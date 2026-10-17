@@ -198,7 +198,7 @@ t_cenario() {
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png; perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
   elif [ "$c" = pedra ]; then
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "cadê o diamante (diamante.png) subindo? perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
-  elif [ "$c" = padrao ] || [ "$c" = epico ] || [ "$c" = codex ] || [ "$c" = uso-codex ] || [ "$c" = uso-codex-sem ] || [ "$c" = uso-ambos ]; then
+  elif [ "$c" = padrao ] || [ "$c" = epico ] || [ "$c" = codex ] || [ "$c" = uso-codex ] || [ "$c" = uso-codex-sem ] || [ "$c" = uso-ambos ] || [ "$c" = agentes ] || [ "$c" = agentes-tudo ] || [ "$c" = paginas ]; then
     # picareta, pedra e bug são do Minecraft
     [ "$(pixels "$foto" 74 237 217 40)" -lt 5 ] || falha "o Clawd do Padrão apareceu com a ferramenta" || return 1
   else
@@ -213,9 +213,12 @@ t_cenario() {
   if [ "$c" = atualizar ]; then
     [ "$(pixels "$foto" 167 139 250 30)" -gt 10 ] || falha "cadê o aviso roxo da versão nova?" || return 1
   fi
-  # a marquinha "codex" fica na cor do usage normal do Padrão (#D1D5DB); Uso = Codex some com a barra de 85% do Claude, Os dois traz de volta
+  # a pílula "codex" é verde e a "claude" laranja (toda sessão do Claude); Uso = Codex some com a barra de 85% do Claude, Os dois traz de volta
   if [ "$c" = codex ]; then
-    [ "$(pixels "$foto" 209 213 219 4)" -gt 8 ] || falha "cadê a marquinha \"codex\" na lista?" || return 1
+    [ "$(pixels "$foto" 16 163 127 4)" -gt 8 ] || falha "cadê a pílula \"codex\" (verde) na lista?" || return 1
+  fi
+  if [ "$c" = codex ] || [ "$c" = misto ]; then
+    [ "$(pixels "$foto" 217 119 87 4)" -gt 8 ] || falha "cadê a pílula \"claude\" (laranja) na lista?" || return 1
   fi
   # no Mac o texto suavizado cai uns pixels na cor da barra (no Windows dá 0); barra de verdade tem centenas
   if [ "$c" = uso-codex-sem ]; then
@@ -257,7 +260,7 @@ enfeites_mc() {
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 # Sem o motor: o Clawd daqui (Swift), o de quando falta o node. As lutas antigas (pedra, bug)

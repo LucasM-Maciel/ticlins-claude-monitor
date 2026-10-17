@@ -180,7 +180,7 @@ t_cenario() {
     [ "$(pixels "$foto" 215 119 87 30)" -gt 30 ] || falha "cadê o Clawd (laranja)? perto: $(pixels "$foto" 215 119 87 80 lista)" || return 1
   fi
 }
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 # Sem o motor fica só o cartão. As lutas antigas do Mac sem motor (pedra, bug: "andando (pedra)")

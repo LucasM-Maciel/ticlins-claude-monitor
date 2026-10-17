@@ -156,6 +156,7 @@ function main() {
     const name = getTitle(transcript, sessionId) || path.basename(cwd.replace(/[\\/]+$/, "")) || sessionId.slice(0, 8);
     // o pid não muda durante a sessão — no Windows achar ele custa ~1s de PowerShell
     const pid = previous.pid || findClaudePid();
+    const entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT || previous.entrypoint || null;
     fs.writeFileSync(file, JSON.stringify({
         name,
         cwd,
@@ -163,7 +164,8 @@ function main() {
         since,
         updated: now,
         pid,
-        entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT || previous.entrypoint || null,
+        entrypoint,
+        ...((0, processes_1.ehAutomatica)(entrypoint, "claude") ? { automatica: true } : {}),
         transcript,
     }));
 }

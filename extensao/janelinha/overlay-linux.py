@@ -122,7 +122,11 @@ def sem_cair(fn, normal):
 # --- botão direito: tema, Clawd, opacidade e volume, gravados em config.json (os outros leem o mesmo).
 temas = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars"), ("akatsuki", "Akatsuki")]
 arquivo_config = os.path.join(pasta, "config.json")
-config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft", "uso": "claude"}
+# mostrar: "abas" (o padrão), "agentes" (sessões automáticas: claude -p, codex exec) ou "tudo"
+config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft", "uso": "claude", "mostrar": "abas"}
+# a lista mostra 10 sessões por vez; a página só vive na memória (começa na 1, volta pra última que existe)
+SESSOES_POR_PAGINA = 10
+pagina_da_lista = 1
 
 
 def ler_json(caminho):
@@ -150,6 +154,8 @@ if _o:
         config["tema"] = _o["tema"]
     if _o.get("uso") in ("claude", "codex", "ambos"):
         config["uso"] = _o["uso"]
+    if _o.get("mostrar") in ("abas", "agentes", "tudo"):
+        config["mostrar"] = _o["mostrar"]
 
 
 def salvar_config():
@@ -346,6 +352,7 @@ def ler_sessoes(agora):
         s = {
             "id": sid, "nome": (None if codex else titulo(transcript)) or (d.get("name") if isinstance(d.get("name"), str) else "sessão"),
             "codex": codex, "pergunta": d.get("pergunta") is True,
+            "automatica": d.get("automatica") is True,  # não é uma aba (claude -p, codex exec): o hook e a extensão decidem
             "estado": d.get("state") if isinstance(d.get("state"), str) else "waiting",
             "since": numero(d.get("since")) or updated, "updated": updated, "pid": pid, "transcript": transcript,
         }
@@ -356,7 +363,9 @@ def ler_sessoes(agora):
     lista = list(vistas.values())
     for s in lista:
         s["situacao"] = situacao(s)
-    return sorted(lista, key=lambda s: s["updated"], reverse=True)
+    lista = sorted(lista, key=lambda s: s["updated"], reverse=True)
+    # Mostrar: abas (as não automáticas), agentes (as automáticas) ou tudo
+    return [s for s in lista if config["mostrar"] == "tudo" or s["automatica"] == (config["mostrar"] == "agentes")]
 
 
 # Título da aba: o do /rename ("custom-title") ganha do automático ("ai-title"). Lê só o pedaço
@@ -715,9 +724,12 @@ def versao_nova():
 
 
 def clicar(alvo):
-    global clique_da_vez
+    global clique_da_vez, pagina_da_lista
     if alvo.startswith("sessao:"):
         abrir_sessao(alvo[7:])
+    elif alvo.startswith("pagina:"):
+        pagina_da_lista += int(alvo[7:])
+        atualizar()
     elif alvo == "baixar":
         if arquivo_foto is not None:
             clique_da_vez = zip_url
@@ -753,10 +765,30 @@ def escrever(cr, s, cor, r, alinhamento="esq"):
     layout.set_text(s, -1)
     layout.set_width(int(max(1, w) * Pango.SCALE))
     layout.set_ellipsize(Pango.EllipsizeMode.END)
-    layout.set_alignment(Pango.Alignment.RIGHT if alinhamento == "dir" else Pango.Alignment.LEFT)
+    layout.set_alignment(Pango.Alignment.RIGHT if alinhamento == "dir" else Pango.Alignment.CENTER if alinhamento == "centro" else Pango.Alignment.LEFT)
     _, lh = layout.get_pixel_size()
     cr.save()
     cr.set_source_rgba(*cor)
+    cr.move_to(x, y + (h - lh) / 2)
+    PangoCairo.show_layout(cr, layout)
+    cr.restore()
+
+
+# o nome do agente dentro da pílula: letra pequena e escura, igual em todo tema
+fonte_da_pilula = Pango.FontDescription.from_string("Sans Bold")
+fonte_da_pilula.set_absolute_size(10 * Pango.SCALE)
+
+
+def escrever_na_pilula(cr, s, r):
+    x, y, w, h = r
+    layout = PangoCairo.create_layout(cr)
+    layout.set_font_description(fonte_da_pilula)
+    layout.set_text(s, -1)
+    layout.set_width(int(max(1, w) * Pango.SCALE))
+    layout.set_alignment(Pango.Alignment.CENTER)
+    _, lh = layout.get_pixel_size()
+    cr.save()
+    cr.set_source_rgba(*hex_cor("#111827"))
     cr.move_to(x, y + (h - lh) / 2)
     PangoCairo.show_layout(cr, layout)
     cr.restore()
@@ -846,10 +878,12 @@ class Cartao:
     def __init__(self):
         self.linhas = []  # {id, sit, cor, nome, tempo, rotulo}
         self.aviso = None
+        self.pagina = self.paginas = 1  # a lista mostra 10 por vez; com mais de uma página, embaixo vem a linha "◀  1/3  ▶"
         self.ap = aparencia()
         self.x0, self.y0, self.largura = 10, 6, 222
         self.altura_linha = self.altura_uso = 20
-        self.y_uso = self.y_aviso = 0
+        self.altura_paginas = 16
+        self.y_paginas = self.y_uso = self.y_aviso = 0
         self.frame = (0, 0, 0, 0)  # x, y, w, h na janela
 
     def arrumar(self):
@@ -859,7 +893,8 @@ class Cartao:
         self.altura_linha = max(16, ap["letra"]) + 4
         self.altura_uso = max(0 if ap["enfeites"] else 16, ap["letra"], ap["barra"][1]) + 4
         self.largura = max(186 + ap["colTempo"], ap["colRotulo"] + ap["barra"][0] + ap["colPct"] + ap["colFalta"])
-        self.y_uso = self.y0 + (20 if not self.linhas else len(self.linhas) * self.altura_linha) + 10
+        self.y_paginas = self.y0 + (20 if not self.linhas else len(self.linhas) * self.altura_linha)
+        self.y_uso = self.y_paginas + (self.altura_paginas if self.paginas > 1 else 0) + 10
         linhas_uso = linhas_do_uso()
         so_texto = len(linhas_uso) == 1 and linhas_uso[0][0] == "texto"
         altura_do_uso = 20 if so_texto else len(linhas_uso) * self.altura_uso
@@ -895,13 +930,17 @@ class Cartao:
                 cr.arc(x0 + 4, y + self.altura_linha / 2, 4, 0, 2 * math.pi)
                 cr.fill()
                 escrever(cr, l["tempo"], cor, (x0 + 186, y, ap["colTempo"], self.altura_linha), "dir")
-            if l.get("codex"):
-                # a marquinha "codex" ao lado do nome, na cor do tema (a mesma do usage normal)
-                escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 130, self.altura_linha))
-                escrever(cr, "codex", hex_cor(cores_do_uso.get(config["tema"], ["#D1D5DB"])[0]), (x0 + 146, y, 40, self.altura_linha))
-            else:
-                escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 170, self.altura_linha))
+            # toda linha tem a pílula do agente (claude laranja, codex verde), então o nome tem sempre 130
+            escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 130, self.altura_linha))
+            caixa_da_pilula = (x0 + 145, y + (self.altura_linha - 15) / 2, 40, 15)
+            cr.set_source_rgba(*hex_cor("#10A37F" if l.get("codex") else "#D97757"))
+            retangulo_redondo(cr, *caixa_da_pilula, 7)
+            cr.fill()
+            escrever_na_pilula(cr, "codex" if l.get("codex") else "claude", caixa_da_pilula)
             y += self.altura_linha
+        if self.paginas > 1:
+            escrever(cr, f"◀  {self.pagina}/{self.paginas}  ▶", hex_cor("#9CA3AF"), (x0, y, largura, self.altura_paginas), "centro")
+            y += self.altura_paginas
         y += 5
         cr.set_source_rgba(*hex_cor("#33FFFFFF"))
         cr.rectangle(x0, y, largura, 1)
@@ -988,13 +1027,15 @@ class Cartao:
         return r
 
     def alvo_no_ponto(self, px, py):
-        """px, py na janela -> 'sessao:<id>', 'baixar' ou None."""
+        """px, py na janela -> 'sessao:<id>', 'pagina:-1'/'pagina:+1' (metade esquerda/direita da linha das páginas), 'baixar' ou None."""
         fx, fy, fw, fh = self.frame
         x, y = px - fx, py - fy
         if not (0 <= x < fw and 0 <= y < fh) or y < self.y0:
             return None
         if self.aviso and self.y_aviso <= y < self.y_aviso + 20:
             return "baixar"
+        if self.paginas > 1 and self.y_paginas <= y < self.y_paginas + self.altura_paginas:
+            return "pagina:-1" if x < self.x0 + self.largura / 2 else "pagina:+1"
         i = int((y - self.y0) // self.altura_linha)
         return "sessao:" + self.linhas[i]["id"] if i < len(self.linhas) else None
 
@@ -1381,12 +1422,17 @@ def ajustar_entrada():
 
 
 def atualizar():
-    global modo
+    global modo, pagina_da_lista
     agora = time.time()
     sessoes = ler_sessoes(agora)
     avisar(sessoes)
+    # fatia a lista uma vez só: o cartão e o motor usam as mesmas linhas
+    total_de_paginas = max(1, -(-len(sessoes) // SESSOES_POR_PAGINA))
+    pagina_da_lista = min(total_de_paginas, max(1, pagina_da_lista))
+    da_pagina = sessoes[(pagina_da_lista - 1) * SESSOES_POR_PAGINA:pagina_da_lista * SESSOES_POR_PAGINA]
+    cartao.pagina, cartao.paginas = pagina_da_lista, total_de_paginas
     cartao.linhas = []
-    for s in sessoes:
+    for s in da_pagina:
         cor, rotulo = estados.get(s["situacao"], ("#9CA3AF", s["situacao"]))
         cartao.linhas.append({"id": s["id"], "sit": s["situacao"], "cor": cor, "nome": s["nome"],
                               "tempo": tempo((agora - s["since"]) / 60), "rotulo": rotulo,
@@ -1420,7 +1466,9 @@ def atualizar():
         clawd = modo if config["clawd"] else "desligado"
         aviso = aviso_da_situacao.get(som_da_vez) if som_da_vez else None
         som = nome_do_som.get(config["tema"], {}).get(aviso, "nenhum") if aviso else "nenhum"
-        visto = [f"sessao: {s['nome']} | hook={s['estado']} | janelinha={s['situacao']}" + (" | agente=codex" if s.get("codex") else "") for s in sessoes] + [
+        visto = [f"sessao: {s['nome']} | hook={s['estado']} | janelinha={s['situacao']}" + (" | agente=codex" if s.get("codex") else "") for s in sessoes] + (
+            [] if config["mostrar"] == "abas" else [f"mostrar: {config['mostrar']}"]) + (
+            [f"pagina: {pagina_da_lista}/{total_de_paginas}"] if total_de_paginas > 1 else []) + [
             f"clawd: {clawd}", f"usage: {'indisponivel' if not uso else 'ok'}"] + ([] if config["uso"] == "claude" else [f"uso: {config['uso']}", f"barras: {barras_com_grupo()}"]) + [
             f"som: {som}",
             f"som da cena: {som_da_cena_visto or 'nenhum'}", f"clique: {clique_da_vez or 'nenhum'}",
@@ -1481,6 +1529,20 @@ def montar_menu():
     item.set_submenu(sub)
     menu.append(item)
 
+    # Mostrar: quais sessões aparecem (abas, agentes ou tudo)
+    sub = Gtk.Menu()
+    grupo = None
+    modos_de_mostrar = (("abas", "Abas"), ("agentes", "Agentes"), ("tudo", "Tudo"))
+    for mid, nome in modos_de_mostrar:
+        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome)
+        grupo = item
+        item.set_active(config["mostrar"] == mid)
+        item.connect("toggled", lambda it, m=mid: it.get_active() and trocar("mostrar", m))
+        sub.append(item)
+    item = Gtk.MenuItem(label="Mostrar: " + dict(modos_de_mostrar)[config["mostrar"]])
+    item.set_submenu(sub)
+    menu.append(item)
+
     for chave, rotulo, valores in (("opacidade", "Opacidade", [100, 90, 80, 70, 60, 50, 40, 30, 20]),
                                    ("volume", "Volume", [100, 80, 60, 40, 20, 10, 0])):
         sub = Gtk.Menu()
@@ -1507,6 +1569,7 @@ def montar_menu():
 
 
 def trocar(chave, valor):
+    global pagina_da_lista
     config[chave] = valor
     salvar_config()
     if chave == "tema":
@@ -1514,6 +1577,10 @@ def trocar(chave, valor):
         atualizar()
     elif chave == "uso":
         anotar(f"uso: {valor}")
+        atualizar()
+    elif chave == "mostrar":
+        anotar(f"mostrar: {valor}")
+        pagina_da_lista = 1
         atualizar()
     aplicar_config()
 
