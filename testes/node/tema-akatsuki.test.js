@@ -245,13 +245,15 @@ test('a moldura anda: o quadro em t=0 difere do de t=3', () => {
   assert.ok(dif > 100, `${dif} pixels diferentes`);
 });
 
-test('a moldura do Time 7 é parada: faixa azul da bandana com a placa de aço no alto, igual em qualquer instante', () => {
+test('a moldura do Time 7: faixa azul da bandana com reflexos claros dando a volta e a placa de aço parada no alto', () => {
   try {
     A.vestir('t7-colete');
     const quadro = t => { const tela = new Tela(120, 60), g = tela.getContext('2d'); K.moldura(g, [0, 0, 120, 60], t); return tela; };
-    const a = quadro(0), b = quadro(3);
-    assert.deepStrictEqual(Array.from(a.pixels), Array.from(b.pixels));
-    assert.strictEqual(a.pixels[1 * 120 + 30] >>> 0, 0xFF2563EB, 'a faixa azul na 2ª linha');
+    const a = quadro(0), b = quadro(1.3);
+    assert.notDeepStrictEqual(Array.from(a.pixels), Array.from(b.pixels), 'os reflexos andam');
+    const azuis = Array.from(a.pixels.slice(1 * 120 + 12, 1 * 120 + 108)).filter(p => (p >>> 0) === 0xFF2563EB).length;
+    assert.ok(azuis > 20, `a faixa azul na 2ª linha: ${azuis} px`);
+    assert.ok(Array.from(a.pixels).some(p => (p >>> 0) === 0xFFDBEAFE), 'há um reflexo claro na faixa');
     const placa = a.pixels[3 * 120 + 50];  // a placa de aço (cinza claro) sobre a borda, no meio do alto
     assert.ok(((placa >>> 16) & 255) > 180 && (placa & 255) > 180, `a placa da bandana: ${(placa >>> 0).toString(16)}`);
   } finally { A.vestir('akatsuki'); }

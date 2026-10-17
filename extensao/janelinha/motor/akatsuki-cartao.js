@@ -223,9 +223,21 @@ const PLACA = (() => {
   return L.map(l => l.join(''));
 })();
 const CORES_PLACA = { d: '#334155', s: '#CBD5E1', r: '#64748B', k: '#334155' };
-function molduraT7(g, T, [x, y, w, h], [X, Y, W, H], rr, fio) {
-  // a faixa azul da bandana e a placa no meio do alto (parada: é metal)
+const BRILHOS = 4, BRILHO_LEN = 16, BRILHO_VEL = 20, AZUL_CLARO = '#DBEAFE';
+function molduraT7(g, T, [x, y, w, h], [X, Y, W, H], rr, fio, t) {
+  // a faixa azul da bandana, com uns reflexos claros dando a volta (o vento nela), e a placa no meio do alto (parada: é metal)
   colarAnel(g, anel(W, H, rr, [[0, 2 * fio, AZUL]]), X, Y);
+  const e = T.e, ri = fio / e, rx = x + ri, ry = y + ri, rw = w - 2 * ri, rh = h - 2 * ri;
+  if (rw > 2 * CURVA && rh > 2 * CURVA) {
+    const per = 2 * (rw + rh) - 8 * CURVA + 2 * Math.PI * CURVA, esp = per / BRILHOS;
+    g.fillStyle = AZUL_CLARO;
+    for (let i = 0; i < BRILHOS; i++) {
+      for (let k = 0; k < BRILHO_LEN * 2; k++) {  // um traço de BRILHO_LEN DIPs, de meio em meio DIP
+        const [cx, cy] = noTrilho(i * esp + t * BRILHO_VEL + k / 2, rx, ry, rw, rh);
+        g.fillRect(Math.round(T.ox + cx * e - fio), Math.round(T.oy + cy * e - fio), 2 * fio, 2 * fio);
+      }
+    }
+  }
   colar(g, T, naTela('placa', PLACA, CORES_PLACA, T.e), Math.round(x + w / 2 - 15.5), y - 5);
 }
 // a ponta da barra do Time 7: a shuriken de aço (os outros tipos ficaram de fora da escolha do dono). Disco de 9 DIPs feito pixel a pixel na escala da tela, contorno de 1 DIP; o giro anda em
