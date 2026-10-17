@@ -465,6 +465,23 @@ def situacao(s):
     return "finished" if r == "question" and s.get("automatica") else r
 
 
+def mexeu_depois_do_stop(caminho, since):
+    m = data_do_arquivo(caminho)
+    return m is not None and m > since + 2 and time.time() - m <= 45
+
+
+def voltou_a_trabalhar(s):
+    if not s["transcript"]:
+        return False
+    if mexeu_depois_do_stop(s["transcript"], s["since"]):
+        return True
+    pasta_dos_sub = (s["transcript"][:-6] if s["transcript"].endswith(".jsonl") else s["transcript"]) + "/subagents"
+    try:
+        return any(f.endswith(".jsonl") and mexeu_depois_do_stop(os.path.join(pasta_dos_sub, f), s["since"]) for f in os.listdir(pasta_dos_sub))
+    except OSError:
+        return False
+
+
 def situacao_da_conversa(s):
     estado = s["estado"]
     if s.get("codex"):  # a extensão já avisou no arquivo se terminou perguntando
@@ -477,6 +494,10 @@ def situacao_da_conversa(s):
         m = data_do_arquivo(s["transcript"]) if s["transcript"] else None
         if m is not None and m > s["since"] + 2:
             estado = "working"
+    # o Stop grava "waiting" quando o agente principal encerra a vez, mesmo com subagentes rodando; escrita no
+    # transcript (ou no de um subagente) depois do Stop e há pouco = segue trabalhando (regra da extensão)
+    if estado == "waiting" and voltou_a_trabalhar(s):
+        estado = "working"
     pedido = ultimo_pedido(s["transcript"])
     if estado in ("working", "permission"):
         return "question" if pedido == "caixa" else estado

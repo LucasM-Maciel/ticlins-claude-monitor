@@ -53,6 +53,7 @@ const SOUND_DIR = path.join(exports.MONITOR_DIR, "sounds");
 const PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 const STALE_AFTER_SEC = 6 * 60 * 60; // fallback pra sessões sem pid/tty (hook antigo)
 const TRANSCRIPT_GRACE_SEC = 2; // transcript mexido depois disso = permissão respondida
+const ATIVIDADE_RECENTE_SEC = 45; // escrita mais velha que isso não prova que ainda roda (subagente pensando)
 /** execFile que devolve null em vez de estourar. */
 function run(cmd, args) {
     return new Promise((resolve) => {
@@ -97,8 +98,38 @@ function isAlive(data, ttys, now) {
  * Depois de aprovar uma permissão nenhum hook dispara até o Stop, então
  * se o transcript mexeu depois do pedido, a sessão voltou a trabalhar.
  */
+function mexeuDepois(arquivo, since, agora) {
+    try {
+        const m = fs.statSync(arquivo).mtimeMs / 1000;
+        return m > since + TRANSCRIPT_GRACE_SEC && agora - m <= ATIVIDADE_RECENTE_SEC;
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * O Stop grava "waiting" quando o agente principal encerra a vez, mesmo com subagentes
+ * ainda rodando; quando eles voltam, nenhum hook marca "working". Então transcript
+ * (ou transcript de subagente) escrito depois do Stop e há pouco = segue trabalhando.
+ */
+function voltouATrabalhar(data) {
+    if (!data.transcript || data.agente === "codex")
+        return false;
+    const agora = Date.now() / 1000;
+    if (mexeuDepois(data.transcript, data.since, agora))
+        return true;
+    const pastaDosSubagentes = path.join(data.transcript.replace(/\.jsonl$/, ""), "subagents");
+    try {
+        return fs.readdirSync(pastaDosSubagentes).some((f) => f.endsWith(".jsonl") && mexeuDepois(path.join(pastaDosSubagentes, f), data.since, agora));
+    }
+    catch {
+        return false;
+    }
+}
 function effectiveState(data) {
     const state = data.state === "working" || data.state === "permission" ? data.state : "waiting";
+    if (state === "waiting" && voltouATrabalhar(data))
+        return "working";
     if (state === "permission" && data.transcript) {
         try {
             if (fs.statSync(data.transcript).mtimeMs / 1000 > data.since + TRANSCRIPT_GRACE_SEC)

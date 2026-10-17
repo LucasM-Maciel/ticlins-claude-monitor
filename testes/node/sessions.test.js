@@ -54,6 +54,46 @@ test("permissão ainda aberta continua 'permission'", async () => {
     assert.strictEqual((await sessions.readSessions())[0].state, "permission");
 });
 
+// o Stop grava "waiting" quando o agente principal encerra a vez, mesmo com subagentes rodando; quando eles
+// voltam nenhum hook marca "working". Atividade no transcript (ou nos dos subagentes) depois do Stop = ainda trabalhando.
+test("Stop no meio da tarefa: transcript mexendo depois dele continua 'working'", async () => {
+    const t = path.join(casa, "m1.jsonl");
+    fs.writeFileSync(t, "{}\n");
+    gravar("m1", { name: "m1", state: "waiting", pid: process.pid, since: agora() - 30, transcript: t });
+    assert.strictEqual((await sessions.readSessions())[0].state, "working");
+});
+
+test("Stop no meio da tarefa: subagente ainda escrevendo continua 'working'", async () => {
+    const t = path.join(casa, "m2.jsonl");
+    fs.writeFileSync(t, "{}\n");
+    const velho = agora() - 120;
+    fs.utimesSync(t, velho, velho);
+    fs.mkdirSync(path.join(casa, "m2", "subagents"), { recursive: true });
+    fs.writeFileSync(path.join(casa, "m2", "subagents", "agent-x.jsonl"), "{}\n");
+    gravar("m2", { name: "m2", state: "waiting", pid: process.pid, since: agora() - 60, transcript: t });
+    assert.strictEqual((await sessions.readSessions())[0].state, "working");
+});
+
+test("terminou de verdade: transcript e subagentes parados continuam 'waiting'", async () => {
+    const t = path.join(casa, "m3.jsonl");
+    fs.writeFileSync(t, "{}\n");
+    fs.mkdirSync(path.join(casa, "m3", "subagents"), { recursive: true });
+    const sub = path.join(casa, "m3", "subagents", "agent-y.jsonl");
+    fs.writeFileSync(sub, "{}\n");
+    const velho = agora() - 300;
+    fs.utimesSync(t, velho, velho);
+    fs.utimesSync(sub, velho, velho);
+    gravar("m3", { name: "m3", state: "waiting", pid: process.pid, since: agora() - 400, transcript: t });
+    assert.strictEqual((await sessions.readSessions())[0].state, "waiting");
+});
+
+test("escrita colada no Stop (título, snapshot) não vira 'working'", async () => {
+    const t = path.join(casa, "m4.jsonl");
+    fs.writeFileSync(t, "{}\n");
+    gravar("m4", { name: "m4", state: "waiting", pid: process.pid, since: agora() + 1, transcript: t });
+    assert.strictEqual((await sessions.readSessions())[0].state, "waiting");
+});
+
 test("título do transcript ganha do nome gravado; /rename ganha do automático", async () => {
     const t = path.join(casa, "t3.jsonl");
     fs.writeFileSync(t, [

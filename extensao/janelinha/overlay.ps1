@@ -596,6 +596,21 @@ function Situacao($s) {
     if ($r -eq 'question' -and $s.automatica -eq $true) { return 'finished' }
     $r
 }
+function MexeuDepoisDoStop($arquivoDoTranscript, $since) {
+    $quando = (Get-Item -LiteralPath $arquivoDoTranscript -ErrorAction Ignore).LastWriteTimeUtc
+    if (-not $quando) { return $false }
+    $segundos = ([DateTimeOffset]$quando).ToUnixTimeMilliseconds() / 1000
+    $segundos -gt $since + 2 -and ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000 - $segundos) -le 45
+}
+function VoltouATrabalhar($s) {
+    if (-not $s.transcript) { return $false }
+    if (MexeuDepoisDoStop $s.transcript $s.since) { return $true }
+    $pastaDosSub = ($s.transcript -replace '\.jsonl$', '') + '\subagents'
+    foreach ($arqSub in @(Get-ChildItem -LiteralPath $pastaDosSub -Filter '*.jsonl' -ErrorAction Ignore)) {
+        if (MexeuDepoisDoStop $arqSub.FullName $s.since) { return $true }
+    }
+    $false
+}
 function SituacaoDaConversa($s) {
     # sessão do Codex (ou com "pergunta": true): a extensão já leu a conversa e deixou a resposta no arquivo
     if ($s.agente -eq 'codex' -or $s.pergunta -eq $true) {
@@ -610,6 +625,9 @@ function SituacaoDaConversa($s) {
         $mexeu = (Get-Item -LiteralPath $s.transcript -ErrorAction Ignore).LastWriteTimeUtc
         if ($mexeu -and ([DateTimeOffset]$mexeu).ToUnixTimeMilliseconds() / 1000 -gt $s.since + 2) { $estado = 'working' }
     }
+    # o Stop grava "waiting" quando o agente principal encerra a vez, mesmo com subagentes rodando; escrita no
+    # transcript (ou no de um subagente) depois do Stop e há pouco = segue trabalhando (regra da extensão)
+    if ($estado -eq 'waiting' -and (VoltouATrabalhar $s)) { $estado = 'working' }
     $pedido = UltimoPedido $s.transcript
     switch ($estado) {
         'waiting' { if ($pedido) { 'question' } else { 'finished' } }

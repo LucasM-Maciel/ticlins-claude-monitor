@@ -345,6 +345,18 @@ func situacao(_ s: Sessao) -> String {
     let r = situacaoDaConversa(s)
     return r == "question" && s.automatica ? "finished" : r
 }
+func mexeuDepoisDoStop(_ caminho: String, _ since: Double) -> Bool {
+    guard let m = dataDoArquivo(caminho)?.timeIntervalSince1970 else { return false }
+    return m > since + 2 && Date().timeIntervalSince1970 - m <= 45
+}
+func voltouATrabalhar(_ s: Sessao) -> Bool {
+    guard !s.transcript.isEmpty else { return false }
+    if mexeuDepoisDoStop(s.transcript, s.since) { return true }
+    let semExtensao = s.transcript.hasSuffix(".jsonl") ? String(s.transcript.dropLast(6)) : s.transcript
+    let pastaDosSub = semExtensao + "/subagents"
+    let arquivos = (try? FileManager.default.contentsOfDirectory(atPath: pastaDosSub)) ?? []
+    return arquivos.contains { $0.hasSuffix(".jsonl") && mexeuDepoisDoStop(pastaDosSub + "/" + $0, s.since) }
+}
 func situacaoDaConversa(_ s: Sessao) -> String {
     // Codex: sem transcript do Claude; a extensão já avisou no arquivo se terminou perguntando
     if s.codex {
@@ -357,6 +369,9 @@ func situacaoDaConversa(_ s: Sessao) -> String {
     if estado == "permission", let m = dataDoArquivo(s.transcript), m.timeIntervalSince1970 > s.since + 2 {
         estado = "working"
     }
+    // o Stop grava "waiting" quando o agente principal encerra a vez, mesmo com subagentes rodando; escrita no
+    // transcript (ou no de um subagente) depois do Stop e há pouco = segue trabalhando (regra da extensão)
+    if estado == "waiting", voltouATrabalhar(s) { estado = "working" }
     let pedido = ultimoPedido(s.transcript)
     if estado == "working" || estado == "permission" { return pedido == "caixa" ? "question" : estado }
     return pedido != nil ? "question" : "finished"

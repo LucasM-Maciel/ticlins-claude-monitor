@@ -64,11 +64,13 @@ function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuE
     ordem += 1;
     if (situacaoAntes) antes[id] = situacaoAntes;
     const transcript = path.join(dirTranscripts, `${id}.jsonl`);
+    const u = updated ?? agora - ordem;
     if (linhas && !semTranscript) {
         fs.writeFileSync(transcript, linhas.map((l) => JSON.stringify(l)).join("\n") + "\n");
-        if (mexeuEm) fs.utimesSync(transcript, mexeuEm, mexeuEm);
+        // quem terminou (Stop) tem o transcript parado desde então; escrita depois do Stop = ainda trabalhando
+        const mexeu = mexeuEm ?? (estado === "waiting" ? since ?? u : null);
+        if (mexeu) fs.utimesSync(transcript, mexeu, mexeu);
     }
-    const u = updated ?? agora - ordem;
     fs.writeFileSync(path.join(dirSessoes, `${id}.json`), JSON.stringify({
         name: nomeNoArquivo ?? "meu-projeto",
         cwd: "C:\\Users\\amigo\\projetos\\meu-projeto",
@@ -186,6 +188,10 @@ if (cenario === "misto") {
     sessao("permissao-aberta", {
         estado: "permission", since: agora - 5, mexeuEm: agora - 60, mostra: ["Pedindo permissão agora", "permission"],
         linhas: [titulo("Pedindo permissão agora"), ferramenta("Bash")],
+    });
+    sessao("stop-no-meio", {  // o Stop avisou "terminou", mas o transcript segue andando: ainda roda
+        estado: "waiting", since: agora - 300, mexeuEm: agora - 3, mostra: ["Stop no meio da tarefa", "working"],
+        linhas: [titulo("Stop no meio da tarefa"), texto("Lancei os agentes, volto quando acabarem.")],
     });
     sessao("pergunta-texto", {
         estado: "waiting", mostra: ["Pergunta no fim do texto", "question"],
