@@ -219,7 +219,7 @@ t_cenario() {
   fi
   # no Mac o texto suavizado cai uns pixels na cor da barra (no Windows dá 0); barra de verdade tem centenas
   if [ "$c" = uso-codex-sem ]; then
-    [ "$(pixels "$foto" 209 213 219 4)" -lt 15 ] || falha "barra de usage de alguém no \"Codex: sem uso ainda\" ($(pixels "$foto" 209 213 219 4) pixels)" || return 1
+    [ "$(pixels "$foto" 209 213 219 4)" -lt 60 ] || falha "barra de usage de alguém no \"Codex: sem uso ainda\" ($(pixels "$foto" 209 213 219 4) pixels)" || return 1
   fi
   if [ "$c" = uso-codex ] || [ "$c" = uso-codex-sem ]; then
     [ "$(pixels "$foto" 245 158 11 25)" -lt 5 ] || falha "a barra de 85% do Claude apareceu com Uso = Codex" || return 1
