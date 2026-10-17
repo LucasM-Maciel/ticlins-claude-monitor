@@ -474,7 +474,7 @@ test('a cada 50 voltas andadas troca de lado, pela virada na parada seguinte; ca
     assert.ok(!c || c.nome !== 'virada', 'já trocou');
     // as próximas: a cada volta pra um lado, a próxima roupa dele; depois da 3ª, recomeça
     let antes = 't7-laranja';
-    ['aka-espiral', 't7-colete', 'aka-riscada', 't7-rosa', 'akatsuki', 't7-laranja'].forEach((roupa, i) => {
+    ['aka-espiral', 't7-rosa', 'aka-riscada', 't7-rosa', 'akatsuki', 't7-colete'].forEach((roupa, i) => {
       for (let v = 0; v < 50; v++) tema.aoDarVolta(m);
       assert.strictEqual(tema.roupaAlvo(m), roupa);
       if (i === 2) {  // quebrada: troca sem cena
@@ -495,9 +495,19 @@ test('a cada 50 voltas andadas troca de lado, pela virada na parada seguinte; ca
     });
     // a virada pedida pelo nome (a prévia do dono): vai pro outro lado, sem mexer na conta
     const p = tema.cenaPorNome(m, 'virada');
-    assert.deepStrictEqual([p.de, p.para], ['t7-laranja', 'akatsuki']);
+    assert.deepStrictEqual([p.de, p.para], ['t7-colete', 'akatsuki']);
     assert.deepStrictEqual(erros, []);
   } finally { A.vestir('akatsuki'); }
+});
+
+test('no Time 7 o personagem troca a cada 20 voltas (Naruto, Kakashi, Sakura), e a conta segue de uma visita pra outra', () => {
+  const { m } = montar();
+  const em = voltas => { m.salvo.akaVoltas = voltas; return tema.roupaAlvo(m); };
+  assert.deepStrictEqual([50, 69, 70, 89, 90, 99].map(em), ['t7-laranja', 't7-laranja', 't7-colete', 't7-colete', 't7-rosa', 't7-rosa']);
+  // 2ª visita ao Time 7 (voltas 150 a 199): continua de onde parou (50 voltas já dadas lá)
+  assert.deepStrictEqual([150, 159, 160, 179, 180, 199].map(em), ['t7-rosa', 't7-rosa', 't7-laranja', 't7-laranja', 't7-colete', 't7-colete']);
+  // o Sasuke não entra na rotação do Clawd
+  for (let v = 50; v < 1000; v++) if (Math.floor(v / 50) % 2) assert.notStrictEqual(em(v), 't7-azul');
 });
 
 test('as voltas contam andando de verdade, ficam no motor-estado.json, e quem reabre já começa na roupa da conta', () => {
@@ -509,10 +519,10 @@ test('as voltas contam andando de verdade, ficam no motor-estado.json, e quem re
     assert.ok(m.salvo.akaVoltas >= 2, `voltas: ${m.salvo.akaVoltas}`);
     const salvo = JSON.parse(fs.readFileSync(arq, 'utf8'));
     assert.deepStrictEqual([salvo.akaVoltas, salvo.akaRoupa], [m.salvo.akaVoltas, 'akatsuki']);
-    // reabriu com 173 voltas e sem roupa salva: já começa de colete, sem virada
+    // reabriu com 173 voltas (73 no Time 7) e sem roupa salva: já começa de Naruto, sem virada
     fs.writeFileSync(arq, JSON.stringify({ akaVoltas: 173, akaBugs: 4 }));
     const b = montar({ pasta }).m;
-    assert.strictEqual(b.salvo.akaRoupa, 't7-colete');
+    assert.strictEqual(b.salvo.akaRoupa, 't7-laranja');
     const c = tema.naParada(b);
     assert.ok(!c || c.nome !== 'virada');
     assert.strictEqual(b.salvo.akaBugs, 4);

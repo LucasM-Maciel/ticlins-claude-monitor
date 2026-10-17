@@ -29,6 +29,7 @@ const P = require('./parado').paradas('akatsuki', ['lamen', 'treino']);
 const { fatia } = A;
 const SORTEADAS = { akatsuki: ['clones', 'corvos', 'tronco', 'fogo'], time7: ['sapo', 'esfera', 'raio', 'folhas'] };
 const VOLTAS = 50;  // voltas andadas em cada lado (como no Sith)
+const VOLTAS_T7 = 20;  // no Time 7 o personagem troca a cada tanto de voltas (dono, 17/10); a conta segue de uma visita pra outra
 const CHANCE = 0.6;  // das paradas da caminhada, quantas têm cena
 const MORTE = { tronco: 1.75, fogo: 1.85, ...T7.MORTE };  // s: quando o inimigo da cena cai
 const BUGS = 30;  // inimigos derrubados por épico: ~30/h andando = 1 a cada ~1 h (como os droides do Sith)
@@ -191,8 +192,10 @@ Object.assign(FABRICAS, T7.FABRICAS);
 // A conta de voltas decide o lado (alterna a cada 50) e a roupa dele (a próxima das 3, cada vez que
 // ele volta pra esse lado). O que está na tela é a roupa salva; a virada troca no puf.
 function roupaAlvo(m) {
-  const ciclo = Math.floor((m.salvo.akaVoltas || 0) / VOLTAS), lista = A.ROUPAS.LADOS[ciclo % 2 ? 'time7' : 'akatsuki'];
-  return lista[Math.floor(ciclo / 2) % lista.length];
+  const voltas = m.salvo.akaVoltas || 0, ciclo = Math.floor(voltas / VOLTAS), lista = A.ROUPAS.LADOS[ciclo % 2 ? 'time7' : 'akatsuki'];
+  if (ciclo % 2 === 0) return lista[Math.floor(ciclo / 2) % lista.length];
+  const voltasNoT7 = Math.floor(ciclo / 2) * VOLTAS + (voltas - ciclo * VOLTAS);  // só as voltas dadas no Time 7
+  return lista[Math.floor(voltasNoT7 / VOLTAS_T7) % lista.length];
 }
 function roupaDe(m) {
   const c = m.cena;
