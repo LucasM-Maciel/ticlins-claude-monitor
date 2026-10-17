@@ -256,7 +256,13 @@ func lerSessoes(agora: Double) -> [Sessao] {
         var s = s
         s.situacao = situacao(s)
         return s
-    }.sorted { $0.updated > $1.updated }
+    }.sorted {
+        // pergunta/permissão no topo, depois as trabalhando, por último as terminadas; em cada grupo, a que mudou há menos tempo primeiro
+        func grupo(_ s: Sessao) -> Int { s.situacao == "question" || s.situacao == "permission" ? 0 : (s.situacao == "working" ? 1 : 2) }
+        if grupo($0) != grupo($1) { return grupo($0) < grupo($1) }
+        if $0.since != $1.since { return $0.since > $1.since }
+        return $0.updated > $1.updated
+    }
     // Mostrar: abas (as não automáticas), agentes (as automáticas) ou tudo
     .filter { config.mostrar == "tudo" || $0.automatica == (config.mostrar == "agentes") }
 }

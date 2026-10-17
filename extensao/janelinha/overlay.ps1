@@ -509,7 +509,8 @@ function Sessoes($agora) {
     }
     # Mostrar: o campo `automatica` vem pronto no arquivo (o hook e a extensão decidem; aqui não há regra)
     $vistas.Values | ForEach-Object { $_ | Add-Member -NotePropertyName situacao -NotePropertyValue (Situacao $_) -PassThru } |
-        Sort-Object updated -Descending |
+        Sort-Object @{ Expression = { if ($_.situacao -eq 'question' -or $_.situacao -eq 'permission') { 0 } elseif ($_.situacao -eq 'working') { 1 } else { 2 } } },
+                    @{ Expression = { $_.since }; Descending = $true }, @{ Expression = { $_.updated }; Descending = $true } |
         Where-Object { $config.mostrar -eq 'tudo' -or ([bool]$_.automatica) -eq ($config.mostrar -eq 'agentes') }
 }
 

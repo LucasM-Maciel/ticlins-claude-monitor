@@ -80,7 +80,7 @@ function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuE
         ...(automatica ? { automatica: true } : {}),
         transcript,
     }));
-    if (mostra) esperado.push({ updated: u, linha: `sessao: ${mostra[0]} | hook=${estado} | janelinha=${mostra[1]}` });
+    if (mostra) esperado.push({ updated: u, since: since ?? u, situ: mostra[1], linha: `sessao: ${mostra[0]} | hook=${estado} | janelinha=${mostra[1]}` });
 }
 
 /**
@@ -99,7 +99,7 @@ function sessaoCodex(id, { estado, pergunta: perguntou, nome, mostra, automatica
         since: u, updated: u, transcript: rollout, entrypoint: automatica ? "codex_exec" : "codex_vscode", ...(perguntou ? { pergunta: true } : {}),
         ...(automatica ? { automatica: true } : {}),
     }));
-    if (mostra) esperado.push({ updated: u, linha: `sessao: ${nome} | hook=${estado} | janelinha=${mostra} | agente=codex` });
+    if (mostra) esperado.push({ updated: u, since: u, situ: mostra, linha: `sessao: ${nome} | hook=${estado} | janelinha=${mostra} | agente=codex` });
 }
 
 function pidMorto() {
@@ -378,7 +378,9 @@ if (cenario === "misto") {
 }
 
 if (Object.keys(antes).length) fs.writeFileSync(path.join(pasta, "antes.json"), JSON.stringify(antes));
-const linhas = esperado.sort((a, b) => b.updated - a.updated).map((e) => e.linha);
+// a ordem da janelinha: pergunta/permissão no topo, depois as trabalhando, por último as terminadas; em cada grupo, a que mudou há menos tempo primeiro
+const grupoDaSituacao = (s) => (s === "question" || s === "permission" ? 0 : s === "working" ? 1 : 2);
+const linhas = esperado.sort((a, b) => grupoDaSituacao(a.situ) - grupoDaSituacao(b.situ) || b.since - a.since || b.updated - a.updated).map((e) => e.linha);
 const paginasDaLista = Math.max(1, Math.ceil(esperado.length / 10));  // a lista mostra 10 por vez; o .txt traz todas as sessões
 if (mostrarDoCenario !== "abas") linhas.push(`mostrar: ${mostrarDoCenario}`);
 if (paginasDaLista > 1) linhas.push(`pagina: 1/${paginasDaLista}`);

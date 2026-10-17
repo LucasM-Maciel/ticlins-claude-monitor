@@ -363,7 +363,10 @@ def ler_sessoes(agora):
     lista = list(vistas.values())
     for s in lista:
         s["situacao"] = situacao(s)
-    lista = sorted(lista, key=lambda s: s["updated"], reverse=True)
+    # pergunta/permissão no topo, depois as trabalhando, por último as terminadas; em cada grupo, a que mudou há menos tempo primeiro
+    def grupo(s):
+        return 0 if s["situacao"] in ("question", "permission") else (1 if s["situacao"] == "working" else 2)
+    lista = sorted(lista, key=lambda s: (grupo(s), -s["since"], -s["updated"]))
     # Mostrar: abas (as não automáticas), agentes (as automáticas) ou tudo
     return [s for s in lista if config["mostrar"] == "tudo" or s["automatica"] == (config["mostrar"] == "agentes")]
 
