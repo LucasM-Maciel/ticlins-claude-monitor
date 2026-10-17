@@ -123,7 +123,7 @@ test("ClaudeMonitor.zip tem tudo, com o instalador do Mac executável", { skip: 
 test(".vsix leva a janelinha, os scripts e nada de sobra", { skip: !temDist && "rode npm run empacotar" }, async () => {
     const nomes = (await entradas(path.join(DIST, `claude-monitor-${manifesto.version}.vsix`))).map((e) => e.nome);
     for (const n of ["extension/package.json", "extension/readme.md", "extension/out/extension.js", "extension/out/hook.js",
-        "extension/out/processes.js", "extension/out/sem-node.sh", "extension/out/install.js", "extension/out/sessions.js",
+        "extension/out/processes.js", "extension/out/sem-node.sh", "extension/out/install.js", "extension/out/sessions.js", "extension/out/codex.js",
         "extension/janelinha/overlay.ps1", "extension/janelinha/overlay.swift", "extension/janelinha/overlay-linux.py",
         "extension/janelinha/minecraft.js", "extension/janelinha/vorbis.min.js", "extension/janelinha/vorbis-licencas.txt",
         "extension/janelinha/sons-padrao/terminou.wav", "extension/janelinha/sons-padrao/esperando.wav", "extension/janelinha/sons-padrao/tudo.wav",

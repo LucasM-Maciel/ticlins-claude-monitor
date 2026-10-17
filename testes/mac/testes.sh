@@ -198,7 +198,7 @@ t_cenario() {
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png; perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
   elif [ "$c" = pedra ]; then
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "cadê o diamante (diamante.png) subindo? perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
-  elif [ "$c" = padrao ] || [ "$c" = epico ]; then
+  elif [ "$c" = padrao ] || [ "$c" = epico ] || [ "$c" = codex ] || [ "$c" = uso-codex ] || [ "$c" = uso-codex-sem ] || [ "$c" = uso-ambos ]; then
     # picareta, pedra e bug são do Minecraft
     [ "$(pixels "$foto" 74 237 217 40)" -lt 5 ] || falha "o Clawd do Padrão apareceu com a ferramenta" || return 1
   else
@@ -212,6 +212,19 @@ t_cenario() {
   fi
   if [ "$c" = atualizar ]; then
     [ "$(pixels "$foto" 167 139 250 30)" -gt 10 ] || falha "cadê o aviso roxo da versão nova?" || return 1
+  fi
+  # a marquinha "codex" fica na cor do usage normal do Padrão (#D1D5DB); Uso = Codex some com a barra de 85% do Claude, Os dois traz de volta
+  if [ "$c" = codex ]; then
+    [ "$(pixels "$foto" 209 213 219 4)" -gt 8 ] || falha "cadê a marquinha \"codex\" na lista?" || return 1
+  fi
+  if [ "$c" = uso-codex-sem ]; then
+    [ "$(pixels "$foto" 209 213 219 4)" -lt 3 ] || falha "barra de usage de alguém no \"Codex: sem uso ainda\"" || return 1
+  fi
+  if [ "$c" = uso-codex ] || [ "$c" = uso-codex-sem ]; then
+    [ "$(pixels "$foto" 245 158 11 25)" -lt 5 ] || falha "a barra de 85% do Claude apareceu com Uso = Codex" || return 1
+  fi
+  if [ "$c" = uso-ambos ]; then
+    [ "$(pixels "$foto" 245 158 11 25)" -gt 20 ] || falha "cadê a barra de 85% do Claude com Uso = Os dois?" || return 1
   fi
   if [ "$c" = misto ]; then
     [ "$(pixels "$foto" 167 139 250 30)" -lt 3 ] || falha "aviso roxo sem versão nova"
@@ -243,7 +256,7 @@ enfeites_mc() {
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 # Sem o motor: o Clawd daqui (Swift), o de quando falta o node. As lutas antigas (pedra, bug)

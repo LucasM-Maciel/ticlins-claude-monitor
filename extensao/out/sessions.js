@@ -85,6 +85,8 @@ async function ttysWithClaude() {
     return ttys;
 }
 function isAlive(data, ttys, now) {
+    if (data.agente === "codex")
+        return now - (data.updated || 0) <= STALE_AFTER_SEC; // sem pid nem tty: quem apaga é o codex.js (rollout parado)
     if (data.pid)
         return pidAlive(data.pid);
     if (data.tty)
@@ -211,13 +213,13 @@ async function readSessions() {
             continue;
         }
         const id = entry.replace(/\.json$/, "");
-        const transcript = data.transcript || findTranscript(id);
+        const transcript = data.transcript || (data.agente === "codex" ? null : findTranscript(id));
         const updated = data.updated || now;
         const since = data.since || updated;
         sessions.push({
             id,
             file,
-            name: titles.get(transcript) || data.name || "sessão",
+            name: (data.agente === "codex" ? undefined : titles.get(transcript)) || data.name || "sessão",
             cwd: data.cwd || "",
             state: effectiveState({ ...data, since, transcript }),
             since,
@@ -226,6 +228,8 @@ async function readSessions() {
             pid: data.pid || null,
             entrypoint: data.entrypoint || null,
             transcript,
+            agente: data.agente === "codex" ? "codex" : "claude",
+            pergunta: data.pergunta === true,
         });
     }
     // /clear e resume criam session_id novo no mesmo processo/terminal:

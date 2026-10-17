@@ -517,6 +517,72 @@ test("clique na janelinha (vscode://local.claude-monitor/sessao?id=…) abre a a
     assert.ok(r.mensagens.some((m) => m.texto.includes("já fechou")), JSON.stringify(r.mensagens));
 });
 
+/** Casa de mentira com um ~/.codex: um rollout no formato do Codex CLI (texto inventado). */
+function casaComCodex({ originator = "codex_vscode", cwd, fim = "task_started" } = {}) {
+    const casa = pastaTemp("cm-ext-");
+    const id = "00000000-0000-4000-8000-0000000000aa";
+    const d = new Date();
+    const dois = (n) => String(n).padStart(2, "0");
+    const dir = path.join(casa, ".codex", "sessions", String(d.getFullYear()), dois(d.getMonth() + 1), dois(d.getDate()));
+    fs.mkdirSync(dir, { recursive: true });
+    const quando = new Date().toISOString();
+    const linhas = [
+        { timestamp: quando, type: "session_meta", payload: { id, cwd, originator, source: "vscode" } },
+        { timestamp: quando, type: "event_msg", payload: { type: fim } },
+        { timestamp: quando, type: "event_msg", payload: { type: "token_count", rate_limits: { primary: { used_percent: 7, window_minutes: 43200, resets_at: Math.floor(Date.now() / 1000) + 86400 }, secondary: null, plan_type: "free" } } },
+    ];
+    fs.writeFileSync(path.join(dir, `rollout-2026-10-16T10-00-00-${id}.jsonl`), linhas.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    fs.writeFileSync(path.join(casa, ".codex", "session_index.jsonl"), JSON.stringify({ id, thread_name: "Sessão do Codex", updated_at: quando }) + "\n");
+    return { casa, id: `codex-${id}` };
+}
+
+test("Codex: a extensão lê ~/.codex e grava a sessão e o uso, sem hook", async () => {
+    const projeto = path.join(os.tmpdir(), "projeto-do-codex");
+    const { casa, id } = casaComCodex({ cwd: projeto });
+    const { pasta } = await ativar({ casa });
+    const sessao = JSON.parse(fs.readFileSync(path.join(pasta, "sessions", `${id}.json`), "utf8"));
+    assert.strictEqual(sessao.agente, "codex");
+    assert.strictEqual(sessao.name, "Sessão do Codex");
+    assert.strictEqual(sessao.state, "working");
+    const uso = JSON.parse(fs.readFileSync(path.join(pasta, "uso-codex.json"), "utf8"));
+    assert.deepStrictEqual(uso.janelas.map((j) => [j.rotulo, j.usado]), [["30d", 7]]);
+});
+
+test("Codex: sem ~/.codex a extensão não grava nada do Codex", async () => {
+    const { pasta } = await ativar();
+    assert.deepStrictEqual(fs.readdirSync(path.join(pasta, "sessions")).filter((f) => f.startsWith("codex-")), []);
+    assert.ok(!fs.existsSync(path.join(pasta, "uso-codex.json")));
+    assert.ok(!fs.existsSync(path.join(path.dirname(pasta), ".codex")), "criou ~/.codex");
+});
+
+test("clique numa sessão do Codex (painel do VS Code) abre a barra do Codex: chatgpt.openSidebar", async () => {
+    const projeto = path.join(os.tmpdir(), "projeto-do-codex");
+    const { casa, id } = casaComCodex({ cwd: path.join(projeto, "sub") });
+    const { r } = await ativar({ casa });
+    r.vscode.workspace.workspaceFolders = [{ uri: { fsPath: projeto } }];
+    await r.uri.handleUri({ query: `id=${id}` });
+    assert.deepStrictEqual(r.executados.at(-1), ["chatgpt.openSidebar"]);
+    assert.ok(!r.executados.some((e) => e[0] === "claude-vscode.editor.open"), "chamou o comando do Claude pra uma sessão do Codex");
+});
+
+test("clique numa sessão do Codex de outra janela: abre a pasta dela (foca a janela que a tem)", async () => {
+    const { casa, id } = casaComCodex({ cwd: path.join(os.tmpdir(), "outro-projeto") });
+    const { r } = await ativar({ casa });
+    r.vscode.workspace.workspaceFolders = [{ uri: { fsPath: path.join(os.tmpdir(), "projeto-desta-janela") } }];
+    await r.uri.handleUri({ query: `id=${id}` });
+    assert.ok(!r.executados.some((e) => e[0] === "chatgpt.openSidebar"), "abriu a barra do Codex desta janela pra uma sessão de outra");
+    assert.strictEqual(r.executados.at(-1)[0], "vscode.openFolder");
+});
+
+test("clique numa sessão do Codex do terminal (codex-tui) não abre a barra do Codex", async () => {
+    const projeto = path.join(os.tmpdir(), "projeto-do-codex");
+    const { casa, id } = casaComCodex({ cwd: projeto, originator: "codex-tui" });
+    const { r } = await ativar({ casa });
+    r.vscode.workspace.workspaceFolders = [{ uri: { fsPath: projeto } }];
+    await r.uri.handleUri({ query: `id=${id}` });
+    assert.ok(!r.executados.some((e) => e[0] === "chatgpt.openSidebar"), JSON.stringify(r.executados));
+});
+
 /** Mojang de mentira no ar (ou, com `foraDoAr`, uma porta que ninguém atende) durante fn */
 async function comMojang(fn, { foraDoAr = false } = {}) {
     const m = await mojang.iniciar();

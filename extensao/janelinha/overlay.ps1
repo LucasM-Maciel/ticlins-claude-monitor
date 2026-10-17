@@ -112,7 +112,9 @@ $nomeDoSom = @{  # pro diário e pro .txt do -Foto
 # cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
 $temas = [ordered]@{ padrao = 'Padrão'; minecraft = 'Minecraft'; dragonball = 'Dragon Ball'; sith = 'Star Wars'; akatsuki = 'Akatsuki' }
 $configArquivo = Join-Path $Pasta 'config.json'
-$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft' }
+# Uso (botão direito): quais barras de usage aparecem; o padrão é só as do Claude (nada muda sem pedir)
+$modosDeUso = [ordered]@{ claude = 'Claude'; codex = 'Codex'; ambos = 'Os dois' }
+$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft'; uso = 'claude' }
 # Exists antes: arquivo que não existe soma no $Error mesmo pego no try (o "fechou (1 erros)" do diário)
 if ([IO.File]::Exists($configArquivo)) {
     try {
@@ -122,6 +124,7 @@ if ([IO.File]::Exists($configArquivo)) {
         if ($null -ne $configLido.clawd) { $config.clawd = [bool]$configLido.clawd }
         if ($null -ne $configLido.volume) { $config.volume = [math]::Min(1.0, [math]::Max(0.0, [double]$configLido.volume)) }
         if ($temas.Contains("$($configLido.tema)")) { $config.tema = "$($configLido.tema)" }
+        if ($modosDeUso.Contains("$($configLido.uso)")) { $config.uso = "$($configLido.uso)" }
     } catch { Anotar "config.json com defeito, fiquei com o padrão: $_" }
 }
 function SalvarConfig {
@@ -473,8 +476,11 @@ function Sessoes($agora) {
         if ($s.pid) { if (-not (PidVivo $s.pid)) { return } }
         elseif ($agora - $s.updated -gt 6 * 3600) { return }
         $s | Add-Member -NotePropertyName id -NotePropertyValue $_.BaseName
-        $titulo = Titulo $s.transcript
-        if ($titulo) { $s.name = $titulo }
+        # sessão do Codex: o título já vem pronto no arquivo (o transcript é de outro formato)
+        if ($s.agente -ne 'codex') {
+            $titulo = Titulo $s.transcript
+            if ($titulo) { $s.name = $titulo }
+        }
         $chave = if ($s.pid) { $s.pid } else { $s.id }
         if (-not $vistas[$chave] -or $vistas[$chave].updated -lt $s.updated) { $vistas[$chave] = $s }
     }
@@ -490,7 +496,7 @@ function Sessoes($agora) {
             $sessaoWsl | Add-Member -NotePropertyName id -NotePropertyValue "$idWsl"
             # transcript de Linux (/home/...) vira caminho de Windows pela raiz da distro
             if (([string]$sessaoWsl.transcript).StartsWith('/')) { $sessaoWsl.transcript = $raizWsl + ([string]$sessaoWsl.transcript).Replace('/', '\') }
-            if ([IO.File]::Exists($sessaoWsl.transcript)) {
+            if ($sessaoWsl.agente -ne 'codex' -and [IO.File]::Exists($sessaoWsl.transcript)) {
                 $tituloWsl = Titulo $sessaoWsl.transcript
                 if ($tituloWsl) { $sessaoWsl.name = $tituloWsl }
             }
@@ -579,6 +585,12 @@ function UltimoPedido($transcript) {
 # Situação a partir do estado do hook + última mensagem. Trabalhando/permissão só
 # viram pergunta com a caixinha (texto com "?" no meio do trabalho não conta).
 function Situacao($s) {
+    # sessão do Codex (ou com "pergunta": true): a extensão já leu a conversa e deixou a resposta no arquivo
+    if ($s.agente -eq 'codex' -or $s.pergunta -eq $true) {
+        if ($s.state -eq 'working') { return 'working' }
+        if ($s.pergunta -eq $true) { return 'question' }
+        return 'finished'
+    }
     $estado = $s.state
     # depois de aprovar uma permissão nenhum hook dispara até a sessão parar; se o
     # transcript mexeu depois do pedido, ela voltou a trabalhar (regra da extensão)
@@ -739,6 +751,22 @@ function BuscarUso {
 # no 1º quadro, e refazer a cada 2 s piscava os nomes (filmado 06/10). A chave de cada
 # painel é o que ele mostra; os lugares são onde ficou cada coisa que o motor desenha.
 $listaFeita = @{ sessoes = $null; uso = $null; aviso = $null; lugaresDasSessoes = @(); lugaresDoUso = @() }
+# Uso do Codex: a extensão grava as janelas de limite (5h, 7d ou 30d, conforme o plano) em
+# uso-codex.json, sem rede. Relê só quando o arquivo muda. O catch tira o erro do $Error
+# (arquivo lido no meio da gravação): senão vira "fechou (N erros)" no diário.
+$lidoDoUsoCodex = @{ marca = ''; janelas = @() }
+function JanelasDoCodex {
+    $arquivoDoUsoCodex = Join-Path $Pasta 'uso-codex.json'
+    if (-not [IO.File]::Exists($arquivoDoUsoCodex)) { $lidoDoUsoCodex.marca = ''; $lidoDoUsoCodex.janelas = @(); return }
+    $infoDoUsoCodex = [IO.FileInfo]::new($arquivoDoUsoCodex)
+    $marcaDoUsoCodex = "$($infoDoUsoCodex.LastWriteTimeUtc.Ticks) $($infoDoUsoCodex.Length)"
+    if ($marcaDoUsoCodex -ne $lidoDoUsoCodex.marca) {
+        $lidoDoUsoCodex.marca = $marcaDoUsoCodex
+        $lidoDoUsoCodex.janelas = @()
+        try { $lidoDoUsoCodex.janelas = @(([IO.File]::ReadAllText($arquivoDoUsoCodex) | ConvertFrom-Json).janelas | Where-Object { $_ }) } catch { $Error.RemoveAt(0) }
+    }
+    $lidoDoUsoCodex.janelas
+}
 function Atualizar {
     $agora = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000
     $sessoes = @(Sessoes $agora)
@@ -774,11 +802,18 @@ function Atualizar {
             $bola.Width = 8; $bola.Height = 8
             $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
             $bola.VerticalAlignment = 'Center'
-            $nomeSessao = Texto $s.name '#E5E7EB' 170
+            $ehDoCodex = $s.agente -eq 'codex'
+            $nomeSessao = Texto $s.name '#E5E7EB' $(if ($ehDoCodex) { 130 } else { 170 })
             $nomeSessao.TextTrimming = 'CharacterEllipsis'
             $tempo = $(if ($doMotor) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
             $listaFeita.lugaresDasSessoes += , @($bola, $tempo, $tempoTexto)
-            $linha = Linha $bola $nomeSessao $tempo
+            if ($ehDoCodex) {
+                # a marquinha "codex" ao lado do nome, na cor do tema (a mesma do usage normal)
+                $etiquetaDoCodex = Rotulo 'codex' $coresDoUso[$config.tema][0] 40 $null 40
+                $linha = Linha $bola $nomeSessao $etiquetaDoCodex $tempo
+            } else {
+                $linha = Linha $bola $nomeSessao $tempo
+            }
             $linha.Background = [Windows.Media.Brushes]::Transparent
             $linha.ToolTip = $rotulo
             $linha.Tag = "sessao:$($s.id)"  # o clique acha a sessão por aqui
@@ -800,18 +835,33 @@ function Atualizar {
     }
 
     BuscarUso
-    $medidores = @(if ($uso.dados) { DadosDoMedidor '5h' $uso.dados.five_hour; DadosDoMedidor '7d' $uso.dados.seven_day })
+    # Uso (botão direito): as barras do Claude, as do Codex ou as duas, cada grupo com o nome do agente
+    $medidoresDoClaude = @(if ($uso.dados -and $config.uso -ne 'codex') { DadosDoMedidor '5h' $uso.dados.five_hour; DadosDoMedidor '7d' $uso.dados.seven_day })
+    foreach ($medidorDoClaude in $medidoresDoClaude) { $medidorDoClaude.grupo = 'Claude' }
+    $medidoresDoCodex = @(if ($config.uso -ne 'claude') {
+        foreach ($janelaDoCodex in @(JanelasDoCodex)) { DadosDoMedidor "$($janelaDoCodex.rotulo)" ([pscustomobject]@{ utilization = $janelaDoCodex.usado; resets_at = $janelaDoCodex.reinicia }) }
+    })
+    foreach ($medidorDoCodex in $medidoresDoCodex) { $medidorDoCodex.grupo = 'Codex' }
+    $medidores = @($medidoresDoClaude) + @($medidoresDoCodex)
+    $listaFeita.barras = (@($medidores | ForEach-Object { "$($_.grupo) $($_.rotulo) $($_.pctTexto)" }) -join ' | ')
     # sem o motor, a barra muda com a %; o "falta" anda a cada minuto e é trocado no lugar
-    $chaveDoUso = "$($config.tema) $doMotor $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct)" }) }) -join '')
+    $chaveDoUso = "$($config.tema) $doMotor $($config.uso) $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct)" }) }) -join '')
     if ($chaveDoUso -ne $listaFeita.uso) {
         $listaFeita.uso = $chaveDoUso
         $listaFeita.lugaresDoUso = @()
         $painelUso.Children.Clear()
+        $grupoDoUsoAtual = ''
+        if ($config.uso -eq 'ambos' -and -not $medidoresDoClaude) { [void]$painelUso.Children.Add((Texto 'usage indisponível' '#6B7280')) }
         foreach ($medidor in $medidores) {
+            if ($config.uso -eq 'ambos' -and $medidor.grupo -ne $grupoDoUsoAtual) {
+                $grupoDoUsoAtual = $medidor.grupo
+                [void]$painelUso.Children.Add((Texto $grupoDoUsoAtual '#9CA3AF'))
+            }
             [void]$painelUso.Children.Add((Medidor $medidor))
             $listaFeita.lugaresDoUso += , $medidor.lugares
         }
-        if (-not $medidores) { [void]$painelUso.Children.Add((Texto 'usage indisponível' '#6B7280')) }
+        if ($config.uso -ne 'claude' -and -not $medidoresDoCodex) { [void]$painelUso.Children.Add((Texto 'Codex: sem uso ainda' '#6B7280')) }
+        elseif (-not $medidores) { [void]$painelUso.Children.Add((Texto 'usage indisponível' '#6B7280')) }
     }
     for ($iMedidor = 0; $iMedidor -lt $medidores.Count; $iMedidor++) {
         $medidor, $lugares = $medidores[$iMedidor], $listaFeita.lugaresDoUso[$iMedidor]
@@ -1550,6 +1600,34 @@ SetaDoTema '◀' -1
 SetaDoTema '▶' 1
 [void]$menu.Items.Add($painelTema)
 
+# Uso: Uso ◀ Claude / Codex / Os dois ▶ (quais barras de usage aparecem; fica em config.json > "uso")
+$painelModoUso = New-Object Windows.Controls.StackPanel
+$painelModoUso.Orientation = 'Horizontal'
+$painelModoUso.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
+[void]$painelModoUso.Children.Add((Texto 'Uso' '#D1D5DB' 70))
+$nomeDoModoUso = Texto $modosDeUso[$config.uso] '#FFFFFF' 70
+$nomeDoModoUso.TextAlignment = 'Center'
+$nomeDoModoUso.FontWeight = 'SemiBold'
+function TrocarModoUso($direcaoDoModoUso) {
+    $chavesDosModosUso = @($modosDeUso.Keys)
+    $config.uso = $chavesDosModosUso[($chavesDosModosUso.IndexOf($config.uso) + $direcaoDoModoUso + $chavesDosModosUso.Count) % $chavesDosModosUso.Count]
+    $nomeDoModoUso.Text = $modosDeUso[$config.uso]
+    SalvarConfig
+    Anotar "uso: $($config.uso)"
+    Atualizar
+}
+function SetaDoModoUso($simboloDoModoUso, $direcaoDoModoUso) {
+    $botaoDoModoUso = New-Object Windows.Controls.Button
+    $botaoDoModoUso.Content = $simboloDoModoUso
+    $botaoDoModoUso.Tag = $direcaoDoModoUso
+    $botaoDoModoUso.Add_Click({ TrocarModoUso $this.Tag })
+    [void]$painelModoUso.Children.Add($botaoDoModoUso)
+}
+SetaDoModoUso '◀' -1
+[void]$painelModoUso.Children.Add($nomeDoModoUso)
+SetaDoModoUso '▶' 1
+[void]$menu.Items.Add($painelModoUso)
+
 # toggle do Clawd
 $itemClawd = New-Object Windows.Controls.MenuItem
 $itemClawd.Header = 'Clawd'
@@ -1698,8 +1776,9 @@ if ($Foto) {
             if ($achou) { Clicar $achou }
         }
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
-            "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)"
+            "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)$(if ($_.agente -eq 'codex') { ' | agente=codex' })"
         }) + "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
+            @(if ($config.uso -ne 'claude') { "uso: $($config.uso)"; "barras: $($listaFeita.barras)" }) +
             "som: $(if ($somDaVez) { $nomeDoSom[$config.tema][$avisoDaSituacao[$somDaVez]] } else { 'nenhum' })" +
             "som da cena: $(if ($somDaCena) { $somDaCena } else { 'nenhum' })" +
             "clique: $(if ($cliqueDaVez) { $cliqueDaVez } else { 'nenhum' })" +

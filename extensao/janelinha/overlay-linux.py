@@ -122,7 +122,7 @@ def sem_cair(fn, normal):
 # --- botão direito: tema, Clawd, opacidade e volume, gravados em config.json (os outros leem o mesmo).
 temas = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars"), ("akatsuki", "Akatsuki")]
 arquivo_config = os.path.join(pasta, "config.json")
-config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft"}
+config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft", "uso": "claude"}
 
 
 def ler_json(caminho):
@@ -148,6 +148,8 @@ if _o:
         config["volume"] = min(1.0, max(0.0, numero(_o["volume"])))
     if _o.get("tema") in [t for t, _ in temas]:
         config["tema"] = _o["tema"]
+    if _o.get("uso") in ("claude", "codex", "ambos"):
+        config["uso"] = _o["uso"]
 
 
 def salvar_config():
@@ -338,9 +340,12 @@ def ler_sessoes(agora):
         elif agora - updated > 6 * 3600:
             continue
         sid = arquivo[:-5]
-        transcript = d.get("transcript") if isinstance(d.get("transcript"), str) else ""
+        codex = d.get("agente") == "codex"
+        # Codex: sem transcript do Claude (a extensão grava "pergunta" no arquivo)
+        transcript = d.get("transcript") if isinstance(d.get("transcript"), str) and not codex else ""
         s = {
-            "id": sid, "nome": titulo(transcript) or (d.get("name") if isinstance(d.get("name"), str) else "sessão"),
+            "id": sid, "nome": (None if codex else titulo(transcript)) or (d.get("name") if isinstance(d.get("name"), str) else "sessão"),
+            "codex": codex, "pergunta": d.get("pergunta") is True,
             "estado": d.get("state") if isinstance(d.get("state"), str) else "waiting",
             "since": numero(d.get("since")) or updated, "updated": updated, "pid": pid, "transcript": transcript,
         }
@@ -444,6 +449,10 @@ def ultimo_pedido(transcript):
 
 def situacao(s):
     estado = s["estado"]
+    if s.get("codex"):  # a extensão já avisou no arquivo se terminou perguntando
+        if estado == "working":
+            return "working"
+        return "question" if s.get("pergunta") else "finished"
     # depois de aprovar uma permissão nenhum hook dispara até a sessão parar; se o transcript
     # mexeu depois do pedido, ela voltou a trabalhar (regra da extensão)
     if estado == "permission":
@@ -554,6 +563,54 @@ class SemRedirecionar(urllib.request.HTTPRedirectHandler):
 
 
 abridor = urllib.request.build_opener(SemRedirecionar)
+
+
+# uso do Codex: a extensão grava uso-codex.json (janelas com rotulo, usado e reinicia), sem rede
+uso_do_codex = []
+
+
+def ler_uso_do_codex():
+    global uso_do_codex
+    uso_do_codex = []
+    o = ler_json(os.path.join(pasta, "uso-codex.json"))
+    janelas = o.get("janelas") if o else None
+    if not isinstance(janelas, list):
+        return
+    for j in janelas:
+        if not isinstance(j, dict) or not isinstance(j.get("rotulo"), str):
+            continue
+        m = medida({"utilization": j.get("usado"), "resets_at": j.get("reinicia")})
+        if m:
+            uso_do_codex.append((j["rotulo"], m[0], m[1]))
+
+
+def linhas_do_uso():
+    """O que o bloco do usage mostra, conforme o "Uso" do botão direito: Claude, Codex ou os dois
+    (com os dois, cada grupo ganha o nome do agente). ("texto", txt) ou ("barra", rotulo, pct, renova)."""
+    do_claude = [] if config["uso"] == "codex" else list(uso or [])
+    do_codex = [] if config["uso"] == "claude" else list(uso_do_codex)
+    ambos = config["uso"] == "ambos"
+    r = []
+    if ambos and not do_claude:
+        r.append(("texto", "usage indisponível"))
+    if ambos and do_claude:
+        r.append(("texto", "Claude"))
+    r += [("barra",) + m for m in do_claude]
+    if ambos and do_codex:
+        r.append(("texto", "Codex"))
+    r += [("barra",) + m for m in do_codex]
+    if config["uso"] != "claude" and not do_codex:
+        r.append(("texto", "Codex: sem uso ainda"))
+    elif not do_claude and not do_codex:
+        r.append(("texto", "usage indisponível"))
+    return r
+
+
+def barras_com_grupo():
+    do_claude = [] if config["uso"] == "codex" else list(uso or [])
+    do_codex = [] if config["uso"] == "claude" else list(uso_do_codex)
+    return " | ".join([f"Claude {m[0]} {round(m[1])}%" for m in do_claude]
+                      + [f"Codex {m[0]} {round(m[1])}%" for m in do_codex])
 
 
 def buscar_uso():
@@ -803,7 +860,9 @@ class Cartao:
         self.altura_uso = max(0 if ap["enfeites"] else 16, ap["letra"], ap["barra"][1]) + 4
         self.largura = max(186 + ap["colTempo"], ap["colRotulo"] + ap["barra"][0] + ap["colPct"] + ap["colFalta"])
         self.y_uso = self.y0 + (20 if not self.linhas else len(self.linhas) * self.altura_linha) + 10
-        altura_do_uso = len(uso) * self.altura_uso if uso else 20
+        linhas_uso = linhas_do_uso()
+        so_texto = len(linhas_uso) == 1 and linhas_uso[0][0] == "texto"
+        altura_do_uso = 20 if so_texto else len(linhas_uso) * self.altura_uso
         self.y_aviso = self.y_uso + altura_do_uso + 10
         w = self.x0 + self.largura + ap["padding"][2] + ap["moldura"][2]
         h = self.y_aviso - 10 + (0 if self.aviso is None else 30) + ap["padding"][3] + ap["moldura"][3]
@@ -836,7 +895,12 @@ class Cartao:
                 cr.arc(x0 + 4, y + self.altura_linha / 2, 4, 0, 2 * math.pi)
                 cr.fill()
                 escrever(cr, l["tempo"], cor, (x0 + 186, y, ap["colTempo"], self.altura_linha), "dir")
-            escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 170, self.altura_linha))
+            if l.get("codex"):
+                # a marquinha "codex" ao lado do nome, na cor do tema (a mesma do usage normal)
+                escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 130, self.altura_linha))
+                escrever(cr, "codex", hex_cor(cores_do_uso.get(config["tema"], ["#D1D5DB"])[0]), (x0 + 146, y, 40, self.altura_linha))
+            else:
+                escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 170, self.altura_linha))
             y += self.altura_linha
         y += 5
         cr.set_source_rgba(*hex_cor("#33FFFFFF"))
@@ -848,12 +912,17 @@ class Cartao:
             cr.rectangle(x0, self.y_aviso - 5, largura, 1)
             cr.fill()
             escrever(cr, f"↑ versão {self.aviso} disponível · baixar", hex_cor("#A78BFA"), (x0, self.y_aviso, largura, 20))
-        if not uso:
-            escrever(cr, "usage indisponível", hex_cor("#6B7280"), (x0, y, largura, 20))
-        elif not ap["enfeites"]:  # com enfeites: rótulo, barra, % e falta o motor desenha
-            bw, bh = ap["barra"]
-            r = min(2, bh / 2)
-            for rotulo, pct, renova in uso:
+        linhas_uso = linhas_do_uso()
+        so_texto = len(linhas_uso) == 1 and linhas_uso[0][0] == "texto"
+        bw, bh = ap["barra"]
+        r = min(2, bh / 2)
+        for linha_uso in linhas_uso:
+            if linha_uso[0] == "texto":
+                nome_de_grupo = linha_uso[1] in ("Claude", "Codex")
+                escrever(cr, linha_uso[1], hex_cor("#9CA3AF" if nome_de_grupo else "#6B7280"),
+                         (x0, y, largura, 20 if so_texto else self.altura_uso))
+            elif not ap["enfeites"]:  # com enfeites: rótulo, barra, % e falta o motor desenha
+                _, rotulo, pct, renova = linha_uso
                 c = hex_cor("#EF4444" if pct >= 95 else "#F59E0B" if pct >= 80 else "#D1D5DB")
                 escrever(cr, rotulo, hex_cor("#9CA3AF"), (x0, y, ap["colRotulo"], self.altura_uso))
                 tx, ty = x0 + ap["colRotulo"], y + (self.altura_uso - bh) / 2
@@ -868,7 +937,7 @@ class Cartao:
                 escrever(cr, "%.0f%%" % pct, c, (tx + bw, y, ap["colPct"], self.altura_uso), "dir")
                 escrever(cr, falta_pra_renovar(renova), hex_cor("#6B7280"),
                          (tx + bw + ap["colPct"], y, ap["colFalta"], self.altura_uso), "dir")
-                y += self.altura_uso
+            y += self.altura_uso
         if camada:
             cr.pop_group_to_source()
             cr.paint_with_alpha(config["opacidade"])
@@ -896,12 +965,13 @@ class Cartao:
         return r
 
     def caixas_do_uso(self):
-        if not uso:
-            return []
         ap = self.ap
         cores = cores_do_uso.get(config["tema"], ["#D1D5DB", "#F59E0B", "#EF4444"])
         r = []
-        for j, (rotulo, pct, renova) in enumerate(uso):
+        for j, linha_uso in enumerate(linhas_do_uso()):
+            if linha_uso[0] != "barra":
+                continue
+            _, rotulo, pct, renova = linha_uso
             uy = self.y_uso + j * self.altura_uso
             yl = uy + (self.altura_uso - ap["letra"]) / 2
             nivel = 2 if pct >= 95 else 1 if pct >= 80 else 0
@@ -1319,8 +1389,10 @@ def atualizar():
     for s in sessoes:
         cor, rotulo = estados.get(s["situacao"], ("#9CA3AF", s["situacao"]))
         cartao.linhas.append({"id": s["id"], "sit": s["situacao"], "cor": cor, "nome": s["nome"],
-                              "tempo": tempo((agora - s["since"]) / 60), "rotulo": rotulo})
+                              "tempo": tempo((agora - s["since"]) / 60), "rotulo": rotulo,
+                              "codex": s.get("codex", False)})
     buscar_uso()
+    ler_uso_do_codex()
     cartao.aviso = versao_nova()
     cartao.arrumar()
     ajustar_entrada()
@@ -1348,8 +1420,9 @@ def atualizar():
         clawd = modo if config["clawd"] else "desligado"
         aviso = aviso_da_situacao.get(som_da_vez) if som_da_vez else None
         som = nome_do_som.get(config["tema"], {}).get(aviso, "nenhum") if aviso else "nenhum"
-        visto = [f"sessao: {s['nome']} | hook={s['estado']} | janelinha={s['situacao']}" for s in sessoes] + [
-            f"clawd: {clawd}", f"usage: {'indisponivel' if not uso else 'ok'}", f"som: {som}",
+        visto = [f"sessao: {s['nome']} | hook={s['estado']} | janelinha={s['situacao']}" + (" | agente=codex" if s.get("codex") else "") for s in sessoes] + [
+            f"clawd: {clawd}", f"usage: {'indisponivel' if not uso else 'ok'}"] + ([] if config["uso"] == "claude" else [f"uso: {config['uso']}", f"barras: {barras_com_grupo()}"]) + [
+            f"som: {som}",
             f"som da cena: {som_da_cena_visto or 'nenhum'}", f"clique: {clique_da_vez or 'nenhum'}",
             f"atualizacao: {cartao.aviso or 'nenhuma'}"]
         with open(arquivo_foto + ".txt", "w", encoding="utf-8") as f:
@@ -1394,6 +1467,20 @@ def montar_menu():
     clawd.connect("toggled", lambda it: trocar("clawd", it.get_active()))
     menu.append(clawd)
 
+    # Uso: quais barras de usage aparecem (Claude, Codex ou os dois)
+    sub = Gtk.Menu()
+    grupo = None
+    modos_de_uso = (("claude", "Claude"), ("codex", "Codex"), ("ambos", "Os dois"))
+    for uid, nome in modos_de_uso:
+        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome)
+        grupo = item
+        item.set_active(config["uso"] == uid)
+        item.connect("toggled", lambda it, u=uid: it.get_active() and trocar("uso", u))
+        sub.append(item)
+    item = Gtk.MenuItem(label="Uso: " + dict(modos_de_uso)[config["uso"]])
+    item.set_submenu(sub)
+    menu.append(item)
+
     for chave, rotulo, valores in (("opacidade", "Opacidade", [100, 90, 80, 70, 60, 50, 40, 30, 20]),
                                    ("volume", "Volume", [100, 80, 60, 40, 20, 10, 0])):
         sub = Gtk.Menu()
@@ -1424,6 +1511,9 @@ def trocar(chave, valor):
     salvar_config()
     if chave == "tema":
         anotar(f"tema: {valor}")
+        atualizar()
+    elif chave == "uso":
+        anotar(f"uso: {valor}")
         atualizar()
     aplicar_config()
 

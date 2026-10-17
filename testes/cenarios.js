@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao|epico> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao|epico|codex|uso-codex|uso-codex-sem|uso-ambos> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -82,6 +82,24 @@ function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuE
     if (mostra) esperado.push({ updated: u, linha: `sessao: ${mostra[0]} | hook=${estado} | janelinha=${mostra[1]}` });
 }
 
+/**
+ * Sessão do Codex como a extensão grava (codex-<id>.json, com "agente": "codex"): sem pid, o
+ * título já pronto e, no lugar do transcript do Claude, um rollout do Codex (formato que a
+ * janelinha NÃO lê: o estado e a pergunta vêm do arquivo da sessão).
+ */
+function sessaoCodex(id, { estado, pergunta: perguntou, nome, mostra }) {
+    fs.mkdirSync(dirSessoes, { recursive: true });
+    ordem += 1;
+    const rollout = path.join(dirTranscripts, `rollout-${id}.jsonl`);
+    fs.writeFileSync(rollout, JSON.stringify({ timestamp: new Date().toISOString(), type: "session_meta", payload: { id } }) + "\n");
+    const u = agora - ordem;
+    fs.writeFileSync(path.join(dirSessoes, `codex-${id}.json`), JSON.stringify({
+        agente: "codex", name: nome, cwd: "C:\\Users\\amigo\\projetos\\meu-projeto", state: estado,
+        since: u, updated: u, transcript: rollout, entrypoint: "codex_vscode", ...(perguntou ? { pergunta: true } : {}),
+    }));
+    esperado.push({ updated: u, linha: `sessao: ${nome} | hook=${estado} | janelinha=${mostra} | agente=codex` });
+}
+
 function pidMorto() {
     return spawnSync(process.execPath, ["-e", ""]).pid;  // já terminou quando volta
 }
@@ -91,6 +109,14 @@ function uso(cinco, sete) {
     fs.writeFileSync(path.join(pasta, "uso.json"), JSON.stringify({
         five_hour: { utilization: cinco, resets_at: daqui(90) },
         seven_day: { utilization: sete, resets_at: daqui(3 * 1440 + 60) },
+    }));
+}
+
+function usoDoCodex(janelas) {
+    const daqui = (min) => new Date(Date.now() + min * 60000).toISOString();
+    fs.writeFileSync(path.join(pasta, "uso-codex.json"), JSON.stringify({
+        janelas: janelas.map(([rotulo, usado]) => ({ rotulo, usado, reinicia: daqui(rotulo === "5h" ? 90 : 3 * 1440) })),
+        plano: "free", atualizado: agora,
     }));
 }
 
@@ -133,6 +159,8 @@ function texturasDoMinecraft() {
 
 let clawd;
 let temUso = false;
+let usoMostrado = "claude";  // o item "Uso" do botão direito (config.json > uso); só vai pro .txt quando não é o padrão
+let barras = "";  // as barras que a janelinha mostra, "Agente janela %", separadas por " | "
 let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup (no Padrão: sino-terminou, sino-esperando, sino-tudo)
 let somDaCena = "nenhum";  // a cena épica cuja trilha o motor mandou tocar (mensagem S)
 let clique = "nenhum";  // o link que o clique abriria (a sessão a clicar vai em clicar.txt)
@@ -292,6 +320,28 @@ if (cenario === "misto") {
     som = "sino-terminou";
     uso(38, 85);
     temUso = true;
+} else if (cenario === "codex") {  // sessões do Codex na mesma lista: marquinha, pergunta e estado vindos do arquivo
+    sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
+    sessaoCodex("b1", { estado: "waiting", nome: "Revisar o PR", mostra: "finished" });
+    sessaoCodex("b2", { estado: "waiting", pergunta: true, nome: "Escolher o banco", mostra: "question" });
+    sessaoCodex("b3", { estado: "working", nome: "Rodando a migração", mostra: "working" });
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao" }));
+    clawd = "pulando";
+} else if (cenario === "uso-codex" || cenario === "uso-codex-sem" || cenario === "uso-ambos") {
+    // Uso (botão direito): só o Codex, o Codex sem arquivo ainda, ou as barras do Claude e do Codex
+    sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
+    usoMostrado = cenario === "uso-ambos" ? "ambos" : "codex";
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao", uso: usoMostrado }));
+    uso(38, 85);  // o do Claude existe nos 3, mas só o "ambos" mostra
+    temUso = true;
+    if (cenario === "uso-codex") {  // plano Free: uma janela só, de 30 dias
+        usoDoCodex([["30d", 12]]);
+        barras = "Codex 30d 12%";
+    } else if (cenario === "uso-ambos") {  // plano pago: 5h e 7d
+        usoDoCodex([["5h", 20], ["7d", 61]]);
+        barras = "Claude 5h 38% | Claude 7d 85% | Codex 5h 20% | Codex 7d 61%";
+    }
+    clawd = "andando";
 } else if (cenario === "epico") {  // o Kaiju do Padrão no meio: o motor mixa a trilha e manda a janelinha tocar
     sessao("a", { estado: "working", antes: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
     fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao" }));
@@ -308,6 +358,8 @@ if (cenario === "misto") {
 
 if (Object.keys(antes).length) fs.writeFileSync(path.join(pasta, "antes.json"), JSON.stringify(antes));
 const linhas = esperado.sort((a, b) => b.updated - a.updated).map((e) => e.linha);
-linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`, `som: ${som}`, `som da cena: ${somDaCena}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);
+linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`);
+if (usoMostrado !== "claude") linhas.push(`uso: ${usoMostrado}`, `barras: ${barras}`);
+linhas.push(`som: ${som}`, `som da cena: ${somDaCena}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);
 fs.writeFileSync(path.join(pasta, "esperado.txt"), linhas.join("\n") + "\n");
 console.log(linhas.join("\n"));

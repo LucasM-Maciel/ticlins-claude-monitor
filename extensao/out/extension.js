@@ -42,6 +42,7 @@ const child_process_1 = require("child_process");
 const sessions_1 = require("./sessions");
 const processes_1 = require("./processes");
 const install_1 = require("./install");
+const codex_1 = require("./codex");
 const POLL_MS = 1000;
 // ordem na lista: o mais urgente em cima
 const PRIORITY = { permission: 0, waiting: 1, working: 2, seen: 3 };
@@ -72,9 +73,10 @@ class SessionItem extends vscode.TreeItem {
         const state = displayState(session);
         const look = LOOK[state];
         const elapsed = (0, sessions_1.formatElapsed)(Date.now() / 1000 - session.since);
-        this.description = `${look.label} há ${elapsed} · ${projectName(session)}`;
+        this.description = `${session.agente === "codex" ? "codex · " : ""}${look.label} há ${elapsed} · ${projectName(session)}`;
         this.tooltip = new vscode.MarkdownString(`**${session.name}**\n\n${look.label} há ${elapsed}\n\n\`${session.cwd}\`` +
-            (isPanelSession(session) ? "\n\npainel do Claude no VSCode" : "\n\nterminal"));
+            (session.agente === "codex" ? "\n\nagente: codex" : "") +
+            (isPanelSession(session) ? (session.agente === "codex" ? "\n\npainel do Codex no VSCode" : "\n\npainel do Claude no VSCode") : "\n\nterminal"));
         this.iconPath = new vscode.ThemeIcon(look.icon, look.color ? new vscode.ThemeColor(look.color) : undefined);
         this.command = { command: "claudeMonitor.focusSession", title: "Focar sessão", arguments: [session] };
         this.contextValue = state === "waiting" ? "claudeSession.unseen" : "claudeSession";
@@ -554,7 +556,17 @@ async function focusSession(s) {
     seen.set(s.id, s.since);
     provider.refresh();
     if (isPanelSession(s)) {
-        if (isInThisWindow(s.cwd)) {
+        if (isInThisWindow(s.cwd) && s.agente === "codex") {
+            // a extensão do Codex (openai.chatgpt) não tem "abrir a conversa X": abre a barra lateral dela
+            try {
+                await vscode.commands.executeCommand("chatgpt.openSidebar");
+                return;
+            }
+            catch {
+                // extensão do Codex ausente ou mudou a API — cai pro fallback
+            }
+        }
+        else if (isInThisWindow(s.cwd)) {
             // a extensão oficial abre/revela a sessão pelo id
             try {
                 await vscode.commands.executeCommand("claude-vscode.editor.open", s.id);
@@ -673,7 +685,8 @@ function activate(context) {
             playSound();
         // toast só na janela focada, senão aparece em todas
         if (config.get("showNotifications", true) && vscode.window.state.focused) {
-            const msg = s.state === "permission" ? `Claude pedindo permissão: ${s.name}` : `Claude terminou: ${s.name}`;
+            const quem = s.agente === "codex" ? "Codex" : "Claude";
+            const msg = s.state === "permission" ? `${quem} pedindo permissão: ${s.name}` : `${quem} terminou: ${s.name}`;
             vscode.window.showInformationMessage(msg, "Abrir").then((action) => {
                 if (action === "Abrir")
                     focusSession(s);
@@ -708,6 +721,7 @@ function activate(context) {
         running = true;
         try {
             conferirAtualizacao(context.extension.packageJSON.version);
+            (0, codex_1.sincronizarCodex)(); // sessões e uso do Codex viram arquivos; só mexe se ~/.codex existe
             const fresh = await (0, sessions_1.readSessions)();
             for (const s of fresh) {
                 const prev = lastStates.get(s.id);
@@ -759,6 +773,7 @@ function activate(context) {
     context.subscriptions.push(vscode.window.registerUriHandler({
         async handleUri(uri) {
             const { id } = Object.fromEntries(new URLSearchParams(uri.query));
+            (0, codex_1.sincronizarCodex)();
             const s = (await (0, sessions_1.readSessions)()).find((x) => x.id === id);
             if (s)
                 await focusSession(s);

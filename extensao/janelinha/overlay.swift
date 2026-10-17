@@ -69,7 +69,7 @@ func anotar(_ texto: String) {
 // cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
 let temas: [(id: String, nome: String)] = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars"), ("akatsuki", "Akatsuki")]
 let arquivoConfig = pasta + "/config.json"
-var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft")
+var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft", uso: "claude")
 func lerJSON(_ caminho: String) -> [String: Any]? {
     guard let dados = FileManager.default.contents(atPath: caminho) else { return nil }
     return (try? JSONSerialization.jsonObject(with: dados)) as? [String: Any]
@@ -79,6 +79,7 @@ if let o = lerJSON(arquivoConfig) {
     if let v = o["clawd"] as? Bool { config.clawd = v }
     if let v = (o["volume"] as? NSNumber)?.doubleValue { config.volume = min(1, max(0, v)) }
     if let v = o["tema"] as? String, temas.contains(where: { $0.id == v }) { config.tema = v }
+    if let v = o["uso"] as? String, ["claude", "codex", "ambos"].contains(v) { config.uso = v }
 }
 func salvarConfig() {
     // por cima do que já tinha: chave que esta versão não conhece continua lá
@@ -87,6 +88,7 @@ func salvarConfig() {
     o["clawd"] = config.clawd
     o["volume"] = config.volume
     o["tema"] = config.tema
+    o["uso"] = config.uso
     if let d = try? JSONSerialization.data(withJSONObject: o) { try? d.write(to: URL(fileURLWithPath: arquivoConfig)) }
 }
 func nomeDoTema() -> String { temas.first(where: { $0.id == config.tema })?.nome ?? config.tema }
@@ -213,6 +215,8 @@ struct Sessao {
     var pid: Int32?
     var transcript: String
     var situacao = ""
+    var codex = false      // sessão do Codex (sem hook, sem transcript do Claude)
+    var pergunta = false   // o Codex terminou com uma pergunta
 }
 
 func numero(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
@@ -231,10 +235,12 @@ func lerSessoes(agora: Double) -> [Sessao] {
             if kill(p, 0) != 0 && errno != EPERM { continue }
         } else if agora - updated > 6 * 3600 { continue }
         let id = String(arquivo.dropLast(5))
-        let transcript = d["transcript"] as? String ?? ""
-        let s = Sessao(id: id, nome: titulo(transcript) ?? (d["name"] as? String ?? "sessão"),
+        let ehCodex = (d["agente"] as? String) == "codex"
+        let transcript = ehCodex ? "" : d["transcript"] as? String ?? ""
+        let s = Sessao(id: id, nome: (ehCodex ? nil : titulo(transcript)) ?? (d["name"] as? String ?? "sessão"),
                        estado: d["state"] as? String ?? "waiting", since: numero(d["since"]) ?? updated,
-                       updated: updated, pid: pid, transcript: transcript)
+                       updated: updated, pid: pid, transcript: transcript,
+                       codex: ehCodex, pergunta: d["pergunta"] as? Bool == true)
         let chave = pid.map { "pid:\($0)" } ?? "id:\(id)"
         if let v = vistas[chave], v.updated >= s.updated { continue }
         vistas[chave] = s
@@ -320,6 +326,11 @@ func ultimoPedido(_ transcript: String) -> String? {
 // Situação a partir do estado do hook + última mensagem. Trabalhando/permissão só
 // viram pergunta com a caixinha (texto com "?" no meio do trabalho não conta).
 func situacao(_ s: Sessao) -> String {
+    // Codex: sem transcript do Claude; a extensão já avisou no arquivo se terminou perguntando
+    if s.codex {
+        if s.estado == "working" { return "working" }
+        return s.pergunta ? "question" : "finished"
+    }
     var estado = s.estado
     // depois de aprovar uma permissão nenhum hook dispara até a sessão parar; se o
     // transcript mexeu depois do pedido, ela voltou a trabalhar (regra da extensão)
@@ -414,6 +425,49 @@ func usoDe(_ o: [String: Any]) -> [(rotulo: String, medida: Medida)]? {
         return (rotulo: par.0, medida: m)
     }
     return medidas.isEmpty ? nil : medidas
+}
+// uso do Codex: a extensão grava uso-codex.json (janelas com rotulo, usado e reinicia), sem rede
+var usoDoCodex: [(rotulo: String, medida: Medida)] = []
+func lerUsoDoCodex() {
+    usoDoCodex = []
+    guard let o = lerJSON(pasta + "/uso-codex.json"), let janelas = o["janelas"] as? [[String: Any]] else { return }
+    for j in janelas {
+        guard let rotulo = j["rotulo"] as? String,
+              let m = medida(["utilization": j["usado"] as Any, "resets_at": j["reinicia"] as Any]) else { continue }
+        usoDoCodex.append((rotulo: rotulo, medida: m))
+    }
+}
+// o que o bloco do usage mostra, conforme o "Uso" do botão direito: Claude, Codex ou os dois
+// (com os dois, cada grupo ganha o nome do agente). Linhas de texto ou barras.
+enum LinhaDoUso {
+    case texto(String)
+    case barra(rotulo: String, medida: Medida)
+}
+func soUmTexto(_ linhas: [LinhaDoUso]) -> Bool {
+    if linhas.count != 1 { return false }
+    if case .texto = linhas[0] { return true }
+    return false
+}
+func linhasDoUso() -> [LinhaDoUso] {
+    let doClaude = config.uso == "codex" ? [] : (uso ?? [])
+    let doCodex = config.uso == "claude" ? [] : usoDoCodex
+    let ambos = config.uso == "ambos"
+    var r: [LinhaDoUso] = []
+    if ambos && doClaude.isEmpty { r.append(.texto("usage indisponível")) }
+    if ambos && !doClaude.isEmpty { r.append(.texto("Claude")) }
+    for m in doClaude { r.append(.barra(rotulo: m.rotulo, medida: m.medida)) }
+    if ambos && !doCodex.isEmpty { r.append(.texto("Codex")) }
+    for m in doCodex { r.append(.barra(rotulo: m.rotulo, medida: m.medida)) }
+    if config.uso != "claude" && doCodex.isEmpty { r.append(.texto("Codex: sem uso ainda")) }
+    else if doClaude.isEmpty && doCodex.isEmpty { r.append(.texto("usage indisponível")) }
+    return r
+}
+// "Claude 5h 38% | Codex 30d 12%": o que o --foto grava no .txt (o teste compara com o do Windows)
+func barrasComGrupo() -> String {
+    let doClaude = config.uso == "codex" ? [] : (uso ?? [])
+    let doCodex = config.uso == "claude" ? [] : usoDoCodex
+    let f = { (g: String, l: [(rotulo: String, medida: Medida)]) in l.map { "\(g) \($0.rotulo) \(Int($0.medida.pct.rounded()))%" } }
+    return (f("Claude", doClaude) + f("Codex", doCodex)).joined(separator: " | ")
 }
 func buscarUso() {
     if arquivoFoto != nil {  // teste: nada de internet
@@ -630,6 +684,43 @@ final class Preferencias: NSObject {
         item.view = caixa
         return item
     }
+    // "Uso ◀ Claude ▶": quais barras de usage aparecem (Claude, Codex ou os dois)
+    static let modosDeUso: [(id: String, nome: String)] = [("claude", "Claude"), ("codex", "Codex"), ("ambos", "Os dois")]
+    func nomeDoModoUso() -> String { Preferencias.modosDeUso.first(where: { $0.id == config.uso })?.nome ?? config.uso }
+    @objc func trocarUso(_ b: NSButton) {
+        let modos = Preferencias.modosDeUso
+        guard let i = modos.firstIndex(where: { $0.id == config.uso }) else { return }
+        config.uso = modos[(i + b.tag + modos.count) % modos.count].id
+        (b.superview?.viewWithTag(2) as? NSTextField)?.stringValue = nomeDoModoUso()
+        salvarConfig()
+        anotar("uso: \(config.uso)")
+        atualizar()
+    }
+    func itemDoUso() -> NSMenuItem {
+        let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
+        let rotulo = NSTextField(labelWithString: "Uso")
+        rotulo.font = NSFont.menuFont(ofSize: 0)
+        rotulo.frame = NSRect(x: 20, y: 4, width: 72, height: 18)
+        caixa.addSubview(rotulo)
+        let nome = NSTextField(labelWithString: nomeDoModoUso())
+        nome.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        nome.alignment = .center
+        nome.tag = 2
+        nome.frame = NSRect(x: 112, y: 4, width: 86, height: 18)
+        caixa.addSubview(nome)
+        let setas: [(String, Int, CGFloat)] = [("◀", -1, 92), ("▶", 1, 198)]
+        for (simbolo, direcao, x) in setas {
+            let b = NSButton(title: simbolo, target: self, action: #selector(trocarUso(_:)))
+            b.isBordered = false
+            b.font = NSFont.menuFont(ofSize: 11)
+            b.tag = direcao
+            b.frame = NSRect(x: x, y: 4, width: 20, height: 18)
+            caixa.addSubview(b)
+        }
+        let item = NSMenuItem()
+        item.view = caixa
+        return item
+    }
     // "Opacidade ——o—— 90%": item de menu com um slider dentro
     func itemComSlider(_ nome: String, _ minimo: Double, _ valor: Double, _ acao: Selector) -> NSMenuItem {
         let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
@@ -662,6 +753,7 @@ struct LinhaDoCartao {
     var nome: String
     var tempo: String
     var rotulo: String  // o tooltip
+    var codex = false   // sessão do Codex: ganha a marquinha "codex" ao lado do nome
 }
 
 final class Cartao: NSView {
@@ -686,7 +778,9 @@ final class Cartao: NSView {
         alturaUso = max(ap.enfeites ? CGFloat(0) : CGFloat(16), ap.letra, ap.barra.height) + 4
         largura = max(186 + ap.colTempo, ap.colRotulo + ap.barra.width + ap.colPct + ap.colFalta)
         yUso = y0 + (linhas.isEmpty ? 20 : CGFloat(linhas.count) * alturaLinha) + 10
-        let alturaDoUso: CGFloat = uso.map { CGFloat($0.count) * self.alturaUso } ?? 20
+        let linhasUso = linhasDoUso()
+        let soTexto = soUmTexto(linhasUso)
+        let alturaDoUso: CGFloat = soTexto ? 20 : CGFloat(linhasUso.count) * alturaUso
         yAviso = yUso + alturaDoUso + 10
         let w = x0 + largura + ap.padding[2] + ap.moldura[2]
         let h = yAviso - 10 + (aviso == nil ? 0 : 10 + 20) + ap.padding[3] + ap.moldura[3]
@@ -732,7 +826,13 @@ final class Cartao: NSView {
                 NSBezierPath(ovalIn: NSRect(x: x0, y: y + (alturaLinha - 8) / 2, width: 8, height: 8)).fill()
                 escrever(l.tempo, cor, NSRect(x: x0 + 186, y: y, width: ap.colTempo, height: alturaLinha), .right)
             }
-            escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 170, height: alturaLinha))
+            if l.codex {
+                // a marquinha "codex" ao lado do nome, na cor do tema (a mesma do usage normal)
+                escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 130, height: alturaLinha))
+                escrever("codex", hex((coresDoUso[config.tema] ?? ["#D1D5DB"])[0]), NSRect(x: x0 + 146, y: y, width: 40, height: alturaLinha))
+            } else {
+                escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 170, height: alturaLinha))
+            }
             y += alturaLinha
         }
         y += 5
@@ -744,24 +844,29 @@ final class Cartao: NSView {
             NSRect(x: x0, y: yAviso - 5, width: largura, height: 1).fill()
             escrever("↑ versão \(nova) disponível · baixar", hex("#A78BFA"), NSRect(x: x0, y: yAviso, width: largura, height: 20))
         }
-        guard let medidas = uso else {
-            escrever("usage indisponível", hex("#6B7280"), NSRect(x: x0, y: y, width: largura, height: 20))
-            return
-        }
-        if ap.enfeites { return }  // rótulo, barra, % e falta: o motor desenha
+        let linhasUso = linhasDoUso()
+        let soTexto = soUmTexto(linhasUso)
         let b = ap.barra
         let r = min(2, b.height / 2)
-        for (rotulo, m) in medidas {
-            let c = m.pct >= 95 ? hex("#EF4444") : m.pct >= 80 ? hex("#F59E0B") : hex("#D1D5DB")
-            escrever(rotulo, hex("#9CA3AF"), NSRect(x: x0, y: y, width: ap.colRotulo, height: alturaUso))
-            let trilho = NSRect(x: x0 + ap.colRotulo, y: y + (alturaUso - b.height) / 2, width: b.width, height: b.height)
-            hex("#3F3F46").setFill()
-            NSBezierPath(roundedRect: trilho, xRadius: r, yRadius: r).fill()
-            c.setFill()
-            let cheio = b.width * CGFloat(min(max(m.pct, 0), 100)) / 100
-            NSBezierPath(roundedRect: NSRect(x: trilho.minX, y: trilho.minY, width: cheio, height: b.height), xRadius: r, yRadius: r).fill()
-            escrever(String(format: "%.0f%%", m.pct), c, NSRect(x: trilho.maxX, y: y, width: ap.colPct, height: alturaUso), .right)
-            escrever(faltaPraRenovar(m), hex("#6B7280"), NSRect(x: trilho.maxX + ap.colPct, y: y, width: ap.colFalta, height: alturaUso), .right)
+        for linhaUso in linhasUso {
+            switch linhaUso {
+            case .texto(let txt):
+                let ehNomeDeGrupo = txt == "Claude" || txt == "Codex"
+                escrever(txt, hex(ehNomeDeGrupo ? "#9CA3AF" : "#6B7280"),
+                         NSRect(x: x0, y: y, width: largura, height: soTexto ? 20 : alturaUso))
+            case .barra(let rotulo, let m):
+                if ap.enfeites { break }  // rótulo, barra, % e falta: o motor desenha
+                let c = m.pct >= 95 ? hex("#EF4444") : m.pct >= 80 ? hex("#F59E0B") : hex("#D1D5DB")
+                escrever(rotulo, hex("#9CA3AF"), NSRect(x: x0, y: y, width: ap.colRotulo, height: alturaUso))
+                let trilho = NSRect(x: x0 + ap.colRotulo, y: y + (alturaUso - b.height) / 2, width: b.width, height: b.height)
+                hex("#3F3F46").setFill()
+                NSBezierPath(roundedRect: trilho, xRadius: r, yRadius: r).fill()
+                c.setFill()
+                let cheio = b.width * CGFloat(min(max(m.pct, 0), 100)) / 100
+                NSBezierPath(roundedRect: NSRect(x: trilho.minX, y: trilho.minY, width: cheio, height: b.height), xRadius: r, yRadius: r).fill()
+                escrever(String(format: "%.0f%%", m.pct), c, NSRect(x: trilho.maxX, y: y, width: ap.colPct, height: alturaUso), .right)
+                escrever(faltaPraRenovar(m), hex("#6B7280"), NSRect(x: trilho.maxX + ap.colPct, y: y, width: ap.colFalta, height: alturaUso), .right)
+            }
             y += alturaUso
         }
     }
@@ -788,11 +893,11 @@ final class Cartao: NSView {
     }
     // as barras do usage; [] = indisponível (quem escreve isso é a janelinha)
     func caixasDoUso() -> [[String: Any]] {
-        guard let medidas = uso else { return [] }
         let cores = coresDoUso[config.tema] ?? ["#D1D5DB", "#F59E0B", "#EF4444"]
         var r: [[String: Any]] = []
-        for (j, par) in medidas.enumerated() {
-            let m = par.medida
+        for (j, linhaUso) in linhasDoUso().enumerated() {
+            guard case .barra(let rotuloDaBarra, let m) = linhaUso else { continue }
+            let par = (rotulo: rotuloDaBarra, medida: m)
             let uy = yUso + CGFloat(j) * alturaUso
             let yl = uy + (alturaUso - ap.letra) / 2
             let nivel = m.pct >= 95 ? 2 : m.pct >= 80 ? 1 : 0
@@ -843,6 +948,7 @@ final class Cartao: NSView {
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
         menu.addItem(preferencias.itemDosTemas())
+        menu.addItem(preferencias.itemDoUso())
         let clawd = NSMenuItem(title: "Clawd", action: #selector(Preferencias.alternarClawd(_:)), keyEquivalent: "")
         clawd.target = preferencias
         clawd.state = config.clawd ? .on : .off
@@ -1705,9 +1811,10 @@ func atualizar() {
     cartao.linhas = sessoes.map { s -> LinhaDoCartao in
         let e = estados[s.situacao] ?? (cor: "#9CA3AF", rotulo: s.situacao)
         return LinhaDoCartao(id: s.id, sit: s.situacao, cor: e.cor, nome: s.nome, tempo: tempo((agora - s.since) / 60),
-                             rotulo: e.rotulo)
+                             rotulo: e.rotulo, codex: s.codex)
     }
     buscarUso()
+    lerUsoDoCodex()
     cartao.aviso = versaoNova()
     cartao.arrumar()  // redesenha a cada 2 s pra contagem de "falta" andar entre as buscas
     // pedindo algo (pergunta/permissão) ganha de trabalhando, que ganha de parado.
@@ -1726,9 +1833,10 @@ func atualizar() {
         }
         let clawd = config.clawd ? palco.modo + (palco.luta.map { " (\($0))" } ?? "") : "desligado"
         let som = somDaVez.flatMap { avisoDaSituacao[$0] }.flatMap { nomeDoSom[config.tema]?[$0] } ?? "nenhum"
-        let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
-            + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")",
-               "som: \(som)", "som da cena: \(somDaCenaVisto ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
+        let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" + ($0.codex ? " | agente=codex" : "") }
+            + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")"]
+            + (config.uso == "claude" ? [] : ["uso: \(config.uso)", "barras: \(barrasComGrupo())"])
+            + ["som: \(som)", "som da cena: \(somDaCenaVisto ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
                "atualizacao: \(cartao.aviso ?? "nenhuma")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)
     }

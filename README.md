@@ -106,12 +106,26 @@ estiver trabalhando nele.
 - **Preferências**: botão direito na janelinha troca o **Tema** (◀ ▶), liga/desliga
   o **Clawd** e muda a **Opacidade** e o **Volume** dos sons. Ficam gravadas pra
   próxima vez.
+- **Uso** (botão direito, ◀ ▶): quais barras de usage aparecem, as do **Claude**
+  (o padrão), as do **Codex** ou **Os dois**.
 - **Fechar**: botão direito > Fechar.
 - **Reabrir**: no VS Code, `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) >
   **Claude Monitor: Abrir janelinha flutuante**. No Windows também tem o
   atalho "Claude Monitor" na Área de Trabalho.
 - **Desligar a janelinha** e ficar só com a barra lateral: nas configurações
   do VS Code, desmarque **Claude Monitor: Overlay**.
+
+## Codex
+
+Se você também usa o Codex (OpenAI) no VS Code ou no terminal, as sessões dele
+aparecem na mesma lista, com a marquinha **codex** ao lado do nome. Não precisa
+instalar nada: a extensão lê a pasta `~/.codex` (só o que ela grava sobre as
+sessões e os limites de uso; nunca o login) e conta como aberta a sessão que
+mexeu nas últimas 6 horas. Terminou perguntando algo? Aparece como pergunta,
+igual ao Claude. Clicar numa sessão do Codex abre a barra lateral dele no VS Code.
+
+Pra ver as barras de uso do Codex (as janelas de 5h, 7d ou 30d, conforme o seu
+plano), troque o **Uso** no botão direito.
 
 ## Temas
 
@@ -208,6 +222,9 @@ Tudo fica no seu computador. A janelinha lê os arquivos que o Claude Code já
 grava (`~/.claude`) e usa o seu próprio login pra perguntar o usage ao mesmo
 endereço que o `/usage` usa (`api.anthropic.com`). Ela nunca renova nem manda
 o seu login pra outro lugar.
+
+Se você usa o Codex, a extensão também lê a pasta `~/.codex` (só as sessões e os
+limites de uso, nunca o login) e escreve o resumo em `~/.claude-monitor`.
 
 A instalação:
 
