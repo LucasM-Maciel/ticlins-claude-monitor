@@ -24,6 +24,7 @@ const ladoDaRoupa = roupa => (String(roupa).startsWith('t7-') ? 'time7' : 'akats
 function vestir(roupa) {
   if (!ROUPAS.ROUPAS[roupa] || COR.roupa === roupa) return;
   COR.roupa = roupa; COR.contorno = ROUPAS.CONTORNO[roupa]; COR.lado = ladoDaRoupa(roupa);
+  COR.corpo = ROUPAS.ROUPAS[roupa].corpo || '#D77757';  // a mão dos selos e da kunai tem a pele da roupa (o Kisame é azul)
 }
 const ALTURA = ROUPAS.ROUPAS[ROUPA].linhas.length;
 

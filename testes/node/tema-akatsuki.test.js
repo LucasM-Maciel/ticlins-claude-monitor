@@ -24,7 +24,7 @@ const { estadoDeMentira } = require('../motor-foto');
 const ESCALAS = [1, 1.25, 2];
 const JANELINHA = path.join(MOTOR, '..');
 // roupa: veste antes de começar (com as voltas que levam a ela, pra não pedir a virada)
-const VOLTAS_DA = { akatsuki: 0, 't7-laranja': 50, 'aka-espiral': 100, 't7-colete': 150, 'aka-riscada': 200, 't7-colete': 70, 't7-rosa': 90, 't7-azul': 160 };
+const VOLTAS_DA = { akatsuki: 0, 'aka-espiral': 20, 'aka-riscada': 40, 't7-laranja': 50, 't7-colete': 70, 't7-rosa': 90, 'aka-kisame': 110, 'aka-konan': 130, 't7-azul': 160 };
 function montar({ escala = 1, modo = 'andando', semente = 2, roupa = null, pasta = null } = {}) {
   const m = new Mundo({ tema, semente, pasta });
   if (roupa) Object.assign(m.salvo, { akaRoupa: roupa, akaVoltas: VOLTAS_DA[roupa] });
@@ -442,24 +442,25 @@ test('os inimigos (dono, 14/10): o bug e mais 3 de cada lado, sorteados pela sem
 test('a cada 50 voltas andadas troca de lado, pela virada na parada seguinte; cada volta pra um lado veste a próxima roupa dele', () => {
   try {
     assert.strictEqual(tema.voltasPorLado, 50);
-    assert.deepStrictEqual(A.ROUPAS.LADOS, { akatsuki: ['akatsuki', 'aka-espiral', 'aka-riscada'], time7: ['t7-laranja', 't7-colete', 't7-rosa', 't7-azul'] });
+    assert.deepStrictEqual(A.ROUPAS.LADOS, { akatsuki: ['akatsuki', 'aka-espiral', 'aka-riscada', 'aka-kisame', 'aka-konan'], time7: ['t7-laranja', 't7-colete', 't7-rosa', 't7-azul'] });
     const { m, erros } = montar();
     const ate = (m2, t) => { for (let T = m2.T + 1 / 30; m2.cena && T - m2.cena.t0 < t; T += 1 / 30) { m2.proxima = Infinity; m2.passo(T); } };
     assert.strictEqual(m.salvo.akaRoupa, 'akatsuki', 'começa na Akatsuki, de chapéu de palha');
+    Object.assign(m.salvo, { akaVoltas: 0, akaRoupa: 'aka-riscada' });  // a Akatsuki já trocou de roupa a cada 20; aqui vale a virada de lado
     for (let i = 0; i < 49; i++) tema.aoDarVolta(m);
     let c = tema.naParada(m);
     assert.ok(!c || c.nome !== 'virada', '49 voltas: ainda não');
     tema.aoDarVolta(m);
     assert.strictEqual(m.salvo.akaVoltas, 50);
     c = tema.naParada(m);
-    assert.ok(c && c.nome === 'virada' && c.de === 'akatsuki' && c.para === 't7-laranja', 'a 50ª: a virada, sem o cara-ou-coroa');
+    assert.ok(c && c.nome === 'virada' && c.de === 'aka-riscada' && c.para === 't7-laranja', 'a 50ª: a virada, sem o cara-ou-coroa');
     // cortada antes do puf: não troca, e a próxima parada tenta de novo
     m.comecarCena(c);
     ate(m, 1.0);
     assert.strictEqual(tema.ladoDe(m), 'akatsuki', 'antes do puf, o lado velho');
     m.receber({ modo: 'pulando' });
     assert.strictEqual(m.cena, null);
-    assert.strictEqual(m.salvo.akaRoupa, 'akatsuki');
+    assert.strictEqual(m.salvo.akaRoupa, 'aka-riscada');
     m.receber({ modo: 'andando' });
     c = tema.naParada(m);
     assert.ok(c && c.nome === 'virada', 'tenta de novo');
@@ -474,7 +475,7 @@ test('a cada 50 voltas andadas troca de lado, pela virada na parada seguinte; ca
     assert.ok(!c || c.nome !== 'virada', 'já trocou');
     // as próximas: a cada volta pra um lado, a próxima roupa dele; depois da 3ª, recomeça
     let antes = 't7-laranja';
-    ['aka-espiral', 't7-rosa', 'aka-riscada', 't7-colete', 'akatsuki', 't7-azul'].forEach((roupa, i) => {
+    ['aka-riscada', 't7-rosa', 'akatsuki', 't7-colete', 'aka-riscada', 't7-azul'].forEach((roupa, i) => {
       for (let v = 0; v < 50; v++) tema.aoDarVolta(m);
       assert.strictEqual(tema.roupaAlvo(m), roupa);
       if (i === 2) {  // quebrada: troca sem cena
@@ -509,6 +510,15 @@ test('no Time 7 o personagem troca a cada 20 voltas (Naruto, Kakashi, Sakura, Sa
   // os quatro entram na rotação do Clawd
   const vistos = new Set(); for (let v = 50; v < 1000; v++) if (Math.floor(v / 50) % 2) vistos.add(em(v));
   assert.deepStrictEqual([...vistos].sort(), ['t7-azul', 't7-colete', 't7-laranja', 't7-rosa']);
+});
+
+test('na Akatsuki o personagem troca a cada 20 voltas (chapéu de palha, espiral, riscada, Kisame, Konan), e a conta segue de uma visita pra outra', () => {
+  const { m } = montar();
+  const em = voltas => { m.salvo.akaVoltas = voltas; return tema.roupaAlvo(m); };
+  assert.deepStrictEqual([0, 19, 20, 39, 40, 49].map(em), ['akatsuki', 'akatsuki', 'aka-espiral', 'aka-espiral', 'aka-riscada', 'aka-riscada']);
+  assert.deepStrictEqual([100, 109, 110, 129, 130, 149].map(em), ['aka-riscada', 'aka-riscada', 'aka-kisame', 'aka-kisame', 'aka-konan', 'aka-konan']);
+  const vistos = new Set(); for (let v = 0; v < 1000; v++) if (!(Math.floor(v / 50) % 2)) vistos.add(em(v));
+  assert.deepStrictEqual([...vistos].sort(), ['aka-espiral', 'aka-kisame', 'aka-konan', 'aka-riscada', 'akatsuki']);
 });
 
 test('as voltas contam andando de verdade, ficam no motor-estado.json, e quem reabre já começa na roupa da conta', () => {
@@ -568,7 +578,7 @@ test('o épico é o do lado da tela (a fera na Akatsuki, o trio no Time 7), e a 
     m.receber({ modo: 'pulando' });
     assert.strictEqual(m.salvo.akaEpico, true, 'cortado: o pedido volta');
     m.receber({ modo: 'andando' });
-    Object.assign(m.salvo, { akaRoupa: 'aka-riscada', akaVoltas: 200 });
+    Object.assign(m.salvo, { akaRoupa: 'aka-riscada', akaVoltas: 40 });
     naReta(m);
     const d = tema.naParada(m);
     assert.ok(d && d.epico && d.quem === 'aka', 'na Akatsuki, o da Akatsuki');
