@@ -213,12 +213,12 @@ t_cenario() {
   if [ "$c" = atualizar ]; then
     [ "$(pixels "$foto" 167 139 250 30)" -gt 10 ] || falha "cadê o aviso roxo da versão nova?" || return 1
   fi
-  # o ícone do Codex é o nó branco (84 pixels por sessão, 3 sessões) e o do Claude a estrela laranja (65 por sessão) (toda sessão do Claude); Uso = Codex some com a barra de 85% do Claude, Os dois traz de volta
+  # o ícone do Codex é o nó branco (51 pixels por sessão, 3 sessões) e o do Claude a estrela laranja (29 por sessão) (toda sessão do Claude); Uso = Codex some com a barra de 85% do Claude, Os dois traz de volta
   if [ "$c" = codex ]; then
-    [ "$(pixels "$foto" 255 255 255 4)" -gt 100 ] || falha "cadê o ícone do Codex (nó branco) na lista?" || return 1
+    [ "$(pixels "$foto" 255 255 255 4)" -gt 60 ] || falha "cadê o ícone do Codex (nó branco) na lista?" || return 1
   fi
   if [ "$c" = codex ] || [ "$c" = misto ]; then
-    [ "$(pixels "$foto" 217 119 87 4)" -gt 30 ] || falha "cadê o ícone do Claude (estrela laranja) na lista?" || return 1
+    [ "$(pixels "$foto" 217 119 87 4)" -gt 15 ] || falha "cadê o ícone do Claude (estrela laranja) na lista?" || return 1
   fi
   # no Mac o texto suavizado cai uns pixels na cor da barra (no Windows dá 0); barra de verdade tem centenas
   if [ "$c" = uso-codex-sem ]; then

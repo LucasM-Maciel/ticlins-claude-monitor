@@ -323,6 +323,11 @@ function cenaPorNome(m, nome) {
   return fazer ? { nome, ...fazer(Math.floor(m.sorteio() * 4294967296)) } : null;
 }
 
+// o motor está a 32 quadros/s: pulando, em cena ou com alguém trabalhando
+function emMovimento(m) {
+  return m.modo === 'pulando' || !!m.cena || (m.host.linhas || []).some(l => l.sit === 'working');
+}
+
 module.exports = {
   layout: {
     raio: 8, fundo: '#EE121212', moldura: [2, 2, 2, 2], padding: [10, 6, 10, 6], enfeites: true,
@@ -396,7 +401,8 @@ module.exports = {
   fundo(g, m) {  // a moldura e os enfeites, nas caixas que a janelinha mandou
     A.vestir(roupaDe(m));  // o 1º desenho do quadro: daqui pra frente, tudo com a roupa (e o lado) da vez
     const h = m.host, e = h.escala || 1, t = m.T;
-    if (h.cartao) K.moldura(g, h.cartao, t);
+    const fase = K.andar(t, emMovimento(m));  // a moldura e o redemoinho só andam com o motor a 32 quadros/s
+    if (h.cartao) K.moldura(g, h.cartao, fase);
     for (const l of h.linhas || []) {
       if (l.bola) K.bolinha(g, l, t);
       if (l.tempo) K.escrever(g, e, l.tempo.txt, l.tempo.cor, l.tempo.caixa, true);
@@ -404,7 +410,7 @@ module.exports = {
     for (const u of h.uso || []) {
       const nivel = K.nivelDe(u);
       if (u.rotulo) K.escrever(g, e, u.rotulo.txt, COR.rotulo, u.rotulo.caixa, false);
-      if (u.barra) K.barra(g, u.barra, u.pct, nivel, t);
+      if (u.barra) K.barra(g, u.barra, u.pct, nivel, fase);
       if (u.pctTxt) K.escrever(g, e, u.pctTxt.txt, K.corDoPct(nivel), u.pctTxt.caixa, true);
       if (u.falta) K.escrever(g, e, u.falta.txt, COR.falta, u.falta.caixa, true);
     }
@@ -417,11 +423,9 @@ module.exports = {
     else if (modo === 'pulando') A.clawdAkatsuki(g, A.pulando(t));
     else A.clawdAkatsuki(g, { T: t, pernas: 'ambas' });
   },
-  // parado mexe a moldura (devagar) e as barras do usage a partir de 80%
-  animado(m) {
-    if (m.modo === 'pulando' || m.cena) return true;
-    return (m.host.uso || []).some(u => K.nivelDe(u) >= 1);
-  },
+  // a moldura (as nuvens) e o redemoinho da barra só andam com a janelinha mexendo: alguém trabalhando ou
+  // uma cena. Parado o motor desenha a 5 quadros/s, e o que andasse daria saltos (os "tickzinhos de lag")
+  animado: emMovimento,
   bugsPorEpico: BUGS,
   voltasPorLado: VOLTAS,
   pula: PULA,

@@ -763,39 +763,31 @@ function MudarPagina($passoDaPagina) {
     $paginaDaLista.atual += $passoDaPagina
     Atualizar
 }
-# o ícone do agente ao lado do nome, em pixel art 13x13 (1 px por quadradinho, cor fixa em todo
+# o ícone do agente ao lado do nome, em pixel art 9x9 (1 px por quadradinho, cor fixa em todo
 # tema): a estrela do Claude (laranja) e o nó do Codex (branco). A MESMA grade vai no overlay.swift
 # e no overlay-linux.py: mudou aqui, muda lá.
 $gradesDosIcones = @{
     claude = @(
-        '...#..#..#...',
-        '...#..#..#...',
-        '....#.#.#....',
-        '##..#.#.#..##',
-        '..###.#.###..',
-        '.....###.....',
-        '#############',
-        '.....###.....',
-        '..###.#.###..',
-        '##..#.#.#..##',
-        '....#.#.#....',
-        '...#..#..#...',
-        '...#..#..#...'
+        '....#....',
+        '.#..#..#.',
+        '..#.#.#..',
+        '...###...',
+        '#########',
+        '...###...',
+        '..#.#.#..',
+        '.#..#..#.',
+        '....#....'
     )
     codex = @(
-        '....#####....',
-        '...####.##...',
-        '.##.###.####.',
-        '###.#...#####',
-        '###.......###',
-        '###.........#',
-        '###.......###',
-        '#.........###',
-        '###.......###',
-        '#####...#.###',
-        '.####.###.##.',
-        '...##.####...',
-        '....#####....'
+        '..#####..',
+        '.#######.',
+        '###...###',
+        '##.#...##',
+        '##..#..##',
+        '##.#...##',
+        '###...###',
+        '.#######.',
+        '..#####..'
     )
 }
 function IconeDoAgente($nomeDoAgente) {
@@ -809,8 +801,8 @@ function IconeDoAgente($nomeDoAgente) {
     $icone = New-Object Windows.Shapes.Path
     $icone.Data = $retangulosDoIcone
     $icone.Fill = Cor $(if ($nomeDoAgente -eq 'codex') { '#FFFFFF' } else { '#D97757' })
-    $icone.Width = 13; $icone.Height = 13
-    $icone.Margin = [Windows.Thickness]::new(0, 0, 7, 0)
+    $icone.Width = 9; $icone.Height = 9
+    $icone.Margin = [Windows.Thickness]::new(0, 0, 9, 0)
     $icone.VerticalAlignment = 'Center'
     $icone.SnapsToDevicePixels = $true
     [Windows.Media.RenderOptions]::SetEdgeMode($icone, 'Aliased')

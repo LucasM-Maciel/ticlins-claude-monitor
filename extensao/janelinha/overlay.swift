@@ -566,37 +566,29 @@ let L: CGFloat = 380, A: CGFloat = 440
 let M: CGFloat = 34                      // espaço em volta do cartão, por onde o Clawd anda
 let fonte = NSFont.systemFont(ofSize: 12)
 
-// o ícone do agente: pixel art 13x13, 1 px por quadradinho, cor fixa em todo tema (a estrela do
+// o ícone do agente: pixel art 9x9, 1 px por quadradinho, cor fixa em todo tema (a estrela do
 // Claude laranja, o nó do Codex branco). A MESMA grade vai no overlay.ps1 e no overlay-linux.py.
 let gradeDoIconeClaude = [
-    "...#..#..#...",
-    "...#..#..#...",
-    "....#.#.#....",
-    "##..#.#.#..##",
-    "..###.#.###..",
-    ".....###.....",
-    "#############",
-    ".....###.....",
-    "..###.#.###..",
-    "##..#.#.#..##",
-    "....#.#.#....",
-    "...#..#..#...",
-    "...#..#..#...",
+    "....#....",
+    ".#..#..#.",
+    "..#.#.#..",
+    "...###...",
+    "#########",
+    "...###...",
+    "..#.#.#..",
+    ".#..#..#.",
+    "....#....",
 ]
 let gradeDoIconeCodex = [
-    "....#####....",
-    "...####.##...",
-    ".##.###.####.",
-    "###.#...#####",
-    "###.......###",
-    "###.........#",
-    "###.......###",
-    "#.........###",
-    "###.......###",
-    "#####...#.###",
-    ".####.###.##.",
-    "...##.####...",
-    "....#####....",
+    "..#####..",
+    ".#######.",
+    "###...###",
+    "##.#...##",
+    "##..#..##",
+    "##.#...##",
+    "###...###",
+    ".#######.",
+    "..#####..",
 ]
 func desenharIcone(_ grade: [String], _ cor: String, _ x: CGFloat, _ y: CGFloat) {
     guard let ctx = NSGraphicsContext.current?.cgContext else { return }
@@ -921,7 +913,7 @@ final class Cartao: NSView {
             // toda linha tem o ícone do agente (estrela do Claude, nó do Codex), então o nome tem sempre 150
             escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 150, height: alturaLinha))
             desenharIcone(l.codex ? gradeDoIconeCodex : gradeDoIconeClaude, l.codex ? "#FFFFFF" : "#D97757",
-                          x0 + 171, y + ((alturaLinha - 13) / 2).rounded())
+                          x0 + 173, y + ((alturaLinha - 9) / 2).rounded())
             y += alturaLinha
         }
         if paginas > 1 {

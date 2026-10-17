@@ -223,10 +223,12 @@ test('layout: enfeites do tema, moldura de 2 px e as colunas de sempre', () => {
   assert.deepStrictEqual(l.colunas, { tempo: 36, pct: 38, falta: 48, rotulo: 18 });
 });
 
-test('a moldura não tem mais linha de neon: nenhum fio vermelho contínuo entre as nuvens', () => {
+test('a moldura é chapada: um fio vermelho de 1 px na borda e, por dentro, só as nuvens (sem brilho, sem fio largo)', () => {
   const W = 220, H = 110, tela = new Tela(W, H), g = tela.getContext('2d');
   K.moldura(g, [0, 0, W, H], 0);
-  for (let y = 0; y < 8; y++) {  // a faixa de cima: o fio antigo era uma linha de ~175 px seguidos (vinho ou vermelho, com o brilho)
+  let fio = 0; for (let x = 12; x < W - 12; x++) if ((tela.pixels[x] >>> 0) === 0xFFDC2626) fio++;
+  assert.ok(fio > 100, `o fio vermelho liso na borda de cima: ${fio} px`);
+  for (let y = 2; y < 8; y++) {  // por dentro do fio, o antigo era uma linha de ~175 px seguidos (vinho ou vermelho, com o brilho)
     let corrida = 0, maior = 0;
     for (let x = 12; x < W - 12; x++) {
       const p = tela.pixels[y * W + x], r = (p >>> 16) & 255, gg = (p >>> 8) & 255, b = p & 255;
@@ -243,16 +245,26 @@ test('a moldura anda: o quadro em t=0 difere do de t=3', () => {
   assert.ok(dif > 100, `${dif} pixels diferentes`);
 });
 
-test('a barra do usage: chakra azul até o gasto, redemoinho na ponta (sem kunai), laranja e vermelha nos níveis, e a nuvenzinha da situação', () => {
+test('a moldura do Time 7 é parada: fio azul-marinho por fora, laranja por dentro, igual em qualquer instante', () => {
+  try {
+    A.vestir('t7-colete');
+    const quadro = t => { const tela = new Tela(120, 60), g = tela.getContext('2d'); K.moldura(g, [0, 0, 120, 60], t); return tela; };
+    const a = quadro(0), b = quadro(3);
+    assert.deepStrictEqual(Array.from(a.pixels), Array.from(b.pixels));
+    assert.strictEqual(a.pixels[1 * 120 + 60] >>> 0, 0xFFF97316, 'laranja na 2ª linha');
+  } finally { A.vestir('akatsuki'); }
+});
+
+test('a barra do usage: branca até o gasto, vermelha nos níveis altos, redemoinho na ponta (sem kunai), e a nuvenzinha da situação', () => {
   const px = (tela, x, y) => { const p = tela.pixels[y * tela.width + x]; return { r: (p >>> 16) & 255, g: (p >>> 8) & 255, b: p & 255 }; };
   const barra = (pct, nivel = pct >= 95 ? 2 : pct >= 80 ? 1 : 0) => { const tela = new Tela(130, 8), g = tela.getContext('2d'); K.barra(g, [0, 1, 118, 5], pct, nivel, 0); return tela; };
   const b = barra(50), cheio = (118 - 8) * 0.5;
-  const azul = px(b, 10, 4), trilho = px(b, Math.round(cheio + 20), 4), olho = px(b, Math.round(cheio), 4);
-  assert.ok(azul.b > 200 && azul.b > 1.5 * azul.r && azul.g > azul.r, `azul: ${JSON.stringify(azul)}`);
+  const branco = px(b, 10, 4), trilho = px(b, Math.round(cheio + 20), 4), olho = px(b, Math.round(cheio), 4);
+  assert.ok(branco.r > 230 && branco.g > 230 && branco.b > 230, `branco: ${JSON.stringify(branco)}`);
   assert.ok(trilho.r < 80 && trilho.b < 80, `trilho escuro: ${JSON.stringify(trilho)}`);
   assert.ok(olho.r > 240 && olho.g > 240 && olho.b > 240, `o olho do redemoinho (branco) na ponta: ${JSON.stringify(olho)}`);
   const kur = px(barra(85), 10, 4), forte = px(barra(97), 10, 4);
-  assert.ok(kur.r > 200 && kur.g > 120 && kur.g < 190 && kur.b < 60, `laranja Kurama: ${JSON.stringify(kur)}`);
+  assert.ok(kur.r > 200 && kur.g < 110 && kur.b < 110, `vermelha a partir de 80%: ${JSON.stringify(kur)}`);
   assert.ok(forte.r > 200 && forte.g < 110 && forte.b < 110, `vermelha: ${JSON.stringify(forte)}`);
   assert.deepStrictEqual([0, 79, 80, 94, 95, 140].map(p => K.nivelDe({ pct: p })), [0, 0, 1, 1, 2, 2]);
   const tela = new Tela(20, 20), g = tela.getContext('2d');
@@ -506,14 +518,14 @@ test('as voltas contam andando de verdade, ficam no motor-estado.json, e quem re
   } finally { fs.rmSync(pasta, { recursive: true, force: true }); A.vestir('akatsuki'); }
 });
 
-test('o cartão no Time 7: a barra dourada (sem o azul da Akatsuki), o % nas cores do lado e a folhinha da situação', () => {
+test('o cartão no Time 7: a barra laranja (sem o branco da Akatsuki), o % nas cores do lado e a folhinha da situação', () => {
   const px = (tela, x, y) => { const p = tela.pixels[y * tela.width + x]; return { r: (p >>> 16) & 255, g: (p >>> 8) & 255, b: p & 255 }; };
   const barra = pct => { const tela = new Tela(130, 8), g = tela.getContext('2d'); K.barra(g, [0, 1, 118, 5], pct, pct >= 80 ? 1 : 0, 0); return tela; };
   try {
     assert.deepStrictEqual(Object.keys(K.PAL), ['akatsuki', 'time7']);
     A.vestir('t7-colete');
     const lar = px(barra(50), 10, 4);
-    assert.ok(lar.r > 200 && lar.g > 140 && lar.g < 220 && lar.b < 90, `dourada: ${JSON.stringify(lar)}`);
+    assert.ok(lar.r > 200 && lar.g > 90 && lar.g < 150 && lar.b < 60, `laranja: ${JSON.stringify(lar)}`);
     assert.deepStrictEqual([0, 1, 2].map(K.corDoPct), K.PAL.time7.pct);
     const tela = new Tela(20, 20), g = tela.getContext('2d');
     K.bolinha(g, { bola: [6, 6, 8, 8], cor: '#22C55E', sit: 'finished' }, 0);
@@ -521,8 +533,8 @@ test('o cartão no Time 7: a barra dourada (sem o azul da Akatsuki), o % nas cor
     assert.ok(miolo.g > miolo.r && miolo.g > miolo.b, `a folhinha verde: ${JSON.stringify(miolo)}`);
     A.vestir('aka-riscada');
     assert.deepStrictEqual([0, 1, 2].map(K.corDoPct), K.CORES_PCT, 'de volta na Akatsuki');
-    const azul = px(barra(50), 10, 4);
-    assert.ok(azul.b > 200 && azul.b > 1.5 * azul.r, `azul: ${JSON.stringify(azul)}`);
+    const branco = px(barra(50), 10, 4);
+    assert.ok(branco.r > 230 && branco.g > 230 && branco.b > 230, `branco: ${JSON.stringify(branco)}`);
   } finally { A.vestir('akatsuki'); }
 });
 

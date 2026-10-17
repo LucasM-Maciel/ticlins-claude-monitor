@@ -222,9 +222,9 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         if ($cenario -eq 'bug') { Verdade ([Pixels]::Contar($foto, 239, 68, 68, 20) -gt 20) 'o bug não ficou vermelho com a espadada' }
         if ($cenario -eq 'atualizar') { Verdade ([Pixels]::Contar($foto, 167, 139, 250, 25) -gt 10) 'cadê o aviso roxo da versão nova?' }
         if ($cenario -eq 'misto') { Verdade ([Pixels]::Contar($foto, 167, 139, 250, 25) -lt 3) 'aviso roxo sem versão nova' }
-        # o ícone do Codex (nó branco 255,255,255, 84 pixels na grade x 3 sessões do Codex; o texto do nome E5E7EB fica a 26 de distância) e o da estrela do Claude (laranja 217,119,87, 65 pixels por sessão; o Clawd é 215,119,87: com tolerância 1 não conta)
-        if ($cenario -eq 'codex') { Verdade ([Pixels]::Contar($foto, 255, 255, 255, 4) -gt 100) 'cadê o ícone do Codex (nó branco) na lista?' }
-        if ($cenario -in 'misto', 'codex') { Verdade ([Pixels]::Contar($foto, 217, 119, 87, 1) -gt 30) 'cadê o ícone do Claude (estrela laranja) na lista?' }
+        # o ícone do Codex (nó branco 255,255,255, 51 pixels na grade x 3 sessões do Codex; o texto do nome E5E7EB fica a 26 de distância) e o da estrela do Claude (laranja 217,119,87, 29 pixels por sessão; o Clawd é 215,119,87: com tolerância 1 não conta)
+        if ($cenario -eq 'codex') { Verdade ([Pixels]::Contar($foto, 255, 255, 255, 4) -gt 60) 'cadê o ícone do Codex (nó branco) na lista?' }
+        if ($cenario -in 'misto', 'codex') { Verdade ([Pixels]::Contar($foto, 217, 119, 87, 1) -gt 15) 'cadê o ícone do Claude (estrela laranja) na lista?' }
         if ($cenario -eq 'uso-codex-sem') { Verdade ([Pixels]::Contar($foto, 209, 213, 219, 4) -lt 3) 'barra de usage de alguém no "Codex: sem uso ainda"' }
         # Uso = Codex: nenhuma barra do Claude (38% no padrão cinza claro / 85% laranja); Uso = os dois: a do Claude volta (laranja a 85%)
         if ($cenario -in 'uso-codex', 'uso-codex-sem') { Verdade ([Pixels]::Contar($foto, 245, 158, 11, 25) -lt 5) 'a barra de 85% do Claude apareceu com Uso = Codex' }

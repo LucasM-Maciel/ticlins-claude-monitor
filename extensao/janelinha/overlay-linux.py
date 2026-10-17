@@ -774,38 +774,30 @@ def escrever(cr, s, cor, r, alinhamento="esq"):
     cr.restore()
 
 
-# o ícone do agente: pixel art 13x13, 1 px por quadradinho, cor fixa em todo tema (a estrela do
+# o ícone do agente: pixel art 9x9, 1 px por quadradinho, cor fixa em todo tema (a estrela do
 # Claude laranja, o nó do Codex branco). A MESMA grade vai no overlay.ps1 e no overlay.swift.
 GRADE_DOS_ICONES = {
     "claude": [
-        "...#..#..#...",
-        "...#..#..#...",
-        "....#.#.#....",
-        "##..#.#.#..##",
-        "..###.#.###..",
-        ".....###.....",
-        "#############",
-        ".....###.....",
-        "..###.#.###..",
-        "##..#.#.#..##",
-        "....#.#.#....",
-        "...#..#..#...",
-        "...#..#..#...",
+        "....#....",
+        ".#..#..#.",
+        "..#.#.#..",
+        "...###...",
+        "#########",
+        "...###...",
+        "..#.#.#..",
+        ".#..#..#.",
+        "....#....",
     ],
     "codex": [
-        "....#####....",
-        "...####.##...",
-        ".##.###.####.",
-        "###.#...#####",
-        "###.......###",
-        "###.........#",
-        "###.......###",
-        "#.........###",
-        "###.......###",
-        "#####...#.###",
-        ".####.###.##.",
-        "...##.####...",
-        "....#####....",
+        "..#####..",
+        ".#######.",
+        "###...###",
+        "##.#...##",
+        "##..#..##",
+        "##.#...##",
+        "###...###",
+        ".#######.",
+        "..#####..",
     ],
 }
 
@@ -959,7 +951,7 @@ class Cartao:
                 escrever(cr, l["tempo"], cor, (x0 + 186, y, ap["colTempo"], self.altura_linha), "dir")
             # toda linha tem o ícone do agente (estrela do Claude, nó do Codex), então o nome tem sempre 150
             escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 150, self.altura_linha))
-            desenhar_icone(cr, "codex" if l.get("codex") else "claude", round(x0 + 171), round(y + (self.altura_linha - 13) / 2))
+            desenhar_icone(cr, "codex" if l.get("codex") else "claude", round(x0 + 173), round(y + (self.altura_linha - 9) / 2))
             y += self.altura_linha
         if self.paginas > 1:
             escrever(cr, f"◀  {self.pagina}/{self.paginas}  ▶", hex_cor("#9CA3AF"), (x0, y, largura, self.altura_paginas), "centro")
