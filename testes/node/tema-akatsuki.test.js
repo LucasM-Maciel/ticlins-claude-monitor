@@ -245,13 +245,15 @@ test('a moldura anda: o quadro em t=0 difere do de t=3', () => {
   assert.ok(dif > 100, `${dif} pixels diferentes`);
 });
 
-test('a moldura do Time 7 é parada: fio azul-marinho por fora, laranja por dentro, igual em qualquer instante', () => {
+test('a moldura do Time 7 é parada: faixa azul da bandana com a placa de aço no alto, igual em qualquer instante', () => {
   try {
     A.vestir('t7-colete');
     const quadro = t => { const tela = new Tela(120, 60), g = tela.getContext('2d'); K.moldura(g, [0, 0, 120, 60], t); return tela; };
     const a = quadro(0), b = quadro(3);
     assert.deepStrictEqual(Array.from(a.pixels), Array.from(b.pixels));
-    assert.strictEqual(a.pixels[1 * 120 + 60] >>> 0, 0xFFF97316, 'laranja na 2ª linha');
+    assert.strictEqual(a.pixels[1 * 120 + 30] >>> 0, 0xFF2563EB, 'a faixa azul na 2ª linha');
+    const placa = a.pixels[3 * 120 + 50];  // a placa de aço (cinza claro) sobre a borda, no meio do alto
+    assert.ok(((placa >>> 16) & 255) > 180 && (placa & 255) > 180, `a placa da bandana: ${(placa >>> 0).toString(16)}`);
   } finally { A.vestir('akatsuki'); }
 });
 
@@ -262,7 +264,7 @@ test('a barra do usage: branca até o gasto, vermelha nos níveis altos, redemoi
   const branco = px(b, 10, 4), trilho = px(b, Math.round(cheio + 20), 4), olho = px(b, Math.round(cheio), 4);
   assert.ok(branco.r > 230 && branco.g > 230 && branco.b > 230, `branco: ${JSON.stringify(branco)}`);
   assert.ok(trilho.r < 80 && trilho.b < 80, `trilho escuro: ${JSON.stringify(trilho)}`);
-  assert.ok(olho.r > 240 && olho.g > 240 && olho.b > 240, `o olho do redemoinho (branco) na ponta: ${JSON.stringify(olho)}`);
+  assert.ok(olho.r > 150 && olho.g < 90 && olho.b < 90, `o Sharingan (vermelho) na ponta: ${JSON.stringify(olho)}`);
   const kur = px(barra(85), 10, 4), forte = px(barra(97), 10, 4);
   assert.ok(kur.r > 200 && kur.g < 110 && kur.b < 110, `vermelha a partir de 80%: ${JSON.stringify(kur)}`);
   assert.ok(forte.r > 200 && forte.g < 110 && forte.b < 110, `vermelha: ${JSON.stringify(forte)}`);
