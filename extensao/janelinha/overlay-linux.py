@@ -460,6 +460,12 @@ def ultimo_pedido(transcript):
 
 
 def situacao(s):
+    # agente (claude -p, codex exec): ninguém responde a ele, então "pergunta" vira "terminou"
+    r = situacao_da_conversa(s)
+    return "finished" if r == "question" and s.get("automatica") else r
+
+
+def situacao_da_conversa(s):
     estado = s["estado"]
     if s.get("codex"):  # a extensão já avisou no arquivo se terminou perguntando
         if estado == "working":

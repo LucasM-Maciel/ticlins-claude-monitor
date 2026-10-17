@@ -591,6 +591,12 @@ function UltimoPedido($transcript) {
 # Situação a partir do estado do hook + última mensagem. Trabalhando/permissão só
 # viram pergunta com a caixinha (texto com "?" no meio do trabalho não conta).
 function Situacao($s) {
+    # agente (claude -p, codex exec): ninguém responde a ele, então "pergunta" vira "terminou"
+    $r = SituacaoDaConversa $s
+    if ($r -eq 'question' -and $s.automatica -eq $true) { return 'finished' }
+    $r
+}
+function SituacaoDaConversa($s) {
     # sessão do Codex (ou com "pergunta": true): a extensão já leu a conversa e deixou a resposta no arquivo
     if ($s.agente -eq 'codex' -or $s.pergunta -eq $true) {
         if ($s.state -eq 'working') { return 'working' }

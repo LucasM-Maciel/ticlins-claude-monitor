@@ -338,6 +338,8 @@ if (cenario === "misto") {
     sessaoCodex("b1", { estado: "waiting", nome: "Revisar o PR", mostra: "finished" });
     sessao("c", { estado: "working", automatica: true, mostra: tudo ? ["Agente do claude -p", "working"] : null, linhas: [titulo("Agente do claude -p"), ferramenta("Bash")] });
     sessaoCodex("b2", { estado: "working", nome: "Agente do codex exec", automatica: true, mostra: tudo ? "working" : null });
+    // agente que terminou com uma pergunta: ninguém responde a ele, então vira "terminou" (não "pergunta")
+    sessaoCodex("b3", { estado: "waiting", pergunta: true, nome: "Agente que perguntou", automatica: true, mostra: tudo ? "finished" : null });
     mostrarDoCenario = tudo ? "tudo" : "abas";
     fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao", mostrar: mostrarDoCenario }));
     clawd = "andando";

@@ -341,6 +341,11 @@ func ultimoPedido(_ transcript: String) -> String? {
 // Situação a partir do estado do hook + última mensagem. Trabalhando/permissão só
 // viram pergunta com a caixinha (texto com "?" no meio do trabalho não conta).
 func situacao(_ s: Sessao) -> String {
+    // agente (claude -p, codex exec): ninguém responde a ele, então "pergunta" vira "terminou"
+    let r = situacaoDaConversa(s)
+    return r == "question" && s.automatica ? "finished" : r
+}
+func situacaoDaConversa(_ s: Sessao) -> String {
     // Codex: sem transcript do Claude; a extensão já avisou no arquivo se terminou perguntando
     if s.codex {
         if s.estado == "working" { return "working" }
