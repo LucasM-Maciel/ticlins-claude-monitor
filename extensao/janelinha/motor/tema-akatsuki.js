@@ -325,7 +325,7 @@ function cenaPorNome(m, nome) {
 
 // o motor está a 32 quadros/s: pulando, em cena ou com alguém trabalhando
 function emMovimento(m) {
-  return m.modo === 'pulando' || !!m.cena || (m.host.linhas || []).some(l => l.sit === 'working');
+  return m.modo === 'pulando' || !!m.cena || (m.host.linhas || []).some(l => l.sit === 'working') || ladoDe(m) === 'akatsuki';  // as nuvens da Akatsuki giram sempre (a 5 quadros/s dariam tiquinhos); o Time 7 só com tarefa
 }
 
 module.exports = {
