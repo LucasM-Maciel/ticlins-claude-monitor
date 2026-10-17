@@ -147,9 +147,9 @@ function andar(t, mexendo) {
 }
 // O trilho das nuvens (o centro delas): um retângulo de cantos redondos (raio CURVA) com o alto e o pé
 // SOBE DIPs pra dentro da borda e os lados LADO DIPs pra fora; assim a nuvem fica montada no fio e no
-// máximo 5 a 7 DIPs dela entram no cartão (o texto começa a 10-12). PASSO: o espaço entre uma nuvem e a
-// próxima; VEL: DIPs/s, no sentido horário.
-const RAIO = 8, SOBE = 1, LADO = 3, CURVA = 8, PASSO = 70, VEL = 20;
+// máximo 5 a 7 DIPs dela entram no cartão (o texto começa a 10-12). QTD_NUVENS: quantas dão a volta (8, dono,
+// 17/10: "tem nuvens demais, ficou poluído"); VEL: DIPs/s, no sentido horário.
+const RAIO = 8, SOBE = 1, LADO = 3, CURVA = 8, QTD_NUVENS = 8, VEL = 20;
 function noTrilho(s, rx, ry, rw, rh) {  // o ponto a s DIPs do começo do alto do trilho
   const a = CURVA, Lh = rw - 2 * a, Lv = rh - 2 * a, arco = Math.PI * a / 2;
   const seg = [Lh, arco, Lv, arco, Lh, arco, Lv, arco];
@@ -180,7 +180,7 @@ function moldura(g, [x, y, w, h], t) {
   const rx = x - LADO, ry = y + SOBE, rw = w + 2 * LADO, rh = h - 2 * SOBE;
   if (rw > 2 * CURVA && rh > 2 * CURVA) {
     const per = 2 * (rw + rh) - 8 * CURVA + 2 * Math.PI * CURVA;
-    const n = Math.max(4, Math.round(per / PASSO)), esp = per / n, img = nuvemNaTela(e);
+    const n = QTD_NUVENS, esp = per / n, img = nuvemNaTela(e);
     for (let i = 0; i < n; i++) {
       const [cx, cy] = noTrilho(i * esp + t * VEL, rx, ry, rw, rh);
       g.drawImage(img, Math.round(T.ox + (cx - NW / 2) * e), Math.round(T.oy + (cy - NH / 2) * e));
