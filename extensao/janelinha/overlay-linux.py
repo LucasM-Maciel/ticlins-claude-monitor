@@ -774,23 +774,50 @@ def escrever(cr, s, cor, r, alinhamento="esq"):
     cr.restore()
 
 
-# o nome do agente dentro da pílula: letra pequena e escura, igual em todo tema
-fonte_da_pilula = Pango.FontDescription.from_string("Sans Bold")
-fonte_da_pilula.set_absolute_size(10 * Pango.SCALE)
+# o ícone do agente: pixel art 13x13, 1 px por quadradinho, cor fixa em todo tema (a estrela do
+# Claude laranja, o nó do Codex branco). A MESMA grade vai no overlay.ps1 e no overlay.swift.
+GRADE_DOS_ICONES = {
+    "claude": [
+        "...#..#..#...",
+        "...#..#..#...",
+        "....#.#.#....",
+        "##..#.#.#..##",
+        "..###.#.###..",
+        ".....###.....",
+        "#############",
+        ".....###.....",
+        "..###.#.###..",
+        "##..#.#.#..##",
+        "....#.#.#....",
+        "...#..#..#...",
+        "...#..#..#...",
+    ],
+    "codex": [
+        "....#####....",
+        "...####.##...",
+        ".##.###.####.",
+        "###.#...#####",
+        "###.......###",
+        "###.........#",
+        "###.......###",
+        "#.........###",
+        "###.......###",
+        "#####...#.###",
+        ".####.###.##.",
+        "...##.####...",
+        "....#####....",
+    ],
+}
 
 
-def escrever_na_pilula(cr, s, r):
-    x, y, w, h = r
-    layout = PangoCairo.create_layout(cr)
-    layout.set_font_description(fonte_da_pilula)
-    layout.set_text(s, -1)
-    layout.set_width(int(max(1, w) * Pango.SCALE))
-    layout.set_alignment(Pango.Alignment.CENTER)
-    _, lh = layout.get_pixel_size()
+def desenhar_icone(cr, agente, x, y):
     cr.save()
-    cr.set_source_rgba(*hex_cor("#111827"))
-    cr.move_to(x, y + (h - lh) / 2)
-    PangoCairo.show_layout(cr, layout)
+    cr.set_antialias(cairo.ANTIALIAS_NONE)
+    cr.set_source_rgba(*hex_cor("#FFFFFF" if agente == "codex" else "#D97757"))
+    for lin, linha in enumerate(GRADE_DOS_ICONES[agente]):
+        for trecho in re.finditer("#+", linha):
+            cr.rectangle(x + trecho.start(), y + lin, trecho.end() - trecho.start(), 1)
+    cr.fill()
     cr.restore()
 
 
@@ -930,13 +957,9 @@ class Cartao:
                 cr.arc(x0 + 4, y + self.altura_linha / 2, 4, 0, 2 * math.pi)
                 cr.fill()
                 escrever(cr, l["tempo"], cor, (x0 + 186, y, ap["colTempo"], self.altura_linha), "dir")
-            # toda linha tem a pílula do agente (claude laranja, codex verde), então o nome tem sempre 130
-            escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 130, self.altura_linha))
-            caixa_da_pilula = (x0 + 145, y + (self.altura_linha - 15) / 2, 40, 15)
-            cr.set_source_rgba(*hex_cor("#10A37F" if l.get("codex") else "#D97757"))
-            retangulo_redondo(cr, *caixa_da_pilula, 7)
-            cr.fill()
-            escrever_na_pilula(cr, "codex" if l.get("codex") else "claude", caixa_da_pilula)
+            # toda linha tem o ícone do agente (estrela do Claude, nó do Codex), então o nome tem sempre 150
+            escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 150, self.altura_linha))
+            desenhar_icone(cr, "codex" if l.get("codex") else "claude", round(x0 + 171), round(y + (self.altura_linha - 13) / 2))
             y += self.altura_linha
         if self.paginas > 1:
             escrever(cr, f"◀  {self.pagina}/{self.paginas}  ▶", hex_cor("#9CA3AF"), (x0, y, largura, self.altura_paginas), "centro")

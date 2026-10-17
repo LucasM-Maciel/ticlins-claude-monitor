@@ -301,7 +301,7 @@ if (cenario === "misto") {
     clique = "https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip";
     clawd = "parado";
 } else if (cenario === "preferencias") {  // botão direito (config.json): Clawd desligado, cartão a 50%, volume 0
-    // sessão do Codex: a pílula do "claude" é laranja quase igual ao Clawd, e o teste procura o laranja dele sumido
+    // sessão do Codex: o ícone do Claude é laranja quase igual ao Clawd, e o teste procura o laranja dele sumido
     sessaoCodex("a", { estado: "working", nome: "Rodando testes", mostra: "working" });
     fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ opacidade: 0.5, clawd: false, volume: 0 }));
     clawd = "desligado";

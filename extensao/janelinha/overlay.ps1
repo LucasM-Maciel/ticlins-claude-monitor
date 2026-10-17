@@ -763,19 +763,59 @@ function MudarPagina($passoDaPagina) {
     $paginaDaLista.atual += $passoDaPagina
     Atualizar
 }
-# a pílula do agente ao lado do nome: "claude" laranja, "codex" verde, texto escuro igual em todo tema
-function PilulaDoAgente($nomeDoAgente) {
-    $fundoDaPilula = $(if ($nomeDoAgente -eq 'codex') { '#10A37F' } else { '#D97757' })
-    $textoDaPilula = Rotulo $nomeDoAgente '#111827' 40 'Center' 40
-    if ($textoDaPilula -is [Windows.Controls.TextBlock]) { $textoDaPilula.FontSize = 10; $textoDaPilula.FontWeight = 'SemiBold' }
-    $pilula = New-Object Windows.Controls.Border
-    $pilula.Width = 44; $pilula.Height = 15
-    $pilula.CornerRadius = [Windows.CornerRadius]::new(7)
-    $pilula.Background = Cor $fundoDaPilula
-    $pilula.Margin = [Windows.Thickness]::new(0, 0, 6, 0)
-    $pilula.VerticalAlignment = 'Center'
-    $pilula.Child = $textoDaPilula
-    $pilula
+# o ícone do agente ao lado do nome, em pixel art 13x13 (1 px por quadradinho, cor fixa em todo
+# tema): a estrela do Claude (laranja) e o nó do Codex (branco). A MESMA grade vai no overlay.swift
+# e no overlay-linux.py: mudou aqui, muda lá.
+$gradesDosIcones = @{
+    claude = @(
+        '...#..#..#...',
+        '...#..#..#...',
+        '....#.#.#....',
+        '##..#.#.#..##',
+        '..###.#.###..',
+        '.....###.....',
+        '#############',
+        '.....###.....',
+        '..###.#.###..',
+        '##..#.#.#..##',
+        '....#.#.#....',
+        '...#..#..#...',
+        '...#..#..#...'
+    )
+    codex = @(
+        '....#####....',
+        '...####.##...',
+        '.##.###.####.',
+        '###.#...#####',
+        '###.......###',
+        '###.........#',
+        '###.......###',
+        '#.........###',
+        '###.......###',
+        '#####...#.###',
+        '.####.###.##.',
+        '...##.####...',
+        '....#####....'
+    )
+}
+function IconeDoAgente($nomeDoAgente) {
+    $gradeDoIcone = $gradesDosIcones[$nomeDoAgente]
+    $retangulosDoIcone = New-Object Windows.Media.GeometryGroup
+    for ($iLinhaDoIcone = 0; $iLinhaDoIcone -lt $gradeDoIcone.Count; $iLinhaDoIcone++) {
+        foreach ($trechoDoIcone in [regex]::Matches($gradeDoIcone[$iLinhaDoIcone], '#+')) {
+            [void]$retangulosDoIcone.Children.Add([Windows.Media.RectangleGeometry]::new([Windows.Rect]::new($trechoDoIcone.Index, $iLinhaDoIcone, $trechoDoIcone.Length, 1)))
+        }
+    }
+    $icone = New-Object Windows.Shapes.Path
+    $icone.Data = $retangulosDoIcone
+    $icone.Fill = Cor $(if ($nomeDoAgente -eq 'codex') { '#FFFFFF' } else { '#D97757' })
+    $icone.Width = 13; $icone.Height = 13
+    $icone.Margin = [Windows.Thickness]::new(0, 0, 7, 0)
+    $icone.VerticalAlignment = 'Center'
+    $icone.SnapsToDevicePixels = $true
+    [Windows.Media.RenderOptions]::SetEdgeMode($icone, 'Aliased')
+    $icone.ToolTip = $(if ($nomeDoAgente -eq 'codex') { 'Codex' } else { 'Claude' })
+    $icone
 }
 # a linha "◀  1/3  ▶": clicar na metade da esquerda volta uma página, na da direita avança
 function LinhaDasPaginas {
@@ -853,12 +893,12 @@ function Atualizar {
             $bola.Width = 8; $bola.Height = 8
             $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
             $bola.VerticalAlignment = 'Center'
-            $nomeSessao = Texto $s.name '#E5E7EB' 130
+            $nomeSessao = Texto $s.name '#E5E7EB' 160
             $nomeSessao.TextTrimming = 'CharacterEllipsis'
             $tempo = $(if ($doMotor) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
             $listaFeita.lugaresDasSessoes += , @($bola, $tempo, $tempoTexto)
-            # toda linha tem a pílula do agente (claude ou codex), então o nome tem sempre 130 px
-            $linha = Linha $bola $nomeSessao (PilulaDoAgente $(if ($s.agente -eq 'codex') { 'codex' } else { 'claude' })) $tempo
+            # toda linha tem o ícone do agente (claude ou codex), então o nome tem sempre 160 px
+            $linha = Linha $bola $nomeSessao (IconeDoAgente $(if ($s.agente -eq 'codex') { 'codex' } else { 'claude' })) $tempo
             $linha.Background = [Windows.Media.Brushes]::Transparent
             $linha.ToolTip = $rotulo
             $linha.Tag = "sessao:$($s.id)"  # o clique acha a sessão por aqui

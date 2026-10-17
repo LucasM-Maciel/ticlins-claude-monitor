@@ -566,14 +566,47 @@ let L: CGFloat = 380, A: CGFloat = 440
 let M: CGFloat = 34                      // espaço em volta do cartão, por onde o Clawd anda
 let fonte = NSFont.systemFont(ofSize: 12)
 
-// o nome do agente dentro da pílula: letra pequena e escura, igual em todo tema
-func escreverNaPilula(_ s: String, _ r: NSRect) {
-    let p = NSMutableParagraphStyle()
-    p.alignment = .center
-    let f = NSFont.systemFont(ofSize: 10, weight: .semibold)
-    let h = ceil(f.ascender - f.descender)
-    (s as NSString).draw(in: NSRect(x: r.minX, y: r.minY + (r.height - h) / 2, width: r.width, height: h + 1),
-                         withAttributes: [.font: f, .foregroundColor: hex("#111827"), .paragraphStyle: p])
+// o ícone do agente: pixel art 13x13, 1 px por quadradinho, cor fixa em todo tema (a estrela do
+// Claude laranja, o nó do Codex branco). A MESMA grade vai no overlay.ps1 e no overlay-linux.py.
+let gradeDoIconeClaude = [
+    "...#..#..#...",
+    "...#..#..#...",
+    "....#.#.#....",
+    "##..#.#.#..##",
+    "..###.#.###..",
+    ".....###.....",
+    "#############",
+    ".....###.....",
+    "..###.#.###..",
+    "##..#.#.#..##",
+    "....#.#.#....",
+    "...#..#..#...",
+    "...#..#..#...",
+]
+let gradeDoIconeCodex = [
+    "....#####....",
+    "...####.##...",
+    ".##.###.####.",
+    "###.#...#####",
+    "###.......###",
+    "###.........#",
+    "###.......###",
+    "#.........###",
+    "###.......###",
+    "#####...#.###",
+    ".####.###.##.",
+    "...##.####...",
+    "....#####....",
+]
+func desenharIcone(_ grade: [String], _ cor: String, _ x: CGFloat, _ y: CGFloat) {
+    guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+    ctx.saveGState()
+    ctx.setShouldAntialias(false)
+    ctx.translateBy(x: x, y: y)
+    ctx.addPath(forma(grade, 1, 1, 0, 0) { $0 == "#" })
+    ctx.setFillColor(hex(cor).cgColor)
+    ctx.fillPath()
+    ctx.restoreGState()
 }
 func escrever(_ s: String, _ c: NSColor, _ r: NSRect, _ alinhamento: NSTextAlignment = .left) {
     let p = NSMutableParagraphStyle()
@@ -810,7 +843,7 @@ struct LinhaDoCartao {
     var nome: String
     var tempo: String
     var rotulo: String  // o tooltip
-    var codex = false   // sessão do Codex: a pílula do nome é "codex" (verde); senão "claude" (laranja)
+    var codex = false   // sessão do Codex: o ícone do nome é o nó do Codex (branco); senão a estrela do Claude (laranja)
 }
 
 final class Cartao: NSView {
@@ -885,12 +918,10 @@ final class Cartao: NSView {
                 NSBezierPath(ovalIn: NSRect(x: x0, y: y + (alturaLinha - 8) / 2, width: 8, height: 8)).fill()
                 escrever(l.tempo, cor, NSRect(x: x0 + 186, y: y, width: ap.colTempo, height: alturaLinha), .right)
             }
-            // toda linha tem a pílula do agente (claude laranja, codex verde), então o nome tem sempre 130
-            escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 130, height: alturaLinha))
-            let caixaDaPilula = NSRect(x: x0 + 145, y: y + (alturaLinha - 15) / 2, width: 40, height: 15)
-            hex(l.codex ? "#10A37F" : "#D97757").setFill()
-            NSBezierPath(roundedRect: caixaDaPilula, xRadius: 7, yRadius: 7).fill()
-            escreverNaPilula(l.codex ? "codex" : "claude", caixaDaPilula)
+            // toda linha tem o ícone do agente (estrela do Claude, nó do Codex), então o nome tem sempre 150
+            escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 150, height: alturaLinha))
+            desenharIcone(l.codex ? gradeDoIconeCodex : gradeDoIconeClaude, l.codex ? "#FFFFFF" : "#D97757",
+                          x0 + 171, y + ((alturaLinha - 13) / 2).rounded())
             y += alturaLinha
         }
         if paginas > 1 {
