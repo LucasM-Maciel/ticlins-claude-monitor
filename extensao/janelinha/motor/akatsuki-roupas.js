@@ -164,7 +164,7 @@ registrarRoupas(ROUPAS);
 // (o Clawd anda por cima de qualquer fundo)
 const LADOS = {
   akatsuki: ['akatsuki', 'aka-espiral', 'aka-riscada'],
-  time7: ['t7-laranja', 't7-colete', 't7-azul'],
+  time7: ['t7-laranja', 't7-colete', 't7-rosa'],  // Naruto, Kakashi, Sakura (o Sasuke fica só no épico; dono, 17/10: "não fosse sempre Sasuke")
 };
 const CONTORNO = {
   akatsuki: '#5B1414', 'aka-espiral': '#5B1414', 'aka-riscada': '#5B1414',

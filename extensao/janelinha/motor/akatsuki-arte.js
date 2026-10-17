@@ -20,7 +20,7 @@ const COR = {
 const ROUPAS = require('./akatsuki-roupas');
 const ROUPA = 'akatsuki';
 COR.roupa = ROUPA; COR.lado = 'akatsuki';
-const ladoDaRoupa = roupa => (ROUPAS.LADOS.time7.includes(roupa) ? 'time7' : 'akatsuki');
+const ladoDaRoupa = roupa => (String(roupa).startsWith('t7-') ? 'time7' : 'akatsuki');  // o Sasuke (azul) e a Sakura (rosa) também são Time 7, mesmo fora da lista do Clawd
 function vestir(roupa) {
   if (!ROUPAS.ROUPAS[roupa] || COR.roupa === roupa) return;
   COR.roupa = roupa; COR.contorno = ROUPAS.CONTORNO[roupa]; COR.lado = ladoDaRoupa(roupa);

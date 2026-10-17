@@ -24,7 +24,7 @@ const { estadoDeMentira } = require('../motor-foto');
 const ESCALAS = [1, 1.25, 2];
 const JANELINHA = path.join(MOTOR, '..');
 // roupa: veste antes de começar (com as voltas que levam a ela, pra não pedir a virada)
-const VOLTAS_DA = { akatsuki: 0, 't7-laranja': 50, 'aka-espiral': 100, 't7-colete': 150, 'aka-riscada': 200, 't7-azul': 250 };
+const VOLTAS_DA = { akatsuki: 0, 't7-laranja': 50, 'aka-espiral': 100, 't7-colete': 150, 'aka-riscada': 200, 't7-rosa': 250 };
 function montar({ escala = 1, modo = 'andando', semente = 2, roupa = null, pasta = null } = {}) {
   const m = new Mundo({ tema, semente, pasta });
   if (roupa) Object.assign(m.salvo, { akaRoupa: roupa, akaVoltas: VOLTAS_DA[roupa] });
@@ -442,7 +442,7 @@ test('os inimigos (dono, 14/10): o bug e mais 3 de cada lado, sorteados pela sem
 test('a cada 50 voltas andadas troca de lado, pela virada na parada seguinte; cada volta pra um lado veste a próxima roupa dele', () => {
   try {
     assert.strictEqual(tema.voltasPorLado, 50);
-    assert.deepStrictEqual(A.ROUPAS.LADOS, { akatsuki: ['akatsuki', 'aka-espiral', 'aka-riscada'], time7: ['t7-laranja', 't7-colete', 't7-azul'] });
+    assert.deepStrictEqual(A.ROUPAS.LADOS, { akatsuki: ['akatsuki', 'aka-espiral', 'aka-riscada'], time7: ['t7-laranja', 't7-colete', 't7-rosa'] });
     const { m, erros } = montar();
     const ate = (m2, t) => { for (let T = m2.T + 1 / 30; m2.cena && T - m2.cena.t0 < t; T += 1 / 30) { m2.proxima = Infinity; m2.passo(T); } };
     assert.strictEqual(m.salvo.akaRoupa, 'akatsuki', 'começa na Akatsuki, de chapéu de palha');
@@ -474,7 +474,7 @@ test('a cada 50 voltas andadas troca de lado, pela virada na parada seguinte; ca
     assert.ok(!c || c.nome !== 'virada', 'já trocou');
     // as próximas: a cada volta pra um lado, a próxima roupa dele; depois da 3ª, recomeça
     let antes = 't7-laranja';
-    ['aka-espiral', 't7-colete', 'aka-riscada', 't7-azul', 'akatsuki', 't7-laranja'].forEach((roupa, i) => {
+    ['aka-espiral', 't7-colete', 'aka-riscada', 't7-rosa', 'akatsuki', 't7-laranja'].forEach((roupa, i) => {
       for (let v = 0; v < 50; v++) tema.aoDarVolta(m);
       assert.strictEqual(tema.roupaAlvo(m), roupa);
       if (i === 2) {  // quebrada: troca sem cena
@@ -548,7 +548,7 @@ test('o épico é o do lado da tela (a fera na Akatsuki, o trio no Time 7), e a 
   try {
     tema.trocarEpico(falso('aka'), 'akatsuki');
     tema.trocarEpico(falso('t7'), 'time7');
-    const { m, erros } = montar({ roupa: 't7-azul' });
+    const { m, erros } = montar({ roupa: 't7-rosa' });
     m.salvo.akaEpico = true;
     naReta(m);
     const c = tema.naParada(m);
@@ -564,15 +564,15 @@ test('o épico é o do lado da tela (a fera na Akatsuki, o trio no Time 7), e a 
     assert.strictEqual(tema.cenaPorNome(m, 'epico').quem, 'aka');
     // o Time 7 sem o arquivo: o pedido se gasta (como na Akatsuki)
     tema.trocarEpico(null, 'time7');
-    Object.assign(m.salvo, { akaRoupa: 't7-azul', akaVoltas: 250, akaEpico: true });
+    Object.assign(m.salvo, { akaRoupa: 't7-rosa', akaVoltas: 250, akaEpico: true });
     const e = tema.naParada(m);
     assert.ok(!e || !e.epico);
     assert.strictEqual(m.salvo.akaEpico, false);
     assert.deepStrictEqual(erros, []);
     // os de verdade: cada lado o seu, e o trio sabe quem ele é
     tema.trocarEpico(undefined);
-    const fera = tema.cenaPorNome(montar().m, 'epico'), trio = tema.cenaPorNome(montar({ roupa: 't7-azul' }).m, 'epico');
+    const fera = tema.cenaPorNome(montar().m, 'epico'), trio = tema.cenaPorNome(montar({ roupa: 't7-rosa' }).m, 'epico');
     assert.ok(fera && fera.plano.feraX > 0 && fera.dur < trio.dur);
-    assert.strictEqual(trio.plano.eu, 't7-azul');
+    assert.strictEqual(trio.plano.eu, 't7-rosa');
   } finally { tema.trocarEpico(undefined); A.vestir('akatsuki'); }
 });

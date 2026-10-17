@@ -403,6 +403,7 @@ module.exports = {
     const h = m.host, e = h.escala || 1, t = m.T;
     const fase = K.andar(t, emMovimento(m));  // a moldura e o redemoinho só andam com o motor a 32 quadros/s
     if (h.cartao) K.moldura(g, h.cartao, fase);
+    if (h.cartao) K.divisoria(g, h, fase);  // Time 7: a travessa entre as sessões e o usage
     for (const l of h.linhas || []) {
       if (l.bola) K.bolinha(g, l, t);
       if (l.tempo) K.escrever(g, e, l.tempo.txt, l.tempo.cor, l.tempo.caixa, true);
