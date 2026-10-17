@@ -47,6 +47,7 @@ const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
+const fundo_1 = require("./fundo");
 exports.MONITOR_DIR = path.join(os.homedir(), ".claude-monitor");
 exports.SESS_DIR = path.join(exports.MONITOR_DIR, "sessions");
 const SOUND_DIR = path.join(exports.MONITOR_DIR, "sounds");
@@ -128,7 +129,7 @@ function voltouATrabalhar(data) {
 }
 function effectiveState(data) {
     const state = data.state === "working" || data.state === "permission" ? data.state : "waiting";
-    if (state === "waiting" && voltouATrabalhar(data))
+    if (state === "waiting" && (data.fundo || voltouATrabalhar(data)))
         return "working";
     if (state === "permission" && data.transcript) {
         try {
@@ -237,6 +238,7 @@ async function readSessions() {
         }
     }
     const ttys = raw.some(([, d]) => !d.pid && d.tty) ? await ttysWithClaude() : null;
+    const comFundo = (0, fundo_1.lerFundo)(now);
     for (const [entry, data] of raw) {
         const file = path.join(exports.SESS_DIR, entry);
         if (!isAlive(data, ttys, now)) {
@@ -252,7 +254,7 @@ async function readSessions() {
             file,
             name: (data.agente === "codex" ? undefined : titles.get(transcript)) || data.name || "sessão",
             cwd: data.cwd || "",
-            state: effectiveState({ ...data, since, transcript }),
+            state: effectiveState({ ...data, since, transcript, fundo: comFundo.has(id) }),
             since,
             updated,
             tty: data.tty || null,

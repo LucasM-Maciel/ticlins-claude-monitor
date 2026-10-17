@@ -228,7 +228,18 @@ struct Sessao {
 
 func numero(_ v: Any?) -> Double? { (v as? NSNumber)?.doubleValue }
 
+// ids das sessões "terminou" com comando rodando em segundo plano: a extensão olha os processos e grava fundo.json
+var idsDeFundo: Set<String> = []
+func lerFundo(agora: Double) -> Set<String> {
+    guard let dados = FileManager.default.contents(atPath: pasta + "/fundo.json"),
+          let d = (try? JSONSerialization.jsonObject(with: dados)) as? [String: Any],
+          let quando = numero(d["updated"]), agora - quando <= 60,
+          let ids = d["ids"] as? [String] else { return [] }
+    return Set(ids)
+}
+
 func lerSessoes(agora: Double) -> [Sessao] {
+    idsDeFundo = lerFundo(agora: agora)
     let fm = FileManager.default
     guard let arquivos = try? fm.contentsOfDirectory(atPath: dirSessoes) else { return [] }
     var vistas: [String: Sessao] = [:]
@@ -350,6 +361,7 @@ func mexeuDepoisDoStop(_ caminho: String, _ since: Double) -> Bool {
     return m > since + 2 && Date().timeIntervalSince1970 - m <= 45
 }
 func voltouATrabalhar(_ s: Sessao) -> Bool {
+    if idsDeFundo.contains(s.id) { return true }
     guard !s.transcript.isEmpty else { return false }
     if mexeuDepoisDoStop(s.transcript, s.since) { return true }
     let semExtensao = s.transcript.hasSuffix(".jsonl") ? String(s.transcript.dropLast(6)) : s.transcript

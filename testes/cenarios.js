@@ -252,6 +252,11 @@ if (cenario === "misto") {
 } else if (cenario === "andando") {
     sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
     sessao("b", { estado: "working", mostra: ["Escrevendo código", "working"], linhas: [titulo("Escrevendo código"), ferramenta("Edit")] });
+    sessao("fundo", {  // o Stop avisou "terminou" e o transcript parou, mas a extensão achou um comando rodando por baixo
+        estado: "waiting", since: agora - 400, mostra: ["Script rodando em segundo plano", "working"],
+        linhas: [titulo("Script rodando em segundo plano"), texto("Deixei a esteira rodando.")],
+    });
+    fs.writeFileSync(path.join(pasta, "fundo.json"), JSON.stringify({ updated: agora, ids: ["fundo"] }));
     clawd = "andando";
     uso(97, 30);
     temUso = true;

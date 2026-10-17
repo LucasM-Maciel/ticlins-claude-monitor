@@ -322,7 +322,22 @@ def pid_vivo(pid):
         return False
 
 
+# ids das sessões "terminou" com comando rodando em segundo plano: a extensão olha os processos e grava fundo.json
+ids_de_fundo = set()
+
+
+def ler_fundo(agora):
+    d = ler_json(os.path.join(pasta, "fundo.json"))
+    quando = numero(d.get("updated")) if isinstance(d, dict) else None
+    ids = d.get("ids") if isinstance(d, dict) else None
+    if quando is None or agora - quando > 60 or not isinstance(ids, list):
+        return set()
+    return {i for i in ids if isinstance(i, str)}
+
+
 def ler_sessoes(agora):
+    global ids_de_fundo
+    ids_de_fundo = ler_fundo(agora)
     try:
         arquivos = os.listdir(dir_sessoes)
     except OSError:
@@ -471,6 +486,8 @@ def mexeu_depois_do_stop(caminho, since):
 
 
 def voltou_a_trabalhar(s):
+    if s["id"] in ids_de_fundo:
+        return True
     if not s["transcript"]:
         return False
     if mexeu_depois_do_stop(s["transcript"], s["since"]):

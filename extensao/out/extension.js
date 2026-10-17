@@ -43,6 +43,7 @@ const sessions_1 = require("./sessions");
 const processes_1 = require("./processes");
 const install_1 = require("./install");
 const codex_1 = require("./codex");
+const fundo_1 = require("./fundo");
 const POLL_MS = 1000;
 // ordem na lista: o mais urgente em cima
 const PRIORITY = { permission: 0, waiting: 1, working: 2, seen: 3 };
@@ -722,6 +723,7 @@ function activate(context) {
         try {
             conferirAtualizacao(context.extension.packageJSON.version);
             (0, codex_1.sincronizarCodex)(); // sessões e uso do Codex viram arquivos; só mexe se ~/.codex existe
+            (0, fundo_1.sincronizarFundo)(); // sessão "terminou" com comando rodando em segundo plano: avisa as janelinhas
             const fresh = await (0, sessions_1.readSessions)();
             for (const s of fresh) {
                 const prev = lastStates.get(s.id);

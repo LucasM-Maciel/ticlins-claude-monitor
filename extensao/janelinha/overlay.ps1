@@ -471,7 +471,17 @@ function PonteirosWsl($agora) {
     }
 }
 
+# ids das sessões "terminou" com comando rodando em segundo plano: a extensão olha os processos e grava fundo.json
+function FundoDeSessoes($agora) {
+    $arquivoFundo = Join-Path $Pasta 'fundo.json'
+    if (-not [IO.File]::Exists($arquivoFundo)) { return @() }
+    $lidoFundo = $null
+    try { $lidoFundo = Get-Content -LiteralPath $arquivoFundo -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $Error.RemoveAt(0) }
+    if ($lidoFundo -and ($agora - $lidoFundo.updated) -le 60) { return @($lidoFundo.ids) }
+    @()
+}
 function Sessoes($agora) {
+    $script:idsDeFundo = @(FundoDeSessoes $agora)
     $vistas = @{}
     Get-ChildItem $dir -Filter *.json -ErrorAction Ignore | ForEach-Object {
         try { $s = Get-Content $_.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return }
@@ -603,6 +613,7 @@ function MexeuDepoisDoStop($arquivoDoTranscript, $since) {
     $segundos -gt $since + 2 -and ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000 - $segundos) -le 45
 }
 function VoltouATrabalhar($s) {
+    if ($script:idsDeFundo -contains $s.id) { return $true }
     if (-not $s.transcript) { return $false }
     if (MexeuDepoisDoStop $s.transcript $s.since) { return $true }
     $pastaDosSub = ($s.transcript -replace '\.jsonl$', '') + '\subagents'

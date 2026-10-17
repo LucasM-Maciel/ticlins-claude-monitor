@@ -74,6 +74,21 @@ test("Stop no meio da tarefa: subagente ainda escrevendo continua 'working'", as
     assert.strictEqual((await sessions.readSessions())[0].state, "working");
 });
 
+test("Stop com comando rodando em segundo plano (fundo.json): 'working' mesmo com o transcript parado", async () => {
+    const t = path.join(casa, "m5.jsonl");
+    fs.writeFileSync(t, "{}\n");
+    const velho = agora() - 300;
+    fs.utimesSync(t, velho, velho);
+    gravar("m5", { name: "m5", state: "waiting", pid: process.pid, since: agora() - 400, transcript: t });
+    const arq = path.join(casa, ".claude-monitor", "fundo.json");
+    try {
+        fs.writeFileSync(arq, JSON.stringify({ updated: agora(), ids: ["m5"] }));
+        assert.strictEqual((await sessions.readSessions())[0].state, "working");
+        fs.writeFileSync(arq, JSON.stringify({ updated: agora() - 120, ids: ["m5"] }));  // extensão parou: ninguém confia
+        assert.strictEqual((await sessions.readSessions())[0].state, "waiting");
+    } finally { fs.rmSync(arq, { force: true }); }
+});
+
 test("terminou de verdade: transcript e subagentes parados continuam 'waiting'", async () => {
     const t = path.join(casa, "m3.jsonl");
     fs.writeFileSync(t, "{}\n");
