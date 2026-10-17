@@ -523,7 +523,7 @@ function desenharClawd(g, t, J, T0, m) {
 }
 
 // a trilha (som.js)
-const SS = n => `sons-akatsuki/${n}.wav`, VOLUME = 0.52;  // VOLUME: a trilha mixada dá ~-22 LUFS (medido), como os épicos dos outros temas
+const SS = n => `sons-akatsuki/${n}.wav`, VOLUME = 0.35;  // VOLUME: a trilha mixada fica em ~-23,5 dBFS de RMS (medido 17/10), no nível dos avisos (terminou -23,2); com 0,52 passava deles e parecia alta
 function sons() {
   const L = [
     [T.selos[0], SS('selos'), 0.6], [T.bate, SS('batida'), 0.9],

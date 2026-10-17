@@ -798,7 +798,7 @@ function desenharGente(g, t, J, T0, m, d) {
 }
 
 // a trilha (som.js)
-const SS = n => `sons-akatsuki/${n}.wav`, VOLUME = 0.52;  // VOLUME: a trilha mixada dá ~-22 LUFS (medido), como os épicos dos outros temas
+const SS = n => `sons-akatsuki/${n}.wav`, VOLUME = 0.40;  // VOLUME: a trilha mixada fica em ~-23,5 dBFS de RMS (medido 17/10), no nível dos avisos (terminou -23,2); com 0,52 passava deles e parecia alta
 function sons(J) {
   const L = J.ajudantes.map((r, i) => [T.chega[i], SS('fumaca'), 0.55, 1 + 0.08 * i]);
   L.push(
