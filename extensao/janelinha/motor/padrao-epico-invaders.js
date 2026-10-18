@@ -105,7 +105,7 @@ function reiArte(luz, dir) {
 // ---------- o plano ----------
 function montar(m, r) {
   const c = m.host.cartao || [104, 264, 242, 142], casa = m.pose();
-  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 112, 184));
+  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 72, 184));
   const J = { cw, HJ, X0: casa.x - c[0], L: MARG, R: cw - MARG, xMin: MARG + 15, xMax: cw - MARG - 15 };
   const fx = Math.round((cw - ((COLS - 1) * DXF + BW)) / 2), fy = -HJ + 40;
   J.bugs = [];

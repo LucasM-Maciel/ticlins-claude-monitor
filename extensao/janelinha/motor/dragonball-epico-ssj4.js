@@ -46,7 +46,7 @@ const linhaDoTempo = [
 // ---------- o plano ----------
 function montar(m, r) {
   const c = m.host.cartao || [98, 260, 248, 146], casa = m.pose();
-  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 112, 184)), X0 = casa.x - c[0];
+  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 72, 184)), X0 = casa.x - c[0];
   const J = { cw, HJ, X0 };
   // o macaco: o maior que cabe no palco (P = DIPs por célula), no meio do Clawd se couber inteiro
   J.P = lim((HJ - 10) / Mc.MH, 2.2, 3.4);

@@ -240,7 +240,7 @@ function pedraEm(J, t) {
 
 function montar(m, r) {
   const c = m.host.cartao || [98, 260, 248, 146], casa = m.pose();
-  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 112, 184)), X0 = casa.x - c[0];
+  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 72, 184)), X0 = casa.x - c[0];
   const J = { cw, HJ, X0 };
   // a floresta: a crista do morro, a linha das copas, a faixa cheia de baixo e a altura dos pinheiros
   J.morro = -HJ * 0.42; J.copas = -HJ * 0.3; J.base = -Math.round(HJ * 0.07); J.pinho = HJ * 0.14;

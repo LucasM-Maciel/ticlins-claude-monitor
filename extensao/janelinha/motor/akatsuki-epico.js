@@ -148,7 +148,7 @@ function fera(olho = 4, boca = 0) {
 // ---------- o palco ----------
 function montar(m) {
   const c = m.host.cartao || [98, 260, 248, 146], casa = m.pose();
-  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 112, 184)), X0 = casa.x - c[0];
+  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 72, 184)), X0 = casa.x - c[0];
   const k = HJ >= 150 && cw >= 230 ? 3 : 2, TW = FW * k, TH = FH * k;
   const BP = k * 2 + 1, BW = 13 * BP, BH = 8 * BP;  // o bug gigante: o do tema, 2k+1 por pixel
   const J = { cw, HJ, X0, k, TW, TH, BP, BW, BH };

@@ -180,3 +180,17 @@ test('cena que quebrou não é pedida de novo a cada quadro', () => {
   for (let T = 0.05; T <= 5; T += 0.05) m.passo(T);  // 100 quadros: a próxima parada fica 20-45 s depois
   assert.strictEqual(pedidas, 1);
 });
+
+test('cena épica com a lista cheia (10 abas, cartão a 88 px do topo) cabe na janela, sem cortar em cima', () => {
+  const { fotografar } = require('../motor-foto');
+  for (const [tema, cena] of [['padrao', 'epico'], ['akatsuki', 'epico'], ['dragonball', 'ssj4'], ['sith', 'epico'], ['sith', 'epico-luz']]) {
+    const estado = estadoDeMentira(tema, 'andando', { sessoes: 10, usos: 4 });
+    const c = estado.cartao.slice(); c[3] += c[1] - 88; c[1] = 88; estado.cartao = c;
+    for (const t of [1, 3, 5, 7, 9]) {
+      const tela = fotografar({ tema, cena, t, estado }), b = tela.bgra();
+      let topo = 0;
+      for (let x = 0; x < tela.width; x++) if (b[x * 4 + 3] > 8) topo++;
+      assert.strictEqual(topo, 0, `${tema}/${cena} t=${t}: ${topo} px colados no topo da janela`);
+    }
+  }
+});

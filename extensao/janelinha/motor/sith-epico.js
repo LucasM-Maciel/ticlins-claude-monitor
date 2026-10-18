@@ -214,7 +214,7 @@ function barrigaEm(J, f, t) {
 
 function montar(m, r) {
   const c = m.host.cartao || [98, 260, 248, 146], casa = m.pose();
-  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 112, 184)), X0 = casa.x - c[0];
+  const cw = c[2], HJ = Math.round(lim(c[1] - 14, 72, 184)), X0 = casa.x - c[0];
   const w = Math.round(Math.min(cw * 0.66, HJ * 0.95)), M = medidasNave(w);
   const J = { cw, HJ, X0, nave: { w, M, x: Math.round(cw * 0.06), y: -HJ + 6 } };
   J.barriga = J.nave.y + M.topo + M.h;
