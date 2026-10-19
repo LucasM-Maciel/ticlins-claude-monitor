@@ -5,7 +5,7 @@
 // (onda de energia, teletransporte, nuvem, esfera gigante, rastreador) e, 1 em 10 voltas que
 // dá no cartão, se transforma por 30 s. Cada sessão que termina dá uma esfera; na 7ª, o
 // dragão serpente dá a volta no cartão, para no ar e realiza um pedido do Clawd (4 em rodízio,
-// dragonball-pedido.js). A cada 150 voltas, o épico da lua cheia: vira macaco
+// dragonball-pedido.js). A cada 400 voltas, o épico da lua cheia: vira macaco
 // dourado gigante e volta no SSJ 4, que fica 2 min (dragonball-epico-ssj4.js). Parado há 1 min:
 // medita ou treina, uma vez cada (parado.js). Os desenhos estão em dragonball-*.js.
 const { lim, sortearPeso } = require('./comum');
@@ -20,7 +20,7 @@ const LUTAS = ['onda', 'teleporte', 'nuvem', 'genki', 'rastreador'];
 const TRANSF = { chance: 1 / 10, dura: 30 };  // 1 em 10 a cada volta no cartão; fica 30 s (+ a entrada)
 const PESOS = Object.fromEntries(A.VARIACOES.map(v => [v.id, 8 - v.forca]));  // as mais fortes mais raras
 const ESPERA_DRAGAO = 0.6;  // s entre a 7ª esfera chegar e o dragão sair
-const LUA = { voltas: 150, dura: 120 };  // o épico da lua cheia: a cada 150 voltas (dono, 09/10); o SSJ 4 fica 2 min
+const LUA = { voltas: 400, dura: 120 };  // o épico da lua cheia: a cada 400 voltas (dono, 19/10; era 150); o SSJ 4 fica 2 min
 const COR = { rotulo: '#86EFAC', falta: '#5E8F6E' };  // verdes de visor
 
 // o que o Clawd veste agora: a transformação (entrando, ativa ou voltando) ou nada
@@ -150,7 +150,7 @@ module.exports = {
 
   // -- regras --
   aoDarVolta(m) {
-    // conta as voltas (sobrevive a reabrir): a cada 150, o épico da lua fica pendente pra parada
+    // conta as voltas (sobrevive a reabrir): a cada 400, o épico da lua fica pendente pra parada
     // seguinte. O sorteio da transformação vem depois, igual (a contagem não mexe nele)
     const n = m.salvo.dbVoltas = (Math.floor(Number(m.salvo.dbVoltas)) || 0) + 1;
     if (n % LUA.voltas === 0) m.salvo.dbLua = true;

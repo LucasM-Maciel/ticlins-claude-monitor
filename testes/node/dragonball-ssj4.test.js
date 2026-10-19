@@ -1,5 +1,5 @@
 'use strict';
-// motor/dragonball-epico-ssj4.js (o épico da lua cheia do tema Dragon Ball: a cada 150 voltas no
+// motor/dragonball-epico-ssj4.js (o épico da lua cheia do tema Dragon Ball: a cada 400 voltas no
 // cartão, o Clawd vira macaco dourado gigante e volta no SSJ 4, que fica 2 min) e
 // motor/dragonball-pedido.js (o dragão das 7 esferas para no ar e realiza um pedido do Clawd,
 // 4 em rodízio). O épico quadro a quadro em 3 escalas e 2 cartões, mesmo instante = mesmos
@@ -77,7 +77,7 @@ test('pelo tema: o ssj4 é este épico, está na lista das cenas e não entra no
   assert.strictEqual(m.cena.dur, epico.T.dur);
   assert.ok(tema.cenas.includes('ssj4'));
   assert.ok(!A.VARIACOES.some(v => v.id === 'ssj4'), 'o SSJ 4 só vem pela lua');
-  assert.strictEqual(tema.voltasPorLua, 150);
+  assert.strictEqual(tema.voltasPorLua, 400);
   assert.strictEqual(tema.duraSSJ4, 120);
 });
 
@@ -234,16 +234,16 @@ test('o plano, em 50 sementes, 3 lugares da reta e 2 cartões: o macaco e a lua 
 });
 
 // ============================== as regras da lua ==============================
-test('a lua: a cada 150 voltas no cartão (contadas e salvas), fica pendente; sobrevive a reabrir', () => {
+test('a lua: a cada 400 voltas no cartão (contadas e salvas), fica pendente; sobrevive a reabrir', () => {
   comPasta(pasta => {
     let m = novoMundo({ pasta, cena: null });
     m.chance = () => false;  // sem transformação sorteada no meio
-    for (let i = 1; i < 150; i++) tema.aoDarVolta(m);
-    assert.strictEqual(m.salvo.dbVoltas, 149);
-    assert.ok(!m.salvo.dbLua, 'a 149ª ainda não');
+    for (let i = 1; i < 400; i++) tema.aoDarVolta(m);
+    assert.strictEqual(m.salvo.dbVoltas, 399);
+    assert.ok(!m.salvo.dbLua, 'a 399ª ainda não');
     tema.aoDarVolta(m);
-    assert.strictEqual(m.salvo.dbLua, true, 'a 150ª chama a lua');
-    assert.deepStrictEqual([salvoEm(pasta).dbVoltas, salvoEm(pasta).dbLua], [150, true]);
+    assert.strictEqual(m.salvo.dbLua, true, 'a 400ª chama a lua');
+    assert.deepStrictEqual([salvoEm(pasta).dbVoltas, salvoEm(pasta).dbLua], [400, true]);
     m = novoMundo({ pasta, cena: null });  // reabriu a janelinha
     assert.strictEqual(m.salvo.dbLua, true, 'pendente depois de reabrir');
     m.comecarCena(tema.naParada(m));
@@ -251,13 +251,13 @@ test('a lua: a cada 150 voltas no cartão (contadas e salvas), fica pendente; so
     assert.ok(!salvoEm(pasta).dbLua, 'começou: gastou');
     m.fimCena(true);  // cortado antes do clarão: volta a ficar pendente
     assert.strictEqual(salvoEm(pasta).dbLua, true);
-    // e de novo na 300ª
-    m.salvo.dbLua = false; m.salvo.dbVoltas = 298;
+    // e de novo na 800ª
+    m.salvo.dbLua = false; m.salvo.dbVoltas = 798;
     m.chance = () => false;
     tema.aoDarVolta(m);
     assert.ok(!m.salvo.dbLua);
     tema.aoDarVolta(m);
-    assert.strictEqual(m.salvo.dbLua, true, 'a 300ª');
+    assert.strictEqual(m.salvo.dbLua, true, 'a 800ª');
     // contagem estragada no arquivo: recomeça do zero, sem quebrar
     m.salvo.dbVoltas = 'xyz'; m.salvo.dbLua = false;
     tema.aoDarVolta(m);
