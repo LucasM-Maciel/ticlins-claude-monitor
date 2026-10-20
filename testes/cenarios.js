@@ -108,7 +108,11 @@ function pidMorto() {
     return spawnSync(process.execPath, ["-e", ""]).pid;  // já terminou quando volta
 }
 
+// ritmo esperado: uso − % da janela que já passou (5h renova em 90 min: 70%; 7d em 3d1h: 56,5%)
+let ritmo = "nenhum";
 function uso(cinco, sete) {
+    const sinal = (n) => (n > 0 ? `+${n}` : `${n}`);
+    ritmo = `5h ${sinal(Math.round(cinco - 70))} | 7d ${sinal(Math.round(sete - 100 * (1 - (3 * 1440 + 60) / (7 * 1440))))}`;
     const daqui = (min) => new Date(Date.now() + min * 60000).toISOString().replace("Z", "+00:00");
     fs.writeFileSync(path.join(pasta, "uso.json"), JSON.stringify({
         five_hour: { utilization: cinco, resets_at: daqui(90) },
@@ -398,6 +402,7 @@ const paginasDaLista = Math.max(1, Math.ceil(esperado.length / 10));  // a lista
 if (mostrarDoCenario !== "abas") linhas.push(`mostrar: ${mostrarDoCenario}`);
 if (paginasDaLista > 1) linhas.push(`pagina: 1/${paginasDaLista}`);
 linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`);
+linhas.push(`ritmo: ${usoMostrado === "codex" ? "nenhum" : ritmo}`);  // o ritmo é só das barras do Claude (5h e 7d)
 if (usoMostrado !== "claude") linhas.push(`uso: ${usoMostrado}`, `barras: ${barras}`);
 linhas.push(`som: ${som}`, `som da cena: ${somDaCena}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);
 fs.writeFileSync(path.join(pasta, "esperado.txt"), linhas.join("\n") + "\n");

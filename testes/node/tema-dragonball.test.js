@@ -12,6 +12,7 @@ const path = require('path');
 const MOTOR = path.join(__dirname, '..', '..', 'extensao', 'janelinha', 'motor');
 const { Tela } = require(path.join(MOTOR, 'raster'));
 const { Mundo } = require(path.join(MOTOR, 'mundo'));
+const { layoutDe } = require(path.join(MOTOR, 'comum'));
 const tema = require(path.join(MOTOR, 'tema-dragonball'));
 const { largPx } = require(path.join(MOTOR, 'dragonball-arte'));
 const { estadoDeMentira } = require('../motor-foto');
@@ -227,6 +228,10 @@ test('layout: as colunas cabem os números na fonte do visor (com a sombra)', ()
   for (const s of ['2d23h', '1h20']) assert.ok(largPx(s) + 1 <= colunas.falta, s);
   assert.ok(largPx('100%') + 1 <= colunas.pct - 4, '100% com folga da barra');
   for (const s of ['5h', '7d']) assert.ok(largPx(s) + 1 <= colunas.rotulo - 2, s);
+  // o ritmo (a coluna vem do layout padrão): o sinal tem glifo e o pior caso cabe com folga do %
+  const { ritmo } = layoutDe(tema).colunas;
+  for (const s of ['-100', '+100']) assert.ok(largPx(s) + 1 <= ritmo - 4, s);
+  assert.ok(largPx('-') > 0 && largPx('-') === largPx('+'), 'o "-" tem glifo');
   assert.deepStrictEqual(tema.trilha, { raio: 8, baixo: 14 });
 });
 

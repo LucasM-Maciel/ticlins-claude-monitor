@@ -54,10 +54,16 @@ Tudo em DIPs, relativo à janela (o motor multiplica por `escala` pra desenhar e
     rotulo: { txt: '5h', cor, caixa },               // à esquerda
     barra: [x, y, w, h], pct: 38, nivel: 0 | 1 | 2,  // nivel: 1 = ≥80%, 2 = ≥95%
     pctTxt: { txt: '38%', cor, caixa },              // à direita
+    decorrido: 73.3,                                 // % da janela (5h/7d) que já passou: o tracinho do ritmo
+    ritmo: { txt: '-35', cor, caixa },               // à direita; pct − decorrido (+ = acima do ritmo)
     falta: { txt: '1h20', cor, caixa },              // à direita
   }],
 }
 ```
+
+`decorrido` não vem sem `resets_at`; `ritmo` só vem com a coluna dele (`colunas.ritmo` > 0).
+O tema desenha os dois com `desenharRitmo(g, u, corDoTracinho, escrever)` do `comum.js`
+(o tracinho e o número com a letra do tema).
 
 `linhas` e `uso` vêm sempre, mas só valem pro tema com `layout.enfeites`; sem isso quem
 desenha a bolinha, os números e a barra é a janelinha. O nome da sessão, "nenhuma sessão aberta",
@@ -76,7 +82,7 @@ layout: {
   padding: [10, 6, 10, 6],    // entre a moldura e o conteúdo
   enfeites: false,            // true: o tema desenha bolinha, números e barra nas caixas
                               // de linhas/uso; a janelinha só guarda o lugar
-  colunas: { tempo: 36, pct: 38, falta: 48, rotulo: 18 },  // largura das caixas (enfeites)
+  colunas: { tempo: 36, pct: 38, ritmo: 34, falta: 48, rotulo: 18 },  // largura das caixas (enfeites)
   letra: 16,                  // altura das caixas de número (a linha do usage fica dessa altura)
   barra: [118, 4],            // tamanho da caixa da barra
 }

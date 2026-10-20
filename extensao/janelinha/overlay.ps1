@@ -426,7 +426,7 @@ function Rotulo($texto, $hex, $largura, $alinhar, $larguraMC) {
 }
 # troca o texto de um Rotulo sem refazer a linha (o tempo "12m" e o "falta" andam a cada minuto)
 function TrocarTexto($elemento, $texto, $hex) {
-    if ($elemento -is [Windows.Controls.TextBlock]) { $elemento.Text = $texto; return }
+    if ($elemento -is [Windows.Controls.TextBlock]) { $elemento.Text = $texto; $elemento.Foreground = Cor $hex; return }
     $elemento.Child.Source = TextoMC $texto $hex
     $elemento.Child.Width = [math]::Round($elemento.Child.Source.PixelWidth * 11 / 9)
 }
@@ -672,13 +672,23 @@ function Avisar($sessoes) {
     }
 }
 
+# ritmo: quanto da janela (5h ou 7d) já passou, em %; é onde fica o tracinho na barra.
+# Gastar no ritmo = o % acompanhar o tempo. O número é o uso menos isso: + = acima do ritmo
+$duracaoDaJanela = @{ '5h' = 5 * 3600; '7d' = 7 * 86400 }
 function DadosDoMedidor($rotulo, $dado) {
     $pct = [double]$dado.utilization
     # já renovou e ainda não veio o novo (o guardado de ontem, ou a busca falhando): zerou
     if ($dado.resets_at -and [DateTimeOffset]$dado.resets_at -le [DateTimeOffset]::Now) { $dado = $null; $pct = 0 }
     $nivel = $(if ($pct -ge 95) { 2 } elseif ($pct -ge 80) { 1 } else { 0 })
+    $decorrido = $null; $ritmo = ''; $corDoRitmo = '#6B7280'
+    if ($dado.resets_at -and $duracaoDaJanela.ContainsKey($rotulo)) {  # só 5h e 7d têm ritmo (o Codex também tem 30d e "<n>min")
+        $decorrido = [math]::Min(100, [math]::Max(0, 100 * (1 - ([DateTimeOffset]$dado.resets_at - [DateTimeOffset]::Now).TotalSeconds / $duracaoDaJanela[$rotulo])))
+        $n = [int][math]::Round($pct - $decorrido, [MidpointRounding]::AwayFromZero)
+        $ritmo, $corDoRitmo = $(if ($n -gt 0) { "+$n", '#F59E0B' } else { "$n", '#22C55E' })
+    }
     @{
         rotulo = $rotulo; pct = $pct; nivel = $nivel; cor = $coresDoUso[$config.tema][$nivel]; pctTexto = '{0:0}%' -f $pct
+        decorrido = $decorrido; ritmo = $ritmo; corDoRitmo = $corDoRitmo
         # quanto falta pra renovar
         falta = $(if ($dado.resets_at) { Tempo ([DateTimeOffset]$dado.resets_at - [DateTimeOffset]::Now).TotalMinutes } else { '' })
     }
@@ -692,6 +702,7 @@ function Medidor($medidor) {
         $lugarDoRotulo = Lugar $layoutDoTema.colunas.rotulo $layoutDoTema.letra
         $trilho = Lugar $layoutDoTema.barra[0] $layoutDoTema.barra[1]
         $p = Lugar $layoutDoTema.colunas.pct $layoutDoTema.letra
+        $r = Lugar $layoutDoTema.colunas.ritmo $layoutDoTema.letra
         $f = Lugar $layoutDoTema.colunas.falta $layoutDoTema.letra
     } elseif ($config.tema -eq 'minecraft' -and $barraXP) {
         $trilho = New-Object Windows.Controls.Canvas
@@ -722,13 +733,30 @@ function Medidor($medidor) {
         $barra.HorizontalAlignment = 'Left'
         $trilho.Child = $barra
     }
+    $barraNaLinha, $tracinho = $trilho, $null
     if (-not $layoutDoTema.enfeites) {
         $p = Rotulo $pctTexto $cor 38 'Right' 38
+        $r = Rotulo $medidor.ritmo $medidor.corDoRitmo 34 'Right' 34
         $f = Rotulo $falta '#6B7280' 48 'Right' 56
         $lugarDoRotulo = Rotulo $rotulo '#9CA3AF' 18 $null 18
+        # o tracinho do ritmo: onde o % estaria gastando por igual (anda no lugar, TracinhoNoLugar)
+        if ($null -ne $medidor.decorrido) {
+            $barraNaLinha = New-Object Windows.Controls.Grid
+            $barraNaLinha.Width = 118; $barraNaLinha.VerticalAlignment = 'Center'
+            $tracinho = New-Object Windows.Shapes.Rectangle
+            $tracinho.Width = 2; $tracinho.Height = $trilho.Height + 6; $tracinho.Fill = Cor '#E5E7EB'
+            $tracinho.HorizontalAlignment = 'Left'; $tracinho.VerticalAlignment = 'Center'
+            TracinhoNoLugar $tracinho $medidor.decorrido
+            [void]$barraNaLinha.Children.Add($trilho)
+            [void]$barraNaLinha.Children.Add($tracinho)
+        }
     }
-    $medidor.lugares = @($lugarDoRotulo, $trilho, $p, $f, $falta)  # e o "falta" que está na tela
-    Linha $lugarDoRotulo $trilho $p $f
+    # e o "falta" e o ritmo que estão na tela
+    $medidor.lugares = @($lugarDoRotulo, $trilho, $p, $f, $falta, $r, $medidor.ritmo, $tracinho)
+    Linha $lugarDoRotulo $barraNaLinha $p $r $f
+}
+function TracinhoNoLugar($tracinho, $decorrido) {
+    $tracinho.Margin = [Windows.Thickness]::new([math]::Round(118 * $decorrido / 100 - 1), 0, 0, 0)
 }
 
 # versão nova: a extensão pergunta pro GitHub 1x por dia e grava a publicada em
@@ -921,7 +949,8 @@ function Atualizar {
             $bola.Width = 8; $bola.Height = 8
             $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
             $bola.VerticalAlignment = 'Center'
-            $nomeSessao = Texto $s.name '#E5E7EB' 160
+            # a coluna do ritmo no usage alarga o cartão: o nome ganha o espaço e o tempo fica na direita
+            $nomeSessao = Texto $s.name '#E5E7EB' (160 + $(if ($doMotor) { $layoutDoTema.colunas.ritmo } else { 34 }))
             $nomeSessao.TextTrimming = 'CharacterEllipsis'
             $tempo = $(if ($doMotor) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
             $listaFeita.lugaresDasSessoes += , @($bola, $tempo, $tempoTexto)
@@ -958,8 +987,9 @@ function Atualizar {
     foreach ($medidorDoCodex in $medidoresDoCodex) { $medidorDoCodex.grupo = 'Codex' }
     $medidores = @($medidoresDoClaude) + @($medidoresDoCodex)
     $listaFeita.barras = (@($medidores | ForEach-Object { "$($_.grupo) $($_.rotulo) $($_.pctTexto)" }) -join ' | ')
+    $listaFeita.ritmo = $(if ($medidoresDoClaude.Count) { @($medidoresDoClaude | ForEach-Object { "$($_.rotulo) $($_.ritmo)" }) -join ' | ' } else { 'nenhum' })
     # sem o motor, a barra muda com a %; o "falta" anda a cada minuto e é trocado no lugar
-    $chaveDoUso = "$($config.tema) $doMotor $($config.uso) $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct)" }) }) -join '')
+    $chaveDoUso = "$($config.tema) $doMotor $($config.uso) $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct) $($null -ne $_.decorrido)" }) }) -join '')
     if ($chaveDoUso -ne $listaFeita.uso) {
         $listaFeita.uso = $chaveDoUso
         $listaFeita.lugaresDoUso = @()
@@ -980,7 +1010,10 @@ function Atualizar {
     for ($iMedidor = 0; $iMedidor -lt $medidores.Count; $iMedidor++) {
         $medidor, $lugares = $medidores[$iMedidor], $listaFeita.lugaresDoUso[$iMedidor]
         if (-not $doMotor -and $lugares[4] -ne $medidor.falta) { TrocarTexto $lugares[3] $medidor.falta '#6B7280'; $lugares[4] = $medidor.falta }
-        [void]$caixasDoMotor.uso.Add(@{ rotulo = @($medidor.rotulo, '#9CA3AF', $lugares[0]); barra = $lugares[1]; pct = $medidor.pct; nivel = $medidor.nivel; pctTxt = @($medidor.pctTexto, $medidor.cor, $lugares[2]); falta = @($medidor.falta, '#6B7280', $lugares[3]) })
+        if (-not $doMotor -and $lugares[6] -ne $medidor.ritmo) { TrocarTexto $lugares[5] $medidor.ritmo $medidor.corDoRitmo; $lugares[6] = $medidor.ritmo }
+        if ($lugares[7] -and $null -ne $medidor.decorrido) { TracinhoNoLugar $lugares[7] $medidor.decorrido }
+        [void]$caixasDoMotor.uso.Add(@{ rotulo = @($medidor.rotulo, '#9CA3AF', $lugares[0]); barra = $lugares[1]; pct = $medidor.pct; nivel = $medidor.nivel; pctTxt = @($medidor.pctTexto, $medidor.cor, $lugares[2])
+            decorrido = $medidor.decorrido; ritmo = @($medidor.ritmo, $medidor.corDoRitmo, $lugares[5]); falta = @($medidor.falta, '#6B7280', $lugares[3]) })
     }
     $nova = VersaoNova
     if ("$nova" -ne $listaFeita.aviso) {
@@ -1539,7 +1572,8 @@ function MotorEstado {
             [ordered]@{ id = $umaLinha.id; sit = $umaLinha.sit; cor = $umaLinha.cor; bola = @(CaixaNaJanela $umaLinha.bola); tempo = (TextoNaJanela $umaLinha.tempo) }
         })
         uso = @(foreach ($umUso in $caixasDoMotor.uso) {
-            [ordered]@{ rotulo = (TextoNaJanela $umUso.rotulo); barra = @(CaixaNaJanela $umUso.barra); pct = $umUso.pct; nivel = $umUso.nivel; pctTxt = (TextoNaJanela $umUso.pctTxt); falta = (TextoNaJanela $umUso.falta) }
+            [ordered]@{ rotulo = (TextoNaJanela $umUso.rotulo); barra = @(CaixaNaJanela $umUso.barra); pct = $umUso.pct; nivel = $umUso.nivel; pctTxt = (TextoNaJanela $umUso.pctTxt)
+                decorrido = $(if ($null -ne $umUso.decorrido) { [math]::Round($umUso.decorrido, 2) }); ritmo = (TextoNaJanela $umUso.ritmo); falta = (TextoNaJanela $umUso.falta) }
         })
     }
     $json = $estadoDoMotor | ConvertTo-Json -Compress -Depth 6
@@ -1923,6 +1957,7 @@ if ($Foto) {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)$(if ($_.agente -eq 'codex') { ' | agente=codex' })"
         }) + @(if ($config.mostrar -ne 'abas') { "mostrar: $($config.mostrar)" }) + @(if ($paginaDaLista.total -gt 1) { "pagina: $($paginaDaLista.atual)/$($paginaDaLista.total)" }) +
             "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
+            "ritmo: $($listaFeita.ritmo)" +
             @(if ($config.uso -ne 'claude') { "uso: $($config.uso)"; "barras: $($listaFeita.barras)" }) +
             "som: $(if ($somDaVez) { $nomeDoSom[$config.tema][$avisoDaSituacao[$somDaVez]] } else { 'nenhum' })" +
             "som da cena: $(if ($somDaCena) { $somDaCena } else { 'nenhum' })" +

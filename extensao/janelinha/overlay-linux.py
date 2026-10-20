@@ -576,6 +576,26 @@ def falta_pra_renovar(renova):
     return tempo((renova - time.time()) / 60) if renova else ""
 
 
+# ritmo: quanto da janela (5h ou 7d) já passou, em %; é onde fica o tracinho na barra.
+# Gastar no ritmo = o % acompanhar o tempo. O número é o uso menos isso: + = acima do ritmo
+duracao_da_janela = {"5h": 5 * 3600, "7d": 7 * 86400}
+
+
+def decorrido(rotulo, renova):
+    if not renova or rotulo not in duracao_da_janela:
+        return None
+    return min(max(100 * (1 - (renova - time.time()) / duracao_da_janela[rotulo]), 0), 100)
+
+
+def ritmo(rotulo, pct, renova):
+    """-> (texto, cor); o arredondamento é o dos outros (meio vai pra longe do zero)."""
+    d = decorrido(rotulo, renova)
+    if d is None:
+        return "", "#6B7280"
+    n = int(math.copysign(math.floor(abs(pct - d) + 0.5), pct - d))
+    return ("+%d" % n, "#F59E0B") if n > 0 else ("%d" % n, "#22C55E")
+
+
 def data_iso(texto):
     if not isinstance(texto, str):
         return None
@@ -667,6 +687,13 @@ def barras_com_grupo():
     do_codex = [] if config["uso"] == "claude" else list(uso_do_codex)
     return " | ".join([f"Claude {m[0]} {round(m[1])}%" for m in do_claude]
                       + [f"Codex {m[0]} {round(m[1])}%" for m in do_codex])
+
+
+def ritmo_do_claude():
+    do_claude = [] if config["uso"] == "codex" else list(uso or [])
+    if not do_claude:
+        return "nenhum"
+    return " | ".join(f"{m[0]} {ritmo(m[0], m[1], m[2])[0]}" for m in do_claude)
 
 
 def buscar_uso():
@@ -890,7 +917,7 @@ cores_do_uso = {
 # A cara do cartão: a de sempre ou, com o motor vivo, o layout do tema (mensagem P, docs/MOTOR.md).
 def aparencia(o=None):
     a = {"raio": 8.0, "fundo": "#E6181818", "moldura": [0, 0, 0, 0], "padding": [10, 6, 10, 6], "enfeites": False,
-         "colTempo": 36.0, "colPct": 38.0, "colFalta": 48.0, "colRotulo": 18.0, "letra": 16.0, "barra": (118.0, 4.0)}
+         "colTempo": 36.0, "colPct": 38.0, "colRitmo": 34.0, "colFalta": 48.0, "colRotulo": 18.0, "letra": 16.0, "barra": (118.0, 4.0)}
     if not o:
         return a
 
@@ -911,9 +938,12 @@ def aparencia(o=None):
         a["padding"] = quatro(o["padding"])
     if isinstance(o.get("enfeites"), bool):
         a["enfeites"] = o["enfeites"]
+    if a["enfeites"]:
+        a["colRitmo"] = 0.0  # o "+12" do ritmo: com enfeites, só se o tema pedir
     c = o.get("colunas")
     if isinstance(c, dict):
-        for k, nome in (("tempo", "colTempo"), ("pct", "colPct"), ("falta", "colFalta"), ("rotulo", "colRotulo")):
+        for k, nome in (("tempo", "colTempo"), ("pct", "colPct"), ("ritmo", "colRitmo"), ("falta", "colFalta"),
+                        ("rotulo", "colRotulo")):
             if numero(c.get(k)) is not None:
                 a[nome] = numero(c[k])
     if numero(o.get("letra")) is not None:
@@ -958,7 +988,7 @@ class Cartao:
         self.y0 = ap["moldura"][1] + ap["padding"][1]
         self.altura_linha = max(16, ap["letra"]) + 4
         self.altura_uso = max(0 if ap["enfeites"] else 16, ap["letra"], ap["barra"][1]) + 4
-        self.largura = max(186 + ap["colTempo"], ap["colRotulo"] + ap["barra"][0] + ap["colPct"] + ap["colFalta"])
+        self.largura = max(186 + ap["colTempo"], ap["colRotulo"] + ap["barra"][0] + ap["colPct"] + ap["colRitmo"] + ap["colFalta"])
         self.y_paginas = self.y0 + (20 if not self.linhas else len(self.linhas) * self.altura_linha)
         self.y_uso = self.y_paginas + (self.altura_paginas if self.paginas > 1 else 0) + 10
         linhas_uso = linhas_do_uso()
@@ -995,10 +1025,10 @@ class Cartao:
                 cr.set_source_rgba(cor[0], cor[1], cor[2], cor[3] * alfa)
                 cr.arc(x0 + 4, y + self.altura_linha / 2, 4, 0, 2 * math.pi)
                 cr.fill()
-                escrever(cr, l["tempo"], cor, (x0 + 186, y, ap["colTempo"], self.altura_linha), "dir")
-            # toda linha tem o ícone do agente (estrela do Claude, nó do Codex), então o nome tem sempre 150
-            escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, 150, self.altura_linha))
-            desenhar_icone(cr, "codex" if l.get("codex") else "claude", round(x0 + 173), round(y + (self.altura_linha - 9) / 2))
+                escrever(cr, l["tempo"], cor, (x0 + largura - ap["colTempo"], y, ap["colTempo"], self.altura_linha), "dir")
+            # toda linha tem o ícone do agente (estrela do Claude, nó do Codex): o nome vai até ele e o tempo fica na direita
+            escrever(cr, l["nome"], hex_cor("#E5E7EB"), (x0 + 16, y, largura - ap["colTempo"] - 36, self.altura_linha))
+            desenhar_icone(cr, "codex" if l.get("codex") else "claude", round(x0 + largura - ap["colTempo"] - 13), round(y + (self.altura_linha - 9) / 2))
             y += self.altura_linha
         if self.paginas > 1:
             escrever(cr, f"◀  {self.pagina}/{self.paginas}  ▶", hex_cor("#9CA3AF"), (x0, y, largura, self.altura_paginas), "centro")
@@ -1035,9 +1065,16 @@ class Cartao:
                     cr.set_source_rgba(*c)
                     retangulo_redondo(cr, tx, ty, cheio, bh, r)
                     cr.fill()
+                d = decorrido(rotulo, renova)
+                if d is not None:  # o tracinho do ritmo: onde o % estaria gastando por igual
+                    cr.set_source_rgba(*hex_cor("#E5E7EB"))
+                    cr.rectangle(round(tx + bw * d / 100 - 1), ty - 3, 2, bh + 6)
+                    cr.fill()
                 escrever(cr, "%.0f%%" % pct, c, (tx + bw, y, ap["colPct"], self.altura_uso), "dir")
+                rt, rc = ritmo(rotulo, pct, renova)
+                escrever(cr, rt, hex_cor(rc), (tx + bw + ap["colPct"], y, ap["colRitmo"], self.altura_uso), "dir")
                 escrever(cr, falta_pra_renovar(renova), hex_cor("#6B7280"),
-                         (tx + bw + ap["colPct"], y, ap["colFalta"], self.altura_uso), "dir")
+                         (tx + bw + ap["colPct"] + ap["colRitmo"], y, ap["colFalta"], self.altura_uso), "dir")
             y += self.altura_uso
         if camada:
             cr.pop_group_to_source()
@@ -1061,7 +1098,7 @@ class Cartao:
                 "id": l["id"], "sit": l["sit"], "cor": l["cor"],
                 "bola": self.na_janela(self.x0, ly + (self.altura_linha - 8) / 2, 8, 8),
                 "tempo": self.texto(l["tempo"], l["cor"], self.na_janela(
-                    self.x0 + 186, ly + (self.altura_linha - ap["letra"]) / 2, ap["colTempo"], ap["letra"])),
+                    self.x0 + self.largura - ap["colTempo"], ly + (self.altura_linha - ap["letra"]) / 2, ap["colTempo"], ap["letra"])),
             })
         return r
 
@@ -1078,14 +1115,21 @@ class Cartao:
             nivel = 2 if pct >= 95 else 1 if pct >= 80 else 0
             xb = self.x0 + ap["colRotulo"]
             xp = xb + ap["barra"][0]
-            xf = xp + ap["colPct"]
-            r.append({
+            xr = xp + ap["colPct"]
+            xf = xr + ap["colRitmo"]
+            medidor = {
                 "rotulo": self.texto(rotulo, "#9CA3AF", self.na_janela(self.x0, yl, ap["colRotulo"], ap["letra"])),
                 "barra": self.na_janela(xb, uy + (self.altura_uso - ap["barra"][1]) / 2, ap["barra"][0], ap["barra"][1]),
                 "pct": pct, "nivel": nivel,
                 "pctTxt": self.texto("%.0f%%" % pct, cores[nivel], self.na_janela(xp, yl, ap["colPct"], ap["letra"])),
                 "falta": self.texto(falta_pra_renovar(renova), "#6B7280", self.na_janela(xf, yl, ap["colFalta"], ap["letra"])),
-            })
+            }
+            d = decorrido(rotulo, renova)
+            if d is not None:
+                medidor["decorrido"] = round(d * 100) / 100
+            if ap["colRitmo"] > 0:
+                medidor["ritmo"] = self.texto(*ritmo(rotulo, pct, renova), self.na_janela(xr, yl, ap["colRitmo"], ap["letra"]))
+            r.append(medidor)
         return r
 
     def alvo_no_ponto(self, px, py):
@@ -1531,7 +1575,8 @@ def atualizar():
         visto = [f"sessao: {s['nome']} | hook={s['estado']} | janelinha={s['situacao']}" + (" | agente=codex" if s.get("codex") else "") for s in sessoes] + (
             [] if config["mostrar"] == "abas" else [f"mostrar: {config['mostrar']}"]) + (
             [f"pagina: {pagina_da_lista}/{total_de_paginas}"] if total_de_paginas > 1 else []) + [
-            f"clawd: {clawd}", f"usage: {'indisponivel' if not uso else 'ok'}"] + ([] if config["uso"] == "claude" else [f"uso: {config['uso']}", f"barras: {barras_com_grupo()}"]) + [
+            f"clawd: {clawd}", f"usage: {'indisponivel' if not uso else 'ok'}", "ritmo: " + ritmo_do_claude()] + (
+            [] if config["uso"] == "claude" else [f"uso: {config['uso']}", f"barras: {barras_com_grupo()}"]) + [
             f"som: {som}",
             f"som da cena: {som_da_cena_visto or 'nenhum'}", f"clique: {clique_da_vez or 'nenhum'}",
             f"atualizacao: {cartao.aviso or 'nenhuma'}"]

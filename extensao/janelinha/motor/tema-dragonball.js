@@ -8,7 +8,7 @@
 // dragonball-pedido.js). A cada 400 voltas, o épico da lua cheia: vira macaco
 // dourado gigante e volta no SSJ 4, que fica 2 min (dragonball-epico-ssj4.js). Parado há 1 min:
 // medita ou treina, uma vez cada (parado.js). Os desenhos estão em dragonball-*.js.
-const { lim, sortearPeso } = require('./comum');
+const { lim, sortearPeso, desenharRitmo } = require('./comum');
 const { registrarRoupas } = require('./clawd');
 const A = require('./dragonball-arte');
 const K = require('./dragonball-cartao');
@@ -216,6 +216,7 @@ module.exports = {
       const nivel = K.nivelDe(u), cor = K.CORES_BARRA[nivel].txt;
       if (u.rotulo) K.escrever(g, e, u.rotulo.txt, COR.rotulo, u.rotulo.caixa, false);
       if (u.barra) K.barra(g, u.barra, u.pct, nivel, t);
+      desenharRitmo(g, u, '#FFFFFF', (txt, c, caixa) => K.escrever(g, e, txt, c, caixa, true));
       if (u.pctTxt) K.escrever(g, e, u.pctTxt.txt, cor, u.pctTxt.caixa, true);
       if (u.falta) K.escrever(g, e, u.falta.txt, COR.falta, u.falta.caixa, true);
       if (u.barra && nivel >= 1 && K.ovoAceso(t + j * 2.5) && !(m.cena && m.cena.nome === 'dragao')) K.ovo(g, e, u.barra[0] + u.barra[2] / 2, u.barra[1] + u.barra[3] / 2);

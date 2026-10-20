@@ -25,6 +25,10 @@ você, ela avisa com um som.
 - **5h e 7d**: o mesmo que o `/usage` do Claude Code mostra (o limite de 5
   horas e o da semana), com quanto falta pra renovar. Fica laranja em 80% e
   vermelho em 95%.
+- **O ritmo**: o tracinho branco na barra marca onde o uso estaria se você
+  gastasse por igual até renovar (é o quanto do tempo já passou). O número do
+  lado é o uso menos isso: **+12** em laranja = 12 pontos acima do ritmo (vai
+  acabar antes de renovar), **-30** em verde = sobrando.
 - **O Clawd** (o bichinho laranja): anda em volta do cartão quando alguma
   sessão está rodando, pula quando alguém está esperando você e fica parado
   quando está tudo quieto. Andando, de vez em quando ele para e apronta alguma
