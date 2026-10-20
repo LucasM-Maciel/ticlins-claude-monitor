@@ -114,10 +114,22 @@ function reamostrar(img, w, h) {
 }
 
 // o layout do tema com o que ele não disse igual ao Padrão (docs/MOTOR.md)
-const LAYOUT = { raio: 8, fundo: '#E6181818', moldura: [0, 0, 0, 0], padding: [10, 6, 10, 6], enfeites: false, colunas: { tempo: 36, pct: 38, falta: 48, rotulo: 18 }, letra: 16, barra: [118, 4] };
+const LAYOUT = { raio: 8, fundo: '#E6181818', moldura: [0, 0, 0, 0], padding: [10, 6, 10, 6], enfeites: false, colunas: { tempo: 36, pct: 38, ritmo: 34, falta: 48, rotulo: 18 }, letra: 16, barra: [118, 4] };
 function layoutDe(tema) {
   const l = (tema && tema.layout) || {};
   return { ...LAYOUT, ...l, colunas: { ...LAYOUT.colunas, ...(l.colunas || {}) } };
 }
 
-module.exports = { DEG, lim, sai, entra, tela, cache, IMG, carregarTexturas, temTexturas, arte, tingida, rng, sortearPeso, rgba, mistura, reamostrar, layoutDe };
+// o ritmo do usage (docs/MOTOR.md): o tracinho na barra onde o % estaria se gastasse por
+// igual até renovar (u.decorrido) e o "+12" na caixa dele, com a letra do tema
+// (escrever(txt, cor, caixa)). Coordenadas da janela, em DIPs, como as do fundo()
+function desenharRitmo(g, u, cor, escrever) {
+  if (u.barra && Number.isFinite(u.decorrido)) {
+    const [x, y, w, h] = u.barra;
+    g.fillStyle = cor;
+    g.fillRect(Math.round(x + w * lim(u.decorrido, 0, 100) / 100 - 1), y - 2, 2, h + 4);
+  }
+  if (u.ritmo && u.ritmo.txt) escrever(u.ritmo.txt, u.ritmo.cor, u.ritmo.caixa);
+}
+
+module.exports = { DEG, lim, sai, entra, tela, cache, IMG, carregarTexturas, temTexturas, arte, tingida, rng, sortearPeso, rgba, mistura, reamostrar, layoutDe, desenharRitmo };
