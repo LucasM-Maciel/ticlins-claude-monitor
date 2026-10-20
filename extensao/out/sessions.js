@@ -127,6 +127,67 @@ function voltouATrabalhar(data) {
         return false;
     }
 }
+/**
+ * Esc no meio do turno, ou recusar uma pergunta/permissão: o Claude Code não dispara hook nenhum
+ * (nem Stop). O transcript termina com "[Request interrupted by user...]" e o arquivo da sessão
+ * ficaria em "working"/"permission" pra sempre. Lê o fim do transcript: a última mensagem de
+ * verdade (ignora ai-title, mode etc.) ser essa = a vez acabou.
+ */
+function mtimeSec(arquivo) {
+    try {
+        return fs.statSync(arquivo).mtimeMs / 1000;
+    }
+    catch {
+        return 0;
+    }
+}
+function interrompida(transcript) {
+    try {
+        const fd = fs.openSync(transcript, "r");
+        try {
+            const tam = fs.fstatSync(fd).size, n = Math.min(tam, 65536);
+            const buf = Buffer.alloc(n);
+            fs.readSync(fd, buf, 0, n, tam - n);
+            const linhas = buf.toString("utf8").split("\n");
+            for (let i = linhas.length - 1; i >= 0; i--) {
+                let j;
+                try {
+                    j = JSON.parse(linhas[i]);
+                }
+                catch {
+                    continue; // linha cortada no começo do bloco, ou ainda sendo escrita
+                }
+                if (j.type !== "user" && j.type !== "assistant")
+                    continue;
+                if (j.type !== "user")
+                    return false;
+                const c = j.message && j.message.content;
+                const texto = typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => (x && x.text) || "").join("") : "";
+                return texto.startsWith("[Request interrupted by user");
+            }
+        }
+        finally {
+            fs.closeSync(fd);
+        }
+    }
+    catch {
+        // sem transcript legível: segue o estado gravado
+    }
+    return false;
+}
+exports.interrompida = interrompida;
+/** Grava "waiting" no arquivo da sessão interrompida (os 3 overlays leem o arquivo, então todos passam a ver). */
+function marcarInterrompida(file, data, now) {
+    try {
+        const novo = { ...data, state: "waiting", since: now, updated: now };
+        fs.writeFileSync(file + ".tmp", JSON.stringify(novo));
+        fs.renameSync(file + ".tmp", file);
+    }
+    catch {
+        // o hook pode estar escrevendo agora: tenta no próximo ciclo
+    }
+    return { state: "waiting", since: now, updated: now };
+}
 function effectiveState(data) {
     const state = data.state === "working" || data.state === "permission" ? data.state : "waiting";
     if (state === "waiting" && (data.fundo || voltouATrabalhar(data)))
@@ -247,8 +308,17 @@ async function readSessions() {
         }
         const id = entry.replace(/\.json$/, "");
         const transcript = data.transcript || (data.agente === "codex" ? null : findTranscript(id));
-        const updated = data.updated || now;
-        const since = data.since || updated;
+        let updated = data.updated || now;
+        let since = data.since || updated;
+        let gravado = data.state;
+        // só vale se o transcript mexeu DEPOIS do estado gravado: senão é o fim da vez anterior
+        // e o hook do novo prompt só chegou antes do transcript
+        if (data.agente !== "codex" && transcript && (gravado === "working" || gravado === "permission") && mtimeSec(transcript) >= since) {
+            if (interrompida(transcript)) {
+                ({ state: gravado, since, updated } = marcarInterrompida(file, data, now));
+                data.state = gravado;
+            }
+        }
         sessions.push({
             id,
             file,

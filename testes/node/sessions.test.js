@@ -54,6 +54,38 @@ test("permissão ainda aberta continua 'permission'", async () => {
     assert.strictEqual((await sessions.readSessions())[0].state, "permission");
 });
 
+// Esc ou recusar uma pergunta: o Claude Code não dispara hook nenhum, o transcript só termina com "[Request interrupted"
+const linha = (obj) => JSON.stringify(obj) + "\n";
+const fala = (texto) => linha({ type: "user", message: { role: "user", content: [{ type: "text", text: texto }] } });
+test("pergunta recusada (transcript termina em 'Request interrupted'): vira 'waiting' e o arquivo é corrigido", async () => {
+    const t = path.join(casa, "i1.jsonl");
+    fs.writeFileSync(t, fala("oi") + fala("[Request interrupted by user for tool use]") + linha({ type: "ai-title", aiTitle: "x" }));
+    gravar("i", { name: "i", state: "permission", pid: process.pid, since: agora() - 30, transcript: t });
+    const s = (await sessions.readSessions())[0];
+    assert.strictEqual(s.state, "waiting");
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(sessions.SESS_DIR, "i.json"), "utf8")).state, "waiting");
+    assert.strictEqual((await sessions.readSessions())[0].state, "waiting", "e continua depois");
+});
+
+test("Esc no meio do turno ('working'): vira 'waiting'; prompt novo depois da interrupção volta a valer", async () => {
+    const t = path.join(casa, "i2.jsonl");
+    fs.writeFileSync(t, fala("[Request interrupted by user]"));
+    gravar("i", { name: "i", state: "working", pid: process.pid, since: agora() - 30, transcript: t });
+    assert.strictEqual((await sessions.readSessions())[0].state, "waiting");
+    fs.writeFileSync(t, fala("[Request interrupted by user]") + fala("continua"));
+    gravar("i", { name: "i", state: "working", pid: process.pid, since: agora() - 30, transcript: t });
+    assert.strictEqual((await sessions.readSessions())[0].state, "working");
+});
+
+test("interrupção ANTIGA (transcript parado antes do estado gravado) não derruba o prompt novo", async () => {
+    const t = path.join(casa, "i3.jsonl");
+    fs.writeFileSync(t, fala("[Request interrupted by user]"));
+    const antes = agora() - 120;
+    fs.utimesSync(t, antes, antes);
+    gravar("i", { name: "i", state: "working", pid: process.pid, since: agora() - 5, transcript: t });
+    assert.strictEqual((await sessions.readSessions())[0].state, "working");
+});
+
 // o Stop grava "waiting" quando o agente principal encerra a vez, mesmo com subagentes rodando; quando eles
 // voltam nenhum hook marca "working". Atividade no transcript (ou nos dos subagentes) depois do Stop = ainda trabalhando.
 test("Stop no meio da tarefa: transcript mexendo depois dele continua 'working'", async () => {
