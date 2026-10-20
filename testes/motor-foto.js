@@ -17,30 +17,32 @@ const { Mundo } = require(path.join(MOTOR, 'mundo'));
 
 // O cartão como a janelinha manda (DIPs, docs/MOTOR.md): janela 380x440, cartão no canto
 // de baixo à direita (34 de margem), montado pelo layout do tema como a janelinha monta:
-// linha de sessão = bolinha 8 + 8 + nome 170 + tempo, 16 de altura + 2 em cima e embaixo;
-// traço de 10; linha do usage = rótulo + barra + % + falta, na altura da letra + 4.
+// linha de sessão = bolinha 8 + 8 + nome + tempo (encostado à direita), 16 de altura + 2 em
+// cima e embaixo; traço de 10; linha do usage = rótulo + barra + % + ritmo + falta, na altura da letra + 4.
 const SITUACOES = [['working', '#22C55E', '12m'], ['finished', '#EF4444', '9m'], ['question', '#60A5FA', 'agora'], ['permission', '#FACC15', '21m']];
-const USOS = [['5h', 38, '1h20'], ['7d', 85, '2d23h'], ['7d', 97, '15h47']];
+const USOS = [['5h', 38, '1h20', 73], ['7d', 85, '2d23h', 57], ['7d', 97, '15h47', 91]];  // ..., decorrido
 function estadoDeMentira(tema, modo = 'andando', { sessoes = 4, usos = 2 } = {}) {
   let modulo = null;
   try { modulo = require(path.join(MOTOR, 'tema-' + tema)); } catch { /* tema que não existe: o layout do Padrão */ }
   const L = layoutDe(modulo), col = L.colunas, [me, mc, md, mb] = L.moldura, [pe, pc, pd, pb] = L.padding;
-  const conteudoW = Math.max(8 + 8 + 170 + col.tempo, col.rotulo + L.barra[0] + col.pct + col.falta);
+  const conteudoW = Math.max(8 + 8 + 170 + col.tempo, col.rotulo + L.barra[0] + col.pct + col.ritmo + col.falta);
   const altUso = Math.max(L.letra, L.barra[1]) + 4;
   const conteudoH = sessoes * 20 + 10 + (usos ? usos * altUso : 20);
   const w = me + pe + conteudoW + pd + md, h = mc + pc + conteudoH + pb + mb;
   const x = 380 - 34 - w, y = 440 - 34 - h, cx = x + me + pe, cy = y + mc + pc;
   const linhas = Array.from({ length: sessoes }, (_, i) => {
     const [sit, cor, txt] = SITUACOES[i % SITUACOES.length], ly = cy + i * 20 + 2;
-    return { id: 'sessao' + i, sit, cor, bola: [cx, ly + 4, 8, 8], tempo: { txt, cor, caixa: [cx + 186, ly + (16 - L.letra) / 2, col.tempo, L.letra] } };
+    return { id: 'sessao' + i, sit, cor, bola: [cx, ly + 4, 8, 8], tempo: { txt, cor, caixa: [cx + conteudoW - col.tempo, ly + (16 - L.letra) / 2, col.tempo, L.letra] } };
   });
-  const uso = USOS.slice(0, usos).map(([rotulo, pct, falta], j) => {
+  const uso = USOS.slice(0, usos).map(([rotulo, pct, falta, decorrido], j) => {
     const uy = cy + sessoes * 20 + 10 + j * altUso + 2, nivel = pct >= 95 ? 2 : pct >= 80 ? 1 : 0, cor = ['#D1D5DB', '#F59E0B', '#EF4444'][nivel];
     let ux = cx;
     const caixa = (largura, alt = L.letra) => { const c = [ux, uy + (altUso - 4 - alt) / 2, largura, alt]; ux += largura; return c; };
     return {
       rotulo: { txt: rotulo, cor: '#9CA3AF', caixa: caixa(col.rotulo) }, barra: caixa(L.barra[0], L.barra[1]), pct, nivel,
-      pctTxt: { txt: pct + '%', cor, caixa: caixa(col.pct) }, falta: { txt: falta, cor: '#6B7280', caixa: caixa(col.falta) },
+      pctTxt: { txt: pct + '%', cor, caixa: caixa(col.pct) }, decorrido,
+      ritmo: { txt: (pct > decorrido ? '+' : '') + (pct - decorrido), cor: pct > decorrido ? '#F59E0B' : '#22C55E', caixa: caixa(col.ritmo) },
+      falta: { txt: falta, cor: '#6B7280', caixa: caixa(col.falta) },
     };
   });
   return { msg: 'estado', tema, clawd: true, modo, escala: 1, janela: [380, 440], cartao: [x, y, w, h], raio: L.raio, opacidade: 1, linhas, uso };

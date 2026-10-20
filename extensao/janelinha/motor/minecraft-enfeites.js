@@ -4,7 +4,7 @@
 // grama e uma sombrinha embaixo dela; bolinha = o menor orbe de XP pintado com a cor da
 // situação; barra do usage = a barra de XP; números na letra do jogo em 11/9, suavizada.
 // Tudo que é caro (moldura, letreiros, orbes, barras pintadas) é feito 1x e guardado.
-const { IMG, tela, cache, temTexturas, reamostrar } = require('./comum');
+const { IMG, tela, cache, temTexturas, reamostrar, desenharRitmo } = require('./comum');
 
 const TEXTURAS = ['terra', 'grama', 'orbe', 'xp_fundo', 'xp_barra', 'fonte'];
 // as 6 e no tamanho do jogo (a janelinha confere igual antes de usar cada uma)
@@ -200,6 +200,7 @@ function desenharEnfeites(g, host, T) {
   }
   for (const u of host.uso || []) {
     if (u.barra) desenharBarra(g, u);
+    desenharRitmo(g, u, '#FFFFFF', (txt, cor, caixa) => escrever(g, txt, cor, caixa, true, esc));
     if (u.rotulo) escrever(g, u.rotulo.txt, '#9CA3AF', u.rotulo.caixa, false, esc);
     if (u.pctTxt) escrever(g, u.pctTxt.txt, COR_PCT[u.nivel] || COR_PCT[0], u.pctTxt.caixa, true, esc);
     if (u.falta) escrever(g, u.falta.txt, '#6B7280', u.falta.caixa, true, esc);

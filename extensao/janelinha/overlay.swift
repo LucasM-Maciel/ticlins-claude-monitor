@@ -371,6 +371,18 @@ var proximaBusca = Date.distantPast
 var buscando = false
 // quanto falta pra renovar
 func faltaPraRenovar(_ m: Medida) -> String { m.renova.map { tempo($0.timeIntervalSinceNow / 60) } ?? "" }
+// ritmo: quanto da janela (5h ou 7d) já passou, em %; é onde fica o tracinho na barra.
+// Gastar no ritmo = o % acompanhar o tempo. O número é o uso menos isso: + = acima do ritmo
+let duracaoDaJanela: [String: TimeInterval] = ["5h": 5 * 3600, "7d": 7 * 86400]
+func decorrido(_ rotulo: String, _ m: Medida) -> Double? {
+    guard let r = m.renova, let d = duracaoDaJanela[rotulo] else { return nil }
+    return min(max(100 * (1 - r.timeIntervalSinceNow / d), 0), 100)
+}
+func ritmo(_ rotulo: String, _ m: Medida) -> (txt: String, cor: String) {
+    guard let d = decorrido(rotulo, m) else { return ("", "#6B7280") }
+    let n = Int((m.pct - d).rounded())
+    return n > 0 ? ("+\(n)", "#F59E0B") : ("\(n)", "#22C55E")
+}
 
 func dataISO(_ texto: String?) -> Date? {
     guard var s = texto else { return nil }
@@ -537,6 +549,7 @@ struct Aparencia {
     var padding: [CGFloat] = [10, 6, 10, 6]
     var enfeites = false
     var colTempo: CGFloat = 36, colPct: CGFloat = 38, colFalta: CGFloat = 48, colRotulo: CGFloat = 18
+    var colRitmo: CGFloat = 34             // o "+12" do ritmo; com enfeites, só se o tema pedir
     var letra: CGFloat = 16                // altura das caixas de número
     var barra = CGSize(width: 118, height: 4)
 }
@@ -553,11 +566,13 @@ func aparencia(_ o: [String: Any]) -> Aparencia {
     if let v = quatro(o["moldura"]) { a.moldura = v }
     if let v = quatro(o["padding"]) { a.padding = v }
     if let v = o["enfeites"] as? Bool { a.enfeites = v }
+    if a.enfeites { a.colRitmo = 0 }
     if let c = o["colunas"] as? [String: Any] {
         if let v = n(c["tempo"]) { a.colTempo = v }
         if let v = n(c["pct"]) { a.colPct = v }
         if let v = n(c["falta"]) { a.colFalta = v }
         if let v = n(c["rotulo"]) { a.colRotulo = v }
+        if let v = n(c["ritmo"]) { a.colRitmo = v }
     }
     if let v = n(o["letra"]) { a.letra = v }
     if let b = o["barra"] as? [Any], b.count == 2, let w = n(b[0]), let h = n(b[1]) { a.barra = CGSize(width: w, height: h) }
@@ -680,7 +695,7 @@ final class Cartao: NSView {
         alturaLinha = max(16, ap.letra) + 4
         // a do usage: com enfeites só tem os lugares do motor; sem, o texto daqui (16)
         alturaUso = max(ap.enfeites ? CGFloat(0) : CGFloat(16), ap.letra, ap.barra.height) + 4
-        largura = max(186 + ap.colTempo, ap.colRotulo + ap.barra.width + ap.colPct + ap.colFalta)
+        largura = max(186 + ap.colTempo, ap.colRotulo + ap.barra.width + ap.colPct + ap.colRitmo + ap.colFalta)
         yUso = y0 + (linhas.isEmpty ? 20 : CGFloat(linhas.count) * alturaLinha) + 10
         let alturaDoUso: CGFloat = uso.map { CGFloat($0.count) * self.alturaUso } ?? 20
         yAviso = yUso + alturaDoUso + 10
@@ -726,9 +741,9 @@ final class Cartao: NSView {
             if !ap.enfeites {  // com enfeites, a bolinha e o tempo são do motor
                 (l.sit == "working" ? cor.withAlphaComponent(opacidadeDoPulso()) : cor).setFill()
                 NSBezierPath(ovalIn: NSRect(x: x0, y: y + (alturaLinha - 8) / 2, width: 8, height: 8)).fill()
-                escrever(l.tempo, cor, NSRect(x: x0 + 186, y: y, width: ap.colTempo, height: alturaLinha), .right)
+                escrever(l.tempo, cor, NSRect(x: x0 + largura - ap.colTempo, y: y, width: ap.colTempo, height: alturaLinha), .right)
             }
-            escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: 170, height: alturaLinha))
+            escrever(l.nome, hex("#E5E7EB"), NSRect(x: x0 + 16, y: y, width: largura - ap.colTempo - 16, height: alturaLinha))
             y += alturaLinha
         }
         y += 5
@@ -756,8 +771,14 @@ final class Cartao: NSView {
             c.setFill()
             let cheio = b.width * CGFloat(min(max(m.pct, 0), 100)) / 100
             NSBezierPath(roundedRect: NSRect(x: trilho.minX, y: trilho.minY, width: cheio, height: b.height), xRadius: r, yRadius: r).fill()
+            if let d = decorrido(rotulo, m) {  // o tracinho do ritmo: onde o % estaria gastando por igual
+                hex("#E5E7EB").setFill()
+                NSRect(x: (trilho.minX + b.width * CGFloat(d) / 100 - 1).rounded(), y: trilho.minY - 3, width: 2, height: b.height + 6).fill()
+            }
             escrever(String(format: "%.0f%%", m.pct), c, NSRect(x: trilho.maxX, y: y, width: ap.colPct, height: alturaUso), .right)
-            escrever(faltaPraRenovar(m), hex("#6B7280"), NSRect(x: trilho.maxX + ap.colPct, y: y, width: ap.colFalta, height: alturaUso), .right)
+            let rt = ritmo(rotulo, m)
+            escrever(rt.txt, hex(rt.cor), NSRect(x: trilho.maxX + ap.colPct, y: y, width: ap.colRitmo, height: alturaUso), .right)
+            escrever(faltaPraRenovar(m), hex("#6B7280"), NSRect(x: trilho.maxX + ap.colPct + ap.colRitmo, y: y, width: ap.colFalta, height: alturaUso), .right)
             y += alturaUso
         }
     }
@@ -776,7 +797,7 @@ final class Cartao: NSView {
             let linha: [String: Any] = [
                 "id": l.id, "sit": l.sit, "cor": l.cor,
                 "bola": naJanela(x0, ly + (alturaLinha - 8) / 2, 8, 8),
-                "tempo": texto(l.tempo, l.cor, naJanela(x0 + 186, ly + (alturaLinha - ap.letra) / 2, ap.colTempo, ap.letra)),
+                "tempo": texto(l.tempo, l.cor, naJanela(x0 + largura - ap.colTempo, ly + (alturaLinha - ap.letra) / 2, ap.colTempo, ap.letra)),
             ]
             r.append(linha)
         }
@@ -792,14 +813,17 @@ final class Cartao: NSView {
             let uy = yUso + CGFloat(j) * alturaUso
             let yl = uy + (alturaUso - ap.letra) / 2
             let nivel = m.pct >= 95 ? 2 : m.pct >= 80 ? 1 : 0
-            let xb = x0 + ap.colRotulo, xp = xb + ap.barra.width, xf = xp + ap.colPct
-            let medidor: [String: Any] = [
+            let xb = x0 + ap.colRotulo, xp = xb + ap.barra.width, xr = xp + ap.colPct, xf = xr + ap.colRitmo
+            let rt = ritmo(par.rotulo, m)
+            var medidor: [String: Any] = [
                 "rotulo": texto(par.rotulo, "#9CA3AF", naJanela(x0, yl, ap.colRotulo, ap.letra)),
                 "barra": naJanela(xb, uy + (alturaUso - ap.barra.height) / 2, ap.barra.width, ap.barra.height),
                 "pct": m.pct, "nivel": nivel,
                 "pctTxt": texto(String(format: "%.0f%%", m.pct), cores[nivel], naJanela(xp, yl, ap.colPct, ap.letra)),
                 "falta": texto(faltaPraRenovar(m), "#6B7280", naJanela(xf, yl, ap.colFalta, ap.letra)),
             ]
+            if let d = decorrido(par.rotulo, m) { medidor["decorrido"] = (d * 100).rounded() / 100 }
+            if ap.colRitmo > 0 { medidor["ritmo"] = texto(rt.txt, rt.cor, naJanela(xr, yl, ap.colRitmo, ap.letra)) }
             r.append(medidor)
         }
         return r
@@ -1724,6 +1748,7 @@ func atualizar() {
         let som = somDaVez.flatMap { avisoDaSituacao[$0] }.flatMap { nomeDoSom[config.tema]?[$0] } ?? "nenhum"
         let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" }
             + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")",
+               "ritmo: " + (uso.map { $0.map { "\($0.rotulo) \(ritmo($0.rotulo, $0.medida).txt)" }.joined(separator: " | ") } ?? "nenhum"),
                "som: \(som)", "som da cena: \(somDaCenaVisto ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
                "atualizacao: \(cartao.aviso ?? "nenhuma")"]
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)

@@ -16,7 +16,7 @@
 // (sith-arte.js, LADOS); os tiros dos droides ficam vermelhos, a esganada vira um empurrão da
 // Força, o respiro vira um giro do sabre, e o épico é outro (sith-epico-luz.js). A troca é uma
 // cena (a virada) na parada seguinte à 50ª volta.
-const { DEG, lim, sai, entra, rng, rgba } = require('./comum');
+const { DEG, lim, sai, entra, rng, rgba, desenharRitmo } = require('./comum');
 const A = require('./sith-arte');
 const K = require('./sith-cartao');
 const P = require('./parado').paradas('sith', ['medita', 'forja']);
@@ -466,6 +466,7 @@ module.exports = {
       const nivel = K.nivelDe(u);
       if (u.rotulo) K.escrever(g, e, u.rotulo.txt, COR.rotulo, u.rotulo.caixa, false);
       if (u.barra) K.barra(g, u.barra, u.pct, nivel, t);
+      desenharRitmo(g, u, '#F5F5F4', (txt, cor, caixa) => K.escrever(g, e, txt, cor, caixa, true));
       if (u.pctTxt) K.escrever(g, e, u.pctTxt.txt, K.corDoPct(u.pct, nivel), u.pctTxt.caixa, true);
       if (u.falta) K.escrever(g, e, u.falta.txt, COR.falta, u.falta.caixa, true);
     }
