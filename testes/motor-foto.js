@@ -12,7 +12,7 @@ const zlib = require('zlib');
 
 const MOTOR = path.join(__dirname, '..', 'extensao', 'janelinha', 'motor');
 const { Tela } = require(path.join(MOTOR, 'raster'));
-const { carregarTexturas, layoutDe } = require(path.join(MOTOR, 'comum'));
+const { carregarTexturas, layoutDe, ritmoDe } = require(path.join(MOTOR, 'comum'));
 const { Mundo } = require(path.join(MOTOR, 'mundo'));
 
 // O cartão como a janelinha manda (DIPs, docs/MOTOR.md): janela 380x440, cartão no canto
@@ -41,7 +41,7 @@ function estadoDeMentira(tema, modo = 'andando', { sessoes = 4, usos = 2 } = {})
     return {
       rotulo: { txt: rotulo, cor: '#9CA3AF', caixa: caixa(col.rotulo) }, barra: caixa(L.barra[0], L.barra[1]), pct, nivel,
       pctTxt: { txt: pct + '%', cor, caixa: caixa(col.pct) }, decorrido,
-      ritmo: { txt: (pct > decorrido ? '+' : '') + (pct - decorrido), cor: pct > decorrido ? '#F59E0B' : '#22C55E', caixa: caixa(col.ritmo) },
+      ritmo: { ...ritmoDe(pct, decorrido, rotulo), caixa: caixa(col.ritmo) },
       falta: { txt: falta, cor: '#6B7280', caixa: caixa(col.falta) },
     };
   });

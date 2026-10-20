@@ -120,6 +120,16 @@ function layoutDe(tema) {
   return { ...LAYOUT, ...l, colunas: { ...LAYOUT.colunas, ...(l.colunas || {}) } };
 }
 
+// Limites espelhados em overlay.ps1/RitmoDe, overlay.swift/ritmo e overlay-linux.py/ritmo.
+function ritmoDe(pct, decorrido, rotulo) {
+  if (!['5h', '7d'].includes(rotulo) || !Number.isFinite(decorrido)) return { txt: '', cor: '#6B7280' };
+  if (rotulo === '5h' && (decorrido < 3.33 || decorrido > 96.67)) return { txt: '', cor: '#9CA3AF' };
+  const d = pct - decorrido;
+  const n = Math.sign(d) * Math.round(Math.abs(d));
+  const cor = d >= 20 ? '#EF4444' : d >= 6 ? '#F59E0B' : d <= -10 ? '#22C55E' : '#9CA3AF';
+  return { txt: n > 0 ? `+${n}` : `${n}`, cor };
+}
+
 // o ritmo do usage (docs/MOTOR.md): o tracinho na barra onde o % estaria se gastasse por
 // igual até renovar (u.decorrido) e o "+12" na caixa dele, com a letra do tema
 // (escrever(txt, cor, caixa)). Coordenadas da janela, em DIPs, como as do fundo()
@@ -132,4 +142,4 @@ function desenharRitmo(g, u, cor, escrever) {
   if (u.ritmo && u.ritmo.txt) escrever(u.ritmo.txt, u.ritmo.cor, u.ritmo.caixa);
 }
 
-module.exports = { DEG, lim, sai, entra, tela, cache, IMG, carregarTexturas, temTexturas, arte, tingida, rng, sortearPeso, rgba, mistura, reamostrar, layoutDe, desenharRitmo };
+module.exports = { DEG, lim, sai, entra, tela, cache, IMG, carregarTexturas, temTexturas, arte, tingida, rng, sortearPeso, rgba, mistura, reamostrar, layoutDe, ritmoDe, desenharRitmo };

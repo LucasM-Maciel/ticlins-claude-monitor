@@ -439,10 +439,14 @@ func decorrido(_ rotulo: String, _ m: Medida) -> Double? {
     guard let r = m.renova, let d = duracaoDaJanela[rotulo] else { return nil }
     return min(max(100 * (1 - r.timeIntervalSinceNow / d), 0), 100)
 }
+// Limites iguais a motor/comum.js/ritmoDe, overlay.ps1/RitmoDe e overlay-linux.py/ritmo.
 func ritmo(_ rotulo: String, _ m: Medida) -> (txt: String, cor: String) {
-    guard let d = decorrido(rotulo, m) else { return ("", "#6B7280") }
-    let n = Int((m.pct - d).rounded())
-    return n > 0 ? ("+\(n)", "#F59E0B") : ("\(n)", "#22C55E")
+    guard let passado = decorrido(rotulo, m) else { return ("", "#6B7280") }
+    if rotulo == "5h" && (passado < 3.33 || passado > 96.67) { return ("", "#9CA3AF") }
+    let d = m.pct - passado
+    let n = Int(d.rounded())
+    let cor = d >= 20 ? "#EF4444" : d >= 6 ? "#F59E0B" : d <= -10 ? "#22C55E" : "#9CA3AF"
+    return (n > 0 ? "+\(n)" : "\(n)", cor)
 }
 
 func dataISO(_ texto: String?) -> Date? {

@@ -587,13 +587,18 @@ def decorrido(rotulo, renova):
     return min(max(100 * (1 - (renova - time.time()) / duracao_da_janela[rotulo]), 0), 100)
 
 
+# Limites iguais a motor/comum.js/ritmoDe, overlay.ps1/RitmoDe e overlay.swift/ritmo.
 def ritmo(rotulo, pct, renova):
     """-> (texto, cor); o arredondamento é o dos outros (meio vai pra longe do zero)."""
-    d = decorrido(rotulo, renova)
-    if d is None:
+    passado = decorrido(rotulo, renova)
+    if passado is None:
         return "", "#6B7280"
-    n = int(math.copysign(math.floor(abs(pct - d) + 0.5), pct - d))
-    return ("+%d" % n, "#F59E0B") if n > 0 else ("%d" % n, "#22C55E")
+    if rotulo == "5h" and (passado < 3.33 or passado > 96.67):
+        return "", "#9CA3AF"
+    d = pct - passado
+    n = int(math.copysign(math.floor(abs(d) + 0.5), d))
+    cor = "#EF4444" if d >= 20 else "#F59E0B" if d >= 6 else "#22C55E" if d <= -10 else "#9CA3AF"
+    return ("+%d" % n if n > 0 else "%d" % n), cor
 
 
 def data_iso(texto):

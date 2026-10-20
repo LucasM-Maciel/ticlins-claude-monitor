@@ -111,8 +111,8 @@ function pidMorto() {
 // ritmo esperado: uso − % da janela que já passou (5h renova em 90 min: 70%; 7d em 3d1h: 56,5%)
 let ritmo = "nenhum";
 function uso(cinco, sete) {
-    const sinal = (n) => (n > 0 ? `+${n}` : `${n}`);
-    ritmo = `5h ${sinal(Math.round(cinco - 70))} | 7d ${sinal(Math.round(sete - 100 * (1 - (3 * 1440 + 60) / (7 * 1440))))}`;
+    const { ritmoDe } = require('../extensao/janelinha/motor/comum');
+    ritmo = `5h ${ritmoDe(cinco, 70, '5h').txt} | 7d ${ritmoDe(sete, 100 * (1 - (3 * 1440 + 60) / (7 * 1440)), '7d').txt}`;
     const daqui = (min) => new Date(Date.now() + min * 60000).toISOString().replace("Z", "+00:00");
     fs.writeFileSync(path.join(pasta, "uso.json"), JSON.stringify({
         five_hour: { utilization: cinco, resets_at: daqui(90) },

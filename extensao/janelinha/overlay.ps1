@@ -675,17 +675,25 @@ function Avisar($sessoes) {
 # ritmo: quanto da janela (5h ou 7d) já passou, em %; é onde fica o tracinho na barra.
 # Gastar no ritmo = o % acompanhar o tempo. O número é o uso menos isso: + = acima do ritmo
 $duracaoDaJanela = @{ '5h' = 5 * 3600; '7d' = 7 * 86400 }
+# Limites iguais a motor/comum.js/ritmoDe, overlay.swift/ritmo e overlay-linux.py/ritmo.
+function RitmoDe($pct, $decorrido, $rotulo) {
+    if ($null -eq $decorrido -or $rotulo -notin '5h', '7d') { return '', '#6B7280' }
+    if ($rotulo -eq '5h' -and ($decorrido -lt 3.33 -or $decorrido -gt 96.67)) { return '', '#9CA3AF' }
+    $d = $pct - $decorrido
+    $n = [int][math]::Round($d, [MidpointRounding]::AwayFromZero)
+    $corDoRitmo = $(if ($d -ge 20) { '#EF4444' } elseif ($d -ge 6) { '#F59E0B' } elseif ($d -le -10) { '#22C55E' } else { '#9CA3AF' })
+    $(if ($n -gt 0) { "+$n" } else { "$n" }), $corDoRitmo
+}
 function DadosDoMedidor($rotulo, $dado) {
     $pct = [double]$dado.utilization
     # já renovou e ainda não veio o novo (o guardado de ontem, ou a busca falhando): zerou
     if ($dado.resets_at -and [DateTimeOffset]$dado.resets_at -le [DateTimeOffset]::Now) { $dado = $null; $pct = 0 }
     $nivel = $(if ($pct -ge 95) { 2 } elseif ($pct -ge 80) { 1 } else { 0 })
-    $decorrido = $null; $ritmo = ''; $corDoRitmo = '#6B7280'
+    $decorrido = $null
     if ($dado.resets_at -and $duracaoDaJanela.ContainsKey($rotulo)) {  # só 5h e 7d têm ritmo (o Codex também tem 30d e "<n>min")
         $decorrido = [math]::Min(100, [math]::Max(0, 100 * (1 - ([DateTimeOffset]$dado.resets_at - [DateTimeOffset]::Now).TotalSeconds / $duracaoDaJanela[$rotulo])))
-        $n = [int][math]::Round($pct - $decorrido, [MidpointRounding]::AwayFromZero)
-        $ritmo, $corDoRitmo = $(if ($n -gt 0) { "+$n", '#F59E0B' } else { "$n", '#22C55E' })
     }
+    $ritmo, $corDoRitmo = RitmoDe $pct $decorrido $rotulo
     @{
         rotulo = $rotulo; pct = $pct; nivel = $nivel; cor = $coresDoUso[$config.tema][$nivel]; pctTexto = '{0:0}%' -f $pct
         decorrido = $decorrido; ritmo = $ritmo; corDoRitmo = $corDoRitmo
@@ -752,7 +760,7 @@ function Medidor($medidor) {
         }
     }
     # e o "falta" e o ritmo que estão na tela
-    $medidor.lugares = @($lugarDoRotulo, $trilho, $p, $f, $falta, $r, $medidor.ritmo, $tracinho)
+    $medidor.lugares = @($lugarDoRotulo, $trilho, $p, $f, $falta, $r, $medidor.ritmo, $tracinho, $medidor.corDoRitmo)
     Linha $lugarDoRotulo $barraNaLinha $p $r $f
 }
 function TracinhoNoLugar($tracinho, $decorrido) {
@@ -1010,7 +1018,7 @@ function Atualizar {
     for ($iMedidor = 0; $iMedidor -lt $medidores.Count; $iMedidor++) {
         $medidor, $lugares = $medidores[$iMedidor], $listaFeita.lugaresDoUso[$iMedidor]
         if (-not $doMotor -and $lugares[4] -ne $medidor.falta) { TrocarTexto $lugares[3] $medidor.falta '#6B7280'; $lugares[4] = $medidor.falta }
-        if (-not $doMotor -and $lugares[6] -ne $medidor.ritmo) { TrocarTexto $lugares[5] $medidor.ritmo $medidor.corDoRitmo; $lugares[6] = $medidor.ritmo }
+        if (-not $doMotor -and ($lugares[6] -ne $medidor.ritmo -or $lugares[8] -ne $medidor.corDoRitmo)) { TrocarTexto $lugares[5] $medidor.ritmo $medidor.corDoRitmo; $lugares[6] = $medidor.ritmo; $lugares[8] = $medidor.corDoRitmo }
         if ($lugares[7] -and $null -ne $medidor.decorrido) { TracinhoNoLugar $lugares[7] $medidor.decorrido }
         [void]$caixasDoMotor.uso.Add(@{ rotulo = @($medidor.rotulo, '#9CA3AF', $lugares[0]); barra = $lugares[1]; pct = $medidor.pct; nivel = $medidor.nivel; pctTxt = @($medidor.pctTexto, $medidor.cor, $lugares[2])
             decorrido = $medidor.decorrido; ritmo = @($medidor.ritmo, $medidor.corDoRitmo, $lugares[5]); falta = @($medidor.falta, '#6B7280', $lugares[3]) })
