@@ -94,7 +94,7 @@ t_instala() {
       || falha "$e recebeu: $(cat "$BIN/$e.log" 2>/dev/null)" || return 1
   done
   local f
-  for f in hook.js processes.js sem-node.sh overlay-linux.py minecraft.js vorbis.min.js sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav sons-sith/terminou.wav sons-sith/esperando.wav sons-sith/tudo.wav sons-akatsuki/tudo.wav motor/motor.js motor/raster.js; do
+  for f in hook.js processes.js sem-node.sh overlay-linux.py minecraft.js vorbis.min.js sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav sons-sith/terminou.wav sons-sith/esperando.wav sons-sith/tudo.wav sons-akatsuki/tudo.wav sons-elden/tudo.wav motor/motor.js motor/raster.js; do
     [ -f "$MONITOR/$f" ] || falha "falta $f" || return 1
   done
   [ -f "$MONITOR/sons/levelup.wav" ] || falha "não baixou os sons do Minecraft: $saida" || return 1
@@ -106,9 +106,11 @@ t_instala() {
   n=$(node -e "$HOOKS" "$CASA/.claude/settings.json")
   [ "$n" = 4 ] || falha "hooks: $n de 4" || return 1
   # a mensagem final só sai com o GTK achado (sem ele: "a janelinha espera o GTK")
-  echo "$saida" | grep -q "canto de baixo à direita" || falha "não terminou com a mensagem final: $saida"
+  echo "$saida" | grep -q "canto de baixo à direita" || falha "não terminou com a mensagem final: $saida" || return 1
+  # em português, com 1 linha em inglês ensinando a trocar
+  echo "$saida" | grep -q 'Language: right-click the floating window > "Idioma" > English' || falha "sem a dica do inglês: $saida"
 }
-teste "instala: extensão no VS Code e no Cursor, arquivos (com sons-sith/, sons-akatsuki/ e overlay-linux.py) e hooks" t_instala
+teste "instala: extensão no VS Code e no Cursor, arquivos (com sons-sith/, sons-akatsuki/, sons-elden/ e overlay-linux.py) e hooks" t_instala
 t_de_novo() {
   com_prazo 300 instalar >/dev/null 2>&1 || falha "2ª instalação falhou" || return 1
   local n
@@ -116,6 +118,21 @@ t_de_novo() {
   [ "$n" = 4 ] || falha "só $n de 4 eventos com um hook só (duplicou): $(cat "$CASA/.claude/settings.json")"
 }
 teste "rodar o instalador de novo não duplica os hooks" t_de_novo
+t_ingles() {
+  local antes saida t r=0
+  antes=$(cat "$MONITOR/config.json")
+  # a janelinha do Linux grava pelo json.dump do Python: com espaço depois dos dois-pontos
+  printf '{"tema": "padrao", "idioma": "en"}' > "$MONITOR/config.json"
+  saida=$(com_prazo 300 instalar 2>&1) || { falha "saiu com erro: $saida"; r=1; }
+  for t in "Looking for VS Code" "Installing the extension" "Done! The floating window now has the Minecraft" "Done! The floating window shows up"; do
+    [ $r = 0 ] && { echo "$saida" | grep -qF "$t" || { falha "faltou '$t': $saida"; r=1; }; }
+  done
+  [ $r = 0 ] && { echo "$saida" | grep -qE 'Pronto!|Procurando|Language: right-click' && { falha "sobrou português (ou a dica): $saida"; r=1; }; }
+  [ $r = 0 ] && { [ "$(cat "$MONITOR/config.json")" = '{"tema": "padrao", "idioma": "en"}' ] || { falha "o instalador mexeu no config.json"; r=1; }; }
+  printf '%s' "$antes" > "$MONITOR/config.json"
+  return $r
+}
+teste "reinstalar com o idioma em inglês (escolhido no menu): fala inglês e não mexe no config.json" t_ingles
 t_hook() {
   local cmd sh nome
   cmd=$(node -p "require(process.argv[1]).hooks.UserPromptSubmit[0].hooks[0].command" "$CASA/.claude/settings.json")
@@ -180,7 +197,7 @@ t_cenario() {
     [ "$(pixels "$foto" 215 119 87 30)" -gt 30 ] || falha "cadê o Clawd (laranja)? perto: $(pixels "$foto" 215 119 87 80 lista)" || return 1
   fi
 }
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas contas contas-sem-credencial contas-mesmo-login contas-mesmo-login-outra contas-mesmo-login-padrao ritmo-desligado ingles; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 # Sem o motor fica só o cartão. As lutas antigas do Mac sem motor (pedra, bug: "andando (pedra)")

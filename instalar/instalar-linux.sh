@@ -8,20 +8,25 @@
 SEM_ABRIR=""
 [ "${1:-}" = "--sem-abrir" ] && SEM_ABRIR=1
 
-passo() { printf '\n\033[36m== %s\033[0m\n' "$1"; }
-ok() { printf '   \033[32mOK\033[0m  %s\n' "$1"; }
-aviso() { printf '   \033[33m!!\033[0m  %s\n' "$1"; }
-falhou() { printf '\n   \033[31mXX\033[0m  %s\n\n' "$1"; exit 1; }
-
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 PASTA="$HOME/.claude-monitor"
+# o idioma do botão direito da janelinha (config.json): quem já escolheu inglês reinstala em inglês
+EN=""
+grep -q '"idioma"[[:space:]]*:[[:space:]]*"en"' "$PASTA/config.json" 2>/dev/null && EN=1
+# o texto em português ($1) ou, com o idioma em inglês, o $2 (quando vier)
+msg() { if [ -n "$EN" ] && [ -n "${2:-}" ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+passo() { printf '\n\033[36m== %s\033[0m\n' "$(msg "$@")"; }
+ok() { printf '   \033[32mOK\033[0m  %s\n' "$(msg "$@")"; }
+aviso() { printf '   \033[33m!!\033[0m  %s\n' "$(msg "$@")"; }
+falhou() { printf '\n   \033[31mXX\033[0m  %s\n\n' "$(msg "$@")"; exit 1; }
+
 VSIX=$(ls "$AQUI"/arquivos/claude-monitor-*.vsix 2>/dev/null | tail -1)
-[ -n "$VSIX" ] || falhou "Não achei o arquivos/claude-monitor-*.vsix do lado deste instalador. Extraia o .zip inteiro antes."
+[ -n "$VSIX" ] || falhou "Não achei o arquivos/claude-monitor-*.vsix do lado deste instalador. Extraia o .zip inteiro antes." "Couldn't find arquivos/claude-monitor-*.vsix next to this installer. Extract the whole .zip first."
 VERSAO=$(basename "$VSIX" .vsix | sed 's/^claude-monitor-//')
 printf '\033[36mClaude Monitor %s\033[0m\n' "$VERSAO"
-command -v unzip >/dev/null 2>&1 || falhou "Falta o unzip (sudo apt install unzip) e rode de novo."
+command -v unzip >/dev/null 2>&1 || falhou "Falta o unzip (sudo apt install unzip) e rode de novo." "unzip is missing (sudo apt install unzip); install it and run this again."
 
-passo "Procurando o VS Code / Cursor"
+passo "Procurando o VS Code / Cursor" "Looking for VS Code / Cursor"
 EDITORES=()
 for nome in code cursor; do
   exe=""
@@ -33,55 +38,55 @@ for nome in code cursor; do
   done < <(type -ap "$nome" 2>/dev/null)
   if [ -n "$exe" ]; then EDITORES+=("$exe"); ok "$exe"; fi
 done
-[ ${#EDITORES[@]} -gt 0 ] || falhou "Não achei o VS Code nem o Cursor. Instale o VS Code (https://code.visualstudio.com) e rode de novo."
+[ ${#EDITORES[@]} -gt 0 ] || falhou "Não achei o VS Code nem o Cursor. Instale o VS Code (https://code.visualstudio.com) e rode de novo." "Couldn't find VS Code or Cursor. Install VS Code (https://code.visualstudio.com) and run this again."
 
-passo "Instalando a extensão"
+passo "Instalando a extensão" "Installing the extension"
 for exe in "${EDITORES[@]}"; do
   if saida=$("$exe" --install-extension "$VSIX" --force 2>&1); then ok "$(basename "$exe")"
-  else aviso "$(basename "$exe") não aceitou a extensão:"; echo "$saida" | sed 's/^/       /'; fi
+  else aviso "$(basename "$exe") não aceitou a extensão:" "$(basename "$exe") didn't accept the extension:"; echo "$saida" | sed 's/^/       /'; fi
 done
 
-passo "Copiando os arquivos pra ~/.claude-monitor"
+passo "Copiando os arquivos pra ~/.claude-monitor" "Copying the files to ~/.claude-monitor"
 # os mesmos que a extensão copia quando o VS Code abre; aqui já saem de dentro do .vsix (é um zip)
 TEMP=$(mktemp -d)
 mkdir -p "$PASTA"
 # instalação nova começa no tema Padrão; quem já usava (tem versao-janelinha) fica no que tinha
 [ -f "$PASTA/versao-janelinha" ] || [ -f "$PASTA/config.json" ] || printf '{"tema":"padrao"}' > "$PASTA/config.json"
-for p in motor sons-padrao sons-dragonball sons-sith sons-akatsuki; do
+for p in motor sons-padrao sons-dragonball sons-sith sons-akatsuki sons-elden; do
   mkdir -p "$PASTA/$p"
-  unzip -o -j -q "$VSIX" "extension/janelinha/$p/*" -d "$PASTA/$p" || falhou "O .vsix está incompleto (falta janelinha/$p/). Baixe de novo."
+  unzip -o -j -q "$VSIX" "extension/janelinha/$p/*" -d "$PASTA/$p" || falhou "O .vsix está incompleto (falta janelinha/$p/). Baixe de novo." "The .vsix is incomplete (janelinha/$p/ is missing). Download it again."
 done
 unzip -o -j -q "$VSIX" extension/out/hook.js extension/out/processes.js extension/out/sem-node.sh \
   extension/janelinha/overlay-linux.py extension/janelinha/minecraft.js extension/janelinha/vorbis.min.js -d "$PASTA" \
-  || falhou "O .vsix está incompleto. Baixe de novo."
-unzip -o -j -q "$VSIX" extension/out/install.js -d "$TEMP" || falhou "O .vsix está incompleto. Baixe de novo."
+  || falhou "O .vsix está incompleto. Baixe de novo." "The .vsix is incomplete. Download it again."
+unzip -o -j -q "$VSIX" extension/out/install.js -d "$TEMP" || falhou "O .vsix está incompleto. Baixe de novo." "The .vsix is incomplete. Download it again."
 printf '%s' "$VERSAO" > "$PASTA/versao-janelinha"  # a extensão só recopia quando a versão muda
 ok "$PASTA"
 
-passo "Ligando o Claude Code na extensão (hooks)"
+passo "Ligando o Claude Code na extensão (hooks)" "Connecting Claude Code to the extension (hooks)"
 if command -v node >/dev/null 2>&1; then
   if saida=$(node -e 'require(process.argv[1]).installHooks()' "$TEMP/install.js" 2>&1); then
-    ok "hooks no ~/.claude/settings.json (cópia do anterior em settings.json.bak-claude-monitor)"
+    ok "hooks no ~/.claude/settings.json (cópia do anterior em settings.json.bak-claude-monitor)" "hooks in ~/.claude/settings.json (the previous one is copied to settings.json.bak-claude-monitor)"
   else
-    aviso "Não consegui mexer no ~/.claude/settings.json: $saida"
-    aviso "Depois, no VS Code: Ctrl+Shift+P > \"Claude Monitor: Instalar hooks no Claude Code\"."
+    aviso "Não consegui mexer no ~/.claude/settings.json: $saida" "Couldn't change ~/.claude/settings.json: $saida"
+    aviso "Depois, no VS Code: Ctrl+Shift+P > \"Claude Monitor: Instalar hooks no Claude Code\"." "Later, in VS Code: Ctrl+Shift+P > \"Claude Monitor: Instalar hooks no Claude Code\"."
   fi
 else
-  aviso "Falta o Node.js: o Claude Code usa ele pra avisar quais sessões estão rodando."
-  aviso "Instale a versão LTS (https://nodejs.org ou o gerenciador da sua distro) e rode este instalador de novo."
+  aviso "Falta o Node.js: o Claude Code usa ele pra avisar quais sessões estão rodando." "Node.js is missing: Claude Code uses it to report which sessions are running."
+  aviso "Instale a versão LTS (https://nodejs.org ou o gerenciador da sua distro) e rode este instalador de novo." "Install the LTS version (https://nodejs.org or your distro's package manager) and run this installer again."
 fi
 rm -rf "$TEMP"
 
-passo "Conferindo a janelinha (Python + GTK 3)"
+passo "Conferindo a janelinha (Python + GTK 3)" "Checking the floating window (Python + GTK 3)"
 GTK='import gi; gi.require_version("Gtk", "3.0"); from gi.repository import Gtk'
 PONTE="import gi, sys; gi.__path__.append(sys.argv[1]); gi.require_foreign('cairo')"
 JANELINHA=1
 if ! python3 -c "$GTK" >/dev/null 2>&1; then
-  aviso "Falta o Python com GTK 3. Instale com:  sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0"
-  aviso "(Fedora: sudo dnf install python3-gobject gtk3) e rode este instalador de novo."
+  aviso "Falta o Python com GTK 3. Instale com:  sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0" "Python with GTK 3 is missing. Install it with:  sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0"
+  aviso "(Fedora: sudo dnf install python3-gobject gtk3) e rode este instalador de novo." "(Fedora: sudo dnf install python3-gobject gtk3) and run this installer again."
   JANELINHA=""
 elif python3 -c "$PONTE" "$PASTA/gi-cairo" >/dev/null 2>&1; then
-  ok "GTK 3 e cairo"
+  ok "GTK 3 e cairo" "GTK 3 and cairo"
 else
   # sem root: baixa o python3-gi-cairo e usa o módulo de dentro da ~/.claude-monitor
   if command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then
@@ -93,25 +98,26 @@ else
     rm -rf "$DEB"
   fi
   if python3 -c "$PONTE" "$PASTA/gi-cairo" >/dev/null 2>&1; then
-    ok "GTK 3 e cairo (ponte baixada pra ~/.claude-monitor/gi-cairo)"
+    ok "GTK 3 e cairo (ponte baixada pra ~/.claude-monitor/gi-cairo)" "GTK 3 and cairo (bridge downloaded to ~/.claude-monitor/gi-cairo)"
   else
-    aviso "Falta o python3-gi-cairo. Instale com:  sudo apt install python3-gi-cairo   e rode de novo."
+    aviso "Falta o python3-gi-cairo. Instale com:  sudo apt install python3-gi-cairo   e rode de novo." "python3-gi-cairo is missing. Install it with:  sudo apt install python3-gi-cairo   and run this again."
     JANELINHA=""
   fi
 fi
 
-passo "Sons do Minecraft (do servidor da Mojang: não precisa ter o jogo)"
+passo "Sons do Minecraft (do servidor da Mojang: não precisa ter o jogo)" "Minecraft sounds (from Mojang's server: you don't need the game)"
 if command -v node >/dev/null 2>&1; then node "$PASTA/minecraft.js" || true
-else aviso "Sem Node.js a janelinha fica com os sons do sistema."; fi
+else aviso "Sem Node.js a janelinha fica com os sons do sistema." "Without Node.js the floating window keeps the system sounds."; fi
 
 if [ -z "$SEM_ABRIR" ] && [ -n "$JANELINHA" ]; then
   nohup python3 "$PASTA/overlay-linux.py" >/dev/null 2>&1 &
 fi
 
 if [ -n "$JANELINHA" ]; then
-  printf '\n\033[32mPronto! A janelinha aparece no canto de baixo à direita.\033[0m\n'
+  printf '\n\033[32m%s\033[0m\n' "$(msg "Pronto! A janelinha aparece no canto de baixo à direita." "Done! The floating window shows up in the bottom-right corner.")"
 else
-  printf '\n\033[33mA extensão e os hooks estão instalados; a janelinha espera o GTK (acima).\033[0m\n'
+  printf '\n\033[33m%s\033[0m\n' "$(msg "A extensão e os hooks estão instalados; a janelinha espera o GTK (acima)." "The extension and the hooks are installed; the floating window waits for GTK (above).")"
 fi
-echo "Feche e abra o VS Code de novo. Sessões do Claude que já estavam abertas"
-echo "precisam ser reabertas pra aparecer (as novas aparecem sozinhas)."
+msg "Feche e abra o VS Code de novo. Sessões do Claude que já estavam abertas" "Close and reopen VS Code. Claude sessions that were already open"; echo
+msg "precisam ser reabertas pra aparecer (as novas aparecem sozinhas)." "need to be reopened to show up (new ones show up on their own)."; echo
+[ -n "$EN" ] || echo "Language: right-click the floating window > \"Idioma\" > English."

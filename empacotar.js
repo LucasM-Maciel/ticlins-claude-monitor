@@ -1,6 +1,6 @@
 // Monta o que os amigos baixam, em dist/:
 //   claude-monitor-<versão>.vsix  a extensão (com a janelinha dentro)
-//   ClaudeMonitor.zip             instaladores + .vsix + COMO INSTALAR/ATUALIZAR.txt
+//   ClaudeMonitor.zip             instaladores + .vsix + COMO INSTALAR/ATUALIZAR.txt (e HOW TO INSTALL/UPDATE.txt)
 // Uso: npm run empacotar
 const fs = require("fs");
 const path = require("path");
@@ -27,6 +27,8 @@ async function main() {
     const instalar = (nome) => path.join(raiz, "instalar", nome);
     zip.addFile(instalar("COMO INSTALAR.txt"), "ClaudeMonitor/COMO INSTALAR.txt");
     zip.addFile(instalar("COMO ATUALIZAR.txt"), "ClaudeMonitor/COMO ATUALIZAR.txt");
+    zip.addFile(instalar("HOW TO INSTALL.txt"), "ClaudeMonitor/HOW TO INSTALL.txt");
+    zip.addFile(instalar("HOW TO UPDATE.txt"), "ClaudeMonitor/HOW TO UPDATE.txt");
     zip.addFile(instalar("instalar-windows.cmd"), "ClaudeMonitor/instalar-windows.cmd");
     zip.addFile(instalar("instalar-mac.sh"), "ClaudeMonitor/instalar-mac.sh", { mode: 0o100755 });
     zip.addFile(instalar("instalar-linux.sh"), "ClaudeMonitor/instalar-linux.sh", { mode: 0o100755 });

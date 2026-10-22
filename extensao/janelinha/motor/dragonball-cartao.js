@@ -3,7 +3,7 @@
 // halo da cor da situação (anel mais grosso que na prévia, que ficou ilegível em 1x), borda =
 // nuvem voadora, barra = barra de ki (+ "MAIS DE 8000!"), números = fonte do visor; e as 7
 // esferas no canto com o dragão serpente. Coordenadas: as da janela, em DIPs.
-const { lim, sai, tela, cache, arte, tingida, rgba, reamostrar } = require('./comum');
+const { lim, sai, tela, cache, arte, tingida, rgba, reamostrar, tr } = require('./comum');
 const { trilha } = require('./clawd');
 const { disco, impacto, ESTRELA3, largPx, textoPx } = require('./dragonball-arte');
 
@@ -167,16 +167,16 @@ function barra(g, [x, y, w, h], pct, nivel, t) {
   }
 }
 // easter egg: "MAIS DE 8000!" piscando 0,18 s aceso / 0,18 apagado (2,8 clarões/s, abaixo do
-// limite de 3/s) por 1,4 s a cada 5 s, com 80% ou mais
-const OVO = 'MAIS DE 8000!';
+// limite de 3/s) por 1,4 s a cada 5 s, com 80% ou mais. Em inglês, a fala da dublagem americana
+const OVO = 'MAIS DE 8000!', OVO_EN = 'OVER 9000!';
 const ovoAceso = t => { const f = ((t % 5) + 5) % 5; return f < 1.4 && Math.floor(f / 0.18) % 2 === 0; };
-function ovo(g, e, cx, cy) {
-  const w = largPx(OVO);
-  const img = pronta('ovo', e, () => {
+function ovo(g, e, cx, cy, idioma) {
+  const txt = tr(idioma, OVO, OVO_EN), w = largPx(txt);
+  const img = pronta('ovo ' + txt, e, () => {
     const c = tela(w + 8, 17), k = c.getContext('2d');
     k.fillStyle = 'rgba(0,0,0,.82)'; k.fillRect(1, 1, w + 6, 15);
     k.fillStyle = '#EF4444'; k.fillRect(1, 1, w + 6, 1); k.fillRect(1, 15, w + 6, 1);
-    textoPx(k, OVO, 4, 3, '#FDE047');
+    textoPx(k, txt, 4, 3, '#FDE047');
     return c;
   });
   colar(g, img, Math.round(cx - w / 2) - 3, cy - 7, e);
@@ -314,6 +314,6 @@ function desenhaEsferas(g, ox, oy, G, n, tAdd, t, ev) {
 }
 
 module.exports = {
-  escrever, bolinha, nuvem, nuvemArte, barra, nivelDe, CORES_BARRA, ovo, ovoAceso, OVO, largPx,
+  escrever, bolinha, nuvem, nuvemArte, barra, nivelDe, CORES_BARRA, ovo, ovoAceso, OVO, OVO_EN, largPx,
   desenhaEsferas, desenhaDragao, duracaoDragao, cabecaDragao, caminhoDragao, paraEm, DRAG, HALO,
 };

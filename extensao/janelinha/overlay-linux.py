@@ -120,10 +120,22 @@ def sem_cair(fn, normal):
 
 
 # --- botão direito: tema, Clawd, opacidade e volume, gravados em config.json (os outros leem o mesmo).
-temas = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars"), ("akatsuki", "Akatsuki")]
+temas = [("padrao", ("Padrão", "Default")), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars"), ("akatsuki", "Akatsuki"), ("elden", "Elden Ring")]
 arquivo_config = os.path.join(pasta, "config.json")
 # mostrar: "abas" (o padrão), "agentes" (sessões automáticas: claude -p, codex exec) ou "tudo"
-config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft", "uso": "claude", "mostrar": "abas"}
+# idioma: sem a chave é português, então quem já instalou não vê nada mudar
+config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft", "uso": "claude", "mostrar": "abas", "ritmo": True, "idioma": "pt"}
+idiomas = (("pt", "Português"), ("en", "English"))
+
+
+def tr(pt, en):
+    """o texto na língua do menu: tr("agora", "now")"""
+    return en if config["idioma"] == "en" else pt
+
+
+def nome_no_idioma(nome):
+    """nome do menu guardado como "Claude" (igual nas duas línguas) ou ("Padrão", "Default")"""
+    return tr(*nome) if isinstance(nome, tuple) else nome
 # a lista mostra 10 sessões por vez; a página só vive na memória (começa na 1, volta pra última que existe)
 SESSOES_POR_PAGINA = 10
 pagina_da_lista = 1
@@ -146,6 +158,8 @@ _o = ler_json(arquivo_config)
 if _o:
     if numero(_o.get("opacidade")) is not None:
         config["opacidade"] = min(1.0, max(0.2, numero(_o["opacidade"])))
+    if isinstance(_o.get("ritmo"), bool):
+        config["ritmo"] = _o["ritmo"]
     if isinstance(_o.get("clawd"), bool):
         config["clawd"] = _o["clawd"]
     if numero(_o.get("volume")) is not None:
@@ -156,6 +170,8 @@ if _o:
         config["uso"] = _o["uso"]
     if _o.get("mostrar") in ("abas", "agentes", "tudo"):
         config["mostrar"] = _o["mostrar"]
+    if _o.get("idioma") in ("pt", "en"):
+        config["idioma"] = _o["idioma"]
 
 
 def salvar_config():
@@ -204,10 +220,10 @@ def hex_cor(codigo):
 
 # situação da sessão -> cor da bolinha e texto do tooltip
 estados = {
-    "working": ("#22C55E", "trabalhando"),
-    "finished": ("#EF4444", "terminou"),
-    "question": ("#60A5FA", "pergunta pra você"),
-    "permission": ("#FACC15", "pedindo permissão"),
+    "working": ("#22C55E", ("trabalhando", "working")),
+    "finished": ("#EF4444", ("terminou", "done")),
+    "question": ("#60A5FA", ("pergunta pra você", "asking you")),
+    "permission": ("#FACC15", ("pedindo permissão", "needs permission")),
 }
 
 # --- sons de cada aviso por tema; com mais de um, sorteia. Sem o arquivo, o do freedesktop.
@@ -221,6 +237,8 @@ sons_do_tema = {
     "sith": {"esperando": ["sons-sith/esperando"], "terminou": ["sons-sith/terminou"], "tudo": ["sons-sith/tudo"]},
     "akatsuki": {"esperando": ["sons-akatsuki/esperando"], "terminou": ["sons-akatsuki/terminou"],
                  "tudo": ["sons-akatsuki/tudo"]},
+    "elden": {"esperando": ["sons-elden/esperando"], "terminou": ["sons-elden/terminou"],
+              "tudo": ["sons-elden/tudo"]},
 }
 som_do_sistema = {"esperando": "window-question", "terminou": "complete", "tudo": "bell"}
 nome_do_som = {  # pro diário e pro .txt do --foto
@@ -229,6 +247,7 @@ nome_do_som = {  # pro diário e pro .txt do --foto
     "dragonball": {"esperando": "esferas-esperando", "terminou": "esferas-terminou", "tudo": "esferas-tudo"},
     "sith": {"esperando": "droide-bipes", "terminou": "sabre-liga", "tudo": "acorde-sith"},
     "akatsuki": {"esperando": "kunai-corda", "terminou": "puf-acorde", "tudo": "frase-tambor"},
+    "elden": {"esperando": "sino-ouro", "terminou": "acorde-graca", "tudo": "gongo-harpa"},
 }
 tocador = shutil.which("paplay") or shutil.which("pw-play")
 
@@ -341,6 +360,7 @@ def ler_sessoes(agora):
     try:
         arquivos = os.listdir(dir_sessoes)
     except OSError:
+        atualizar_contas([])
         return []
     vistas = {}
     for arquivo in arquivos:
@@ -365,7 +385,8 @@ def ler_sessoes(agora):
         # Codex: sem transcript do Claude (a extensão grava "pergunta" no arquivo)
         transcript = d.get("transcript") if isinstance(d.get("transcript"), str) and not codex else ""
         s = {
-            "id": sid, "nome": (None if codex else titulo(transcript)) or (d.get("name") if isinstance(d.get("name"), str) else "sessão"),
+            "id": sid, "nome": (None if codex else titulo(transcript)) or (d.get("name") if isinstance(d.get("name"), str) else tr("sessão", "session")),
+            "configDir": d.get("configDir"),
             "codex": codex, "pergunta": d.get("pergunta") is True,
             "automatica": d.get("automatica") is True,  # não é uma aba (claude -p, codex exec): o hook e a extensão decidem
             "estado": d.get("state") if isinstance(d.get("state"), str) else "waiting",
@@ -375,6 +396,7 @@ def ler_sessoes(agora):
         if chave in vistas and vistas[chave]["updated"] >= s["updated"]:
             continue
         vistas[chave] = s
+    atualizar_contas(vistas.values())
     lista = list(vistas.values())
     for s in lista:
         s["situacao"] = situacao(s)
@@ -552,12 +574,12 @@ def avisar(sessoes):
         tocar(tocar_)
 
 
-def tempo(minutos):
+def tempo(minutos, menos_de_um_minuto=None):
     if not math.isfinite(minutos):
         return ""
     m = max(0, int(math.floor(minutos)))
     if m < 1:
-        return "agora"
+        return menos_de_um_minuto or tr("agora", "now")
     if m < 60:
         return f"{m}m"
     if m < 1440:
@@ -566,14 +588,99 @@ def tempo(minutos):
 
 
 # --- usage: o mesmo endpoint do /usage, a cada 2 min ---
-uso = None  # [(rotulo, pct, renova_epoch|None)]
-proxima_busca = None
-buscando = False
-uso_guardado = os.path.join(pasta, "ultimo-uso.json")
+usos_por_conta = {}  # dir -> dados, proxima, pedido
+contas_do_uso = [""]
+pagina_do_uso = 1
+
+
+def dir_da_conta(dir_sessao):
+    if not isinstance(dir_sessao, str) or not dir_sessao:
+        return ""
+    d = os.path.normpath(os.path.expanduser(dir_sessao))
+    return "" if d == os.path.join(home, ".claude") else d
+
+
+def apelido_da_conta(d):
+    if not d:
+        return tr("padrão", "default")
+    nome = os.path.basename(d)
+    m = re.fullmatch(r"\.claude-conta([0-9]+)", nome)
+    return tr("conta", "account") + " " + m[1] if m else nome
+
+
+def cache_da_conta(d):
+    # o nome do arquivo não depende do idioma: .claude-conta2 -> ultimo-uso-conta2.json
+    nome = re.sub(r"^\.claude-conta([0-9]+)$", r"conta\1", os.path.basename(d)) if d else ""
+    sufixo = "" if not d else "-" + "".join(c for c in nome if c.isalnum() or c in "_.-")
+    return os.path.join(pasta, "ultimo-uso" + sufixo + ".json")
+
+
+tokens_das_contas = {}  # só memória; nunca vai ao cache de usage ou ao diário
+
+
+def token_para_agrupar(d):
+    arquivo = os.path.join(d or os.path.join(pasta if arquivo_foto is not None else home, ".claude"), ".credentials.json")
+    mtime = data_do_arquivo(arquivo)
+    agora = time.monotonic()
+    anterior = tokens_das_contas.get(d)
+    if anterior is None or anterior[0] != mtime or agora - anterior[1] >= 30:
+        tokens_das_contas[d] = (mtime, agora, credenciais_da_conta(d))
+    return tokens_das_contas[d][2]
+
+
+def atualizar_contas(sessoes):
+    global contas_do_uso, pagina_do_uso
+    recentes = {}
+    for s in sessoes:
+        if not s["codex"]:
+            d = dir_da_conta(s.get("configDir"))
+            recentes[d] = max(recentes.get(d, 0), s["updated"])
+    vistos = set()
+    contas_do_uso = []
+    for d in sorted(recentes, key=lambda d: (-recentes[d], d)):
+        token = token_para_agrupar(d)
+        if isinstance(token, str) and token:
+            if token in vistos:
+                continue
+            vistos.add(token)
+        contas_do_uso.append(d)
+    contas_do_uso = contas_do_uso or [""]
+    for d in list(tokens_das_contas):
+        if d not in recentes:
+            del tokens_das_contas[d]
+    pagina_do_uso = min(len(contas_do_uso), max(1, pagina_do_uso))
+    for d in list(usos_por_conta):
+        if d not in contas_do_uso:
+            del usos_por_conta[d]
+    for d in contas_do_uso:
+        if d not in usos_por_conta:
+            o = ler_json(cache_da_conta(d))
+            if o is None and not d and arquivo_foto is not None and argumento("--uso"):
+                o = ler_json(argumento("--uso"))
+            usos_por_conta[d] = {"dados": uso_de(o) if o else None, "proxima": 0, "pedido": False}
+
+
+def conta_atual():
+    return contas_do_uso[pagina_do_uso - 1]
+
+
+def uso_atual():
+    return usos_por_conta.get(conta_atual(), {}).get("dados")
+
+
+def paginas_do_uso():
+    return f"◀ {apelido_da_conta(conta_atual())} · {pagina_do_uso}/{len(contas_do_uso)} ▶"
+
+
+def foto_da_conta():
+    if any(tokens_das_contas):
+        cred = "ok" if credenciais_da_conta(conta_atual()) else "falta"
+        return [f"conta: {apelido_da_conta(conta_atual())} ({pagina_do_uso}/{len(contas_do_uso)}) | credenciais: {cred}"]
+    return []
 
 
 def falta_pra_renovar(renova):
-    return tempo((renova - time.time()) / 60) if renova else ""
+    return tempo((renova - time.time()) / 60, menos_de_um_minuto="<1m") if renova else ""
 
 
 # ritmo: quanto da janela (5h ou 7d) já passou, em %; é onde fica o tracinho na barra.
@@ -588,17 +695,19 @@ def decorrido(rotulo, renova):
 
 
 # Limites iguais a motor/comum.js/ritmoDe, overlay.ps1/RitmoDe e overlay.swift/ritmo.
+palavras_ritmo = (("folga", "slow"), ("no ritmo", "on pace"), ("acima", "fast"), ("estourando", "too fast"))
+
+
 def ritmo(rotulo, pct, renova):
-    """-> (texto, cor); o arredondamento é o dos outros (meio vai pra longe do zero)."""
-    passado = decorrido(rotulo, renova)
+    """-> (palavra, cor), usando a diferença real antes de arredondar."""
+    passado = decorrido(rotulo, renova) if config["ritmo"] else None
     if passado is None:
         return "", "#6B7280"
     if rotulo == "5h" and (passado < 3.33 or passado > 96.67):
         return "", "#9CA3AF"
     d = pct - passado
-    n = int(math.copysign(math.floor(abs(d) + 0.5), d))
     cor = "#EF4444" if d >= 20 else "#F59E0B" if d >= 6 else "#22C55E" if d <= -10 else "#9CA3AF"
-    return ("+%d" % n if n > 0 else "%d" % n), cor
+    return nome_no_idioma(palavras_ritmo[3 if d >= 20 else 2 if d >= 6 else 0 if d <= -10 else 1]), cor
 
 
 def data_iso(texto):
@@ -630,8 +739,8 @@ def uso_de(o):
     return r or None
 
 
-def token():
-    o = ler_json(os.path.join(home, ".claude", ".credentials.json"))
+def credenciais_da_conta(d):
+    o = ler_json(os.path.join(d or os.path.join(pasta if arquivo_foto is not None else home, ".claude"), ".credentials.json"))
     oauth = (o or {}).get("claudeAiOauth")
     return oauth.get("accessToken") if isinstance(oauth, dict) else None
 
@@ -668,61 +777,65 @@ def ler_uso_do_codex():
 def linhas_do_uso():
     """O que o bloco do usage mostra, conforme o "Uso" do botão direito: Claude, Codex ou os dois
     (com os dois, cada grupo ganha o nome do agente). ("texto", txt) ou ("barra", rotulo, pct, renova)."""
-    do_claude = [] if config["uso"] == "codex" else list(uso or [])
+    do_claude = [] if config["uso"] == "codex" else list(uso_atual() or [])
     do_codex = [] if config["uso"] == "claude" else list(uso_do_codex)
     ambos = config["uso"] == "ambos"
     r = []
+    outra_sozinha = len(contas_do_uso) == 1 and bool(conta_atual())
+    if config["uso"] != "codex" and outra_sozinha:
+        r.append(("texto", ("Claude · " if ambos else "") + apelido_da_conta(conta_atual())))
     if ambos and not do_claude:
-        r.append(("texto", "usage indisponível"))
-    if ambos and do_claude:
+        r.append(("texto", tr("usage indisponível", "usage unavailable")))
+    if ambos and do_claude and not outra_sozinha:
         r.append(("texto", "Claude"))
     r += [("barra",) + m for m in do_claude]
+    if config["uso"] != "codex" and len(contas_do_uso) > 1:
+        if not do_claude and not ambos:
+            r.append(("texto", tr("usage indisponível", "usage unavailable")))
+        r.append(("paginas", paginas_do_uso()))
     if ambos and do_codex:
         r.append(("texto", "Codex"))
     r += [("barra",) + m for m in do_codex]
     if config["uso"] != "claude" and not do_codex:
-        r.append(("texto", "Codex: sem uso ainda"))
-    elif not do_claude and not do_codex:
-        r.append(("texto", "usage indisponível"))
+        r.append(("texto", tr("Codex: sem uso ainda", "Codex: no usage yet")))
+    elif not do_claude and not do_codex and len(contas_do_uso) == 1:
+        r.append(("texto", tr("usage indisponível", "usage unavailable")))
     return r
 
 
 def barras_com_grupo():
-    do_claude = [] if config["uso"] == "codex" else list(uso or [])
+    do_claude = [] if config["uso"] == "codex" else list(uso_atual() or [])
     do_codex = [] if config["uso"] == "claude" else list(uso_do_codex)
     return " | ".join([f"Claude {m[0]} {round(m[1])}%" for m in do_claude]
                       + [f"Codex {m[0]} {round(m[1])}%" for m in do_codex])
 
 
 def ritmo_do_claude():
-    do_claude = [] if config["uso"] == "codex" else list(uso or [])
+    if not config["ritmo"]:
+        return "desligado"
+    do_claude = [] if config["uso"] == "codex" else list(uso_atual() or [])
     if not do_claude:
         return "nenhum"
-    return " | ".join(f"{m[0]} {ritmo(m[0], m[1], m[2])[0]}" for m in do_claude)
+    def descricao(m):
+        palavra = ritmo(*m)[0]
+        if not palavra:
+            return m[0] + " "
+        d = m[1] - decorrido(m[0], m[2])
+        n = int(math.copysign(math.floor(abs(d) + 0.5), d))
+        return f"{m[0]} {palavra} ({'+' if n > 0 else ''}{n})"
+    return " | ".join(descricao(m) for m in do_claude)
 
 
-def buscar_uso():
-    global uso, proxima_busca, buscando
-    if arquivo_foto is not None:  # teste: nada de internet
-        f = argumento("--uso")
-        if uso is None and f:
-            o = ler_json(f)
-            if o:
-                uso = uso_de(o)
+def buscar_uso_da_conta(d, estado):
+    if estado["pedido"] or time.time() < estado["proxima"]:
         return
-    if proxima_busca is None:
-        o = ler_json(uso_guardado)
-        if o:
-            uso = uso_de(o)
-        proxima_busca = 0
-    if buscando or time.time() < proxima_busca:
-        return
-    buscando = True
-    proxima_busca = time.time() + 20  # se falhar, tenta de novo logo
+    estado["pedido"] = True
 
     def buscar():
         status, dados = 0, None
-        tk = token()
+        tk = credenciais_da_conta(d)
+        if usos_por_conta.get(d) is not estado:
+            return
         if tk:
             req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage", headers={
                 "Authorization": "Bearer " + tk, "anthropic-beta": "oauth-2025-04-20", "User-Agent": "claude-monitor"})
@@ -736,8 +849,10 @@ def buscar_uso():
         GLib.idle_add(chegou, status, dados)
 
     def chegou(status, dados):
-        global uso, proxima_busca, buscando
-        buscando = False
+        if usos_por_conta.get(d) is not estado:
+            return False  # a conta já não tem sessão viva
+        estado["pedido"] = False
+        estado["proxima"] = time.time() + 20
         novo = None
         if status == 200 and dados:
             try:
@@ -746,18 +861,24 @@ def buscar_uso():
             except ValueError:
                 pass
         if novo:
-            uso = novo
-            proxima_busca = time.time() + 120
+            estado["dados"] = novo
+            estado["proxima"] = time.time() + 120
             try:
-                with open(uso_guardado, "wb") as f:
+                with open(cache_da_conta(d), "wb") as f:
                     f.write(dados)
             except OSError:
                 pass
         elif status == 429:
-            proxima_busca = time.time() + 300  # limite de requisições: espera mais
+            estado["proxima"] = time.time() + 300
         return False
 
     threading.Thread(target=buscar, daemon=True).start()
+
+
+def buscar_uso():
+    if arquivo_foto is None:
+        for d in contas_do_uso:
+            buscar_uso_da_conta(d, usos_por_conta[d])
 
 
 # --- clique numa sessão: a extensão recebe o link e abre a aba (ou o terminal) dela ---
@@ -803,9 +924,12 @@ def versao_nova():
 
 
 def clicar(alvo):
-    global clique_da_vez, pagina_da_lista
+    global clique_da_vez, pagina_da_lista, pagina_do_uso
     if alvo.startswith("sessao:"):
         abrir_sessao(alvo[7:])
+    elif alvo.startswith("uso:"):
+        pagina_do_uso = min(len(contas_do_uso), max(1, pagina_do_uso + int(alvo[4:])))
+        atualizar()
     elif alvo.startswith("pagina:"):
         pagina_da_lista += int(alvo[7:])
         atualizar()
@@ -831,7 +955,7 @@ def trazer_editor():
 
 # --- desenho ---
 # janela fixa (a mesma dos outros: o motor desenha nela inteira); o resto é transparente e o clique passa
-L, A = 380, 440
+L, A = 440, 440
 M = 34  # espaço em volta do cartão, por onde o Clawd anda
 fonte = Pango.FontDescription.from_string("Sans")
 fonte.set_absolute_size(12 * Pango.SCALE)
@@ -916,13 +1040,14 @@ cores_do_uso = {
     "padrao": ["#D1D5DB", "#F59E0B", "#EF4444"], "minecraft": ["#80FF20", "#FFAA00", "#FF5555"],
     "dragonball": ["#FDE047", "#F59E0B", "#EF4444"], "sith": ["#FCA5A5", "#F59E0B", "#EF4444"],
     "akatsuki": ["#FCA5A5", "#F59E0B", "#EF4444"],
+    "elden": ["#F2D77A", "#F59E0B", "#EF4444"],
 }
 
 
 # A cara do cartão: a de sempre ou, com o motor vivo, o layout do tema (mensagem P, docs/MOTOR.md).
 def aparencia(o=None):
     a = {"raio": 8.0, "fundo": "#E6181818", "moldura": [0, 0, 0, 0], "padding": [10, 6, 10, 6], "enfeites": False,
-         "colTempo": 36.0, "colPct": 38.0, "colRitmo": 34.0, "colFalta": 48.0, "colRotulo": 18.0, "letra": 16.0, "barra": (118.0, 4.0)}
+         "colTempo": 36.0, "colPct": 38.0, "colRitmo": 72.0, "colFalta": 48.0, "colRotulo": 18.0, "letra": 16.0, "barra": (118.0, 4.0)}
     if not o:
         return a
 
@@ -944,7 +1069,7 @@ def aparencia(o=None):
     if isinstance(o.get("enfeites"), bool):
         a["enfeites"] = o["enfeites"]
     if a["enfeites"]:
-        a["colRitmo"] = 0.0  # o "+12" do ritmo: com enfeites, só se o tema pedir
+        a["colRitmo"] = 0.0  # com enfeites, só se o tema pedir
     c = o.get("colunas")
     if isinstance(c, dict):
         for k, nome in (("tempo", "colTempo"), ("pct", "colPct"), ("ritmo", "colRitmo"), ("falta", "colFalta"),
@@ -968,9 +1093,17 @@ pediu_foto = False
 
 
 def aparencia_atual():
-    if layouts and (motor_vivo or arquivo_foto is not None) and config["tema"] in layouts:
-        return layouts[config["tema"]]
-    return aparencia()
+    a = dict(layouts[config["tema"]]) if layouts and (motor_vivo or arquivo_foto is not None) and config["tema"] in layouts else aparencia()
+    if not config["ritmo"]:
+        a["colRitmo"] = 0.0
+    elif not a["enfeites"]:
+        # a maior palavra das duas línguas: trocar o idioma não mexe no tamanho do cartão
+        medida = PangoCairo.create_layout(cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)))
+        medida.set_font_description(fonte)
+        for palavra in (p for par in palavras_ritmo for p in par):
+            medida.set_text(palavra, -1)
+            a["colRitmo"] = max(a["colRitmo"], medida.get_pixel_size()[0] + 4)
+    return a
 
 
 class Cartao:
@@ -1021,7 +1154,7 @@ class Cartao:
         x0, largura = self.x0, self.largura
         y = self.y0
         if not self.linhas:
-            escrever(cr, "nenhuma sessão aberta", hex_cor("#9CA3AF"), (x0, y, largura, 20))
+            escrever(cr, tr("nenhuma sessão aberta", "no open sessions"), hex_cor("#9CA3AF"), (x0, y, largura, 20))
             y += 20
         for l in self.linhas:
             cor = hex_cor(l["cor"])
@@ -1047,14 +1180,16 @@ class Cartao:
             cr.set_source_rgba(*hex_cor("#33FFFFFF"))
             cr.rectangle(x0, self.y_aviso - 5, largura, 1)
             cr.fill()
-            escrever(cr, f"↑ versão {self.aviso} disponível · baixar", hex_cor("#A78BFA"), (x0, self.y_aviso, largura, 20))
+            escrever(cr, tr(f"↑ versão {self.aviso} disponível · baixar", f"↑ version {self.aviso} available · download"), hex_cor("#A78BFA"), (x0, self.y_aviso, largura, 20))
         linhas_uso = linhas_do_uso()
         so_texto = len(linhas_uso) == 1 and linhas_uso[0][0] == "texto"
         bw, bh = ap["barra"]
         r = min(2, bh / 2)
         for linha_uso in linhas_uso:
-            if linha_uso[0] == "texto":
-                nome_de_grupo = linha_uso[1] in ("Claude", "Codex")
+            if linha_uso[0] == "paginas":
+                escrever(cr, linha_uso[1], hex_cor("#9CA3AF"), (x0, y, largura, self.altura_uso), "centro")
+            elif linha_uso[0] == "texto":
+                nome_de_grupo = linha_uso[1] in ("Claude", "Codex") or linha_uso[1].startswith("Claude · ") or linha_uso[1] == apelido_da_conta(conta_atual())
                 escrever(cr, linha_uso[1], hex_cor("#9CA3AF" if nome_de_grupo else "#6B7280"),
                          (x0, y, largura, 20 if so_texto else self.altura_uso))
             elif not ap["enfeites"]:  # com enfeites: rótulo, barra, % e falta o motor desenha
@@ -1071,7 +1206,7 @@ class Cartao:
                     retangulo_redondo(cr, tx, ty, cheio, bh, r)
                     cr.fill()
                 d = decorrido(rotulo, renova)
-                if d is not None:  # o tracinho do ritmo: onde o % estaria gastando por igual
+                if config["ritmo"] and d is not None:  # o tracinho do ritmo: onde o % estaria gastando por igual
                     cr.set_source_rgba(*hex_cor("#E5E7EB"))
                     cr.rectangle(round(tx + bw * d / 100 - 1), ty - 3, 2, bh + 6)
                     cr.fill()
@@ -1130,7 +1265,7 @@ class Cartao:
                 "falta": self.texto(falta_pra_renovar(renova), "#6B7280", self.na_janela(xf, yl, ap["colFalta"], ap["letra"])),
             }
             d = decorrido(rotulo, renova)
-            if d is not None:
+            if config["ritmo"] and d is not None:
                 medidor["decorrido"] = round(d * 100) / 100
             if ap["colRitmo"] > 0:
                 medidor["ritmo"] = self.texto(*ritmo(rotulo, pct, renova), self.na_janela(xr, yl, ap["colRitmo"], ap["letra"]))
@@ -1145,6 +1280,9 @@ class Cartao:
             return None
         if self.aviso and self.y_aviso <= y < self.y_aviso + 20:
             return "baixar"
+        for j, linha_uso in enumerate(linhas_do_uso()):
+            if linha_uso[0] == "paginas" and self.y_uso + j * self.altura_uso <= y < self.y_uso + (j + 1) * self.altura_uso:
+                return "uso:-1" if x < self.x0 + self.largura / 2 else "uso:+1"
         if self.paginas > 1 and self.y_paginas <= y < self.y_paginas + self.altura_paginas:
             return "pagina:-1" if x < self.x0 + self.largura / 2 else "pagina:+1"
         i = int((y - self.y0) // self.altura_linha)
@@ -1156,7 +1294,7 @@ class Cartao:
         if not (0 <= x < fw and 0 <= y < fh):
             return None
         if self.aviso and self.y_aviso <= y < self.y_aviso + 20:
-            return "Baixa o zip: extraia e siga o COMO ATUALIZAR.txt"
+            return tr("Baixa o zip: extraia e siga o COMO ATUALIZAR.txt", "Downloads the zip: extract it and follow HOW TO UPDATE.txt")
         if y >= self.y0:
             i = int((y - self.y0) // self.altura_linha)
             if i < len(self.linhas):
@@ -1490,7 +1628,7 @@ def motor_estado():
         return
     fw, fh = cartao.frame[2], cartao.frame[3]
     estado = {
-        "msg": "estado", "tema": config["tema"], "clawd": config["clawd"], "modo": modo,
+        "msg": "estado", "tema": config["tema"], "idioma": config["idioma"], "clawd": config["clawd"], "modo": modo,
         "escala": escala(), "janela": [float(L), float(A)],
         "cartao": cartao.na_janela(0, 0, fw, fh), "raio": float(cartao.ap["raio"]), "opacidade": config["opacidade"],
         "linhas": cartao.caixas_das_linhas(), "uso": cartao.caixas_do_uso(),
@@ -1545,6 +1683,7 @@ def atualizar():
     cartao.linhas = []
     for s in da_pagina:
         cor, rotulo = estados.get(s["situacao"], ("#9CA3AF", s["situacao"]))
+        rotulo = nome_no_idioma(rotulo)
         cartao.linhas.append({"id": s["id"], "sit": s["situacao"], "cor": cor, "nome": s["nome"],
                               "tempo": tempo((agora - s["since"]) / 60), "rotulo": rotulo,
                               "codex": s.get("codex", False)})
@@ -1580,7 +1719,7 @@ def atualizar():
         visto = [f"sessao: {s['nome']} | hook={s['estado']} | janelinha={s['situacao']}" + (" | agente=codex" if s.get("codex") else "") for s in sessoes] + (
             [] if config["mostrar"] == "abas" else [f"mostrar: {config['mostrar']}"]) + (
             [f"pagina: {pagina_da_lista}/{total_de_paginas}"] if total_de_paginas > 1 else []) + [
-            f"clawd: {clawd}", f"usage: {'indisponivel' if not uso else 'ok'}", "ritmo: " + ritmo_do_claude()] + (
+            f"clawd: {clawd}", f"usage: {'indisponivel' if not uso_atual() else 'ok'}"] + foto_da_conta() + ["ritmo: " + ritmo_do_claude()] + (
             [] if config["uso"] == "claude" else [f"uso: {config['uso']}", f"barras: {barras_com_grupo()}"]) + [
             f"som: {som}",
             f"som da cena: {som_da_cena_visto or 'nenhum'}", f"clique: {clique_da_vez or 'nenhum'}",
@@ -1613,49 +1752,54 @@ def montar_menu():
     sub = Gtk.Menu()
     grupo = None
     for tid, nome in temas:
-        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome)
+        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome_no_idioma(nome))
         grupo = item
         item.set_active(config["tema"] == tid)
         item.connect("toggled", lambda it, t=tid: it.get_active() and trocar("tema", t))
         sub.append(item)
-    item = Gtk.MenuItem(label="Tema: " + dict(temas)[config["tema"]])
+    item = Gtk.MenuItem(label=tr("Tema: ", "Theme: ") + nome_no_idioma(dict(temas)[config["tema"]]))
     item.set_submenu(sub)
     menu.append(item)
-
-    clawd = Gtk.CheckMenuItem(label="Clawd")
-    clawd.set_active(config["clawd"])
-    clawd.connect("toggled", lambda it: trocar("clawd", it.get_active()))
-    menu.append(clawd)
 
     # Uso: quais barras de usage aparecem (Claude, Codex ou os dois)
     sub = Gtk.Menu()
     grupo = None
-    modos_de_uso = (("claude", "Claude"), ("codex", "Codex"), ("ambos", "Os dois"))
+    modos_de_uso = (("claude", "Claude"), ("codex", "Codex"), ("ambos", ("Os dois", "Both")))
     for uid, nome in modos_de_uso:
-        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome)
+        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome_no_idioma(nome))
         grupo = item
         item.set_active(config["uso"] == uid)
         item.connect("toggled", lambda it, u=uid: it.get_active() and trocar("uso", u))
         sub.append(item)
-    item = Gtk.MenuItem(label="Uso: " + dict(modos_de_uso)[config["uso"]])
+    item = Gtk.MenuItem(label=tr("Uso: ", "Usage: ") + nome_no_idioma(dict(modos_de_uso)[config["uso"]]))
     item.set_submenu(sub)
     menu.append(item)
 
     # Mostrar: quais sessões aparecem (abas, agentes ou tudo)
     sub = Gtk.Menu()
     grupo = None
-    modos_de_mostrar = (("abas", "Abas"), ("agentes", "Agentes"), ("tudo", "Tudo"))
+    modos_de_mostrar = (("abas", ("Abas", "Tabs")), ("agentes", ("Agentes", "Agents")), ("tudo", ("Tudo", "All")))
     for mid, nome in modos_de_mostrar:
-        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome)
+        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome_no_idioma(nome))
         grupo = item
         item.set_active(config["mostrar"] == mid)
         item.connect("toggled", lambda it, m=mid: it.get_active() and trocar("mostrar", m))
         sub.append(item)
-    item = Gtk.MenuItem(label="Mostrar: " + dict(modos_de_mostrar)[config["mostrar"]])
+    item = Gtk.MenuItem(label=tr("Mostrar: ", "Show: ") + nome_no_idioma(dict(modos_de_mostrar)[config["mostrar"]]))
     item.set_submenu(sub)
     menu.append(item)
 
-    for chave, rotulo, valores in (("opacidade", "Opacidade", [100, 90, 80, 70, 60, 50, 40, 30, 20]),
+    item_ritmo = Gtk.CheckMenuItem(label=tr("Ritmo", "Pace"))
+    item_ritmo.set_active(config["ritmo"])
+    item_ritmo.connect("toggled", lambda it: trocar("ritmo", it.get_active()))
+    menu.append(item_ritmo)
+
+    clawd = Gtk.CheckMenuItem(label="Clawd")
+    clawd.set_active(config["clawd"])
+    clawd.connect("toggled", lambda it: trocar("clawd", it.get_active()))
+    menu.append(clawd)
+
+    for chave, rotulo, valores in (("opacidade", tr("Opacidade", "Opacity"), [100, 90, 80, 70, 60, 50, 40, 30, 20]),
                                    ("volume", "Volume", [100, 80, 60, 40, 20, 10, 0])):
         sub = Gtk.Menu()
         grupo = None
@@ -1672,8 +1816,21 @@ def montar_menu():
         item.set_submenu(sub)
         menu.append(item)
 
+    # Idioma: os nomes ficam na própria língua, pra quem não lê português achar o English
+    sub = Gtk.Menu()
+    grupo = None
+    for iid, nome in idiomas:
+        item = Gtk.RadioMenuItem.new_with_label_from_widget(grupo, nome)
+        grupo = item
+        item.set_active(config["idioma"] == iid)
+        item.connect("toggled", lambda it, i=iid: it.get_active() and trocar("idioma", i))
+        sub.append(item)
+    item = Gtk.MenuItem(label=tr("Idioma: ", "Language: ") + dict(idiomas)[config["idioma"]])
+    item.set_submenu(sub)
+    menu.append(item)
+
     menu.append(Gtk.SeparatorMenuItem())
-    sair = Gtk.MenuItem(label="Fechar")
+    sair = Gtk.MenuItem(label=tr("Fechar", "Close"))
     sair.connect("activate", fechar)
     menu.append(sair)
     menu.show_all()
@@ -1690,9 +1847,14 @@ def trocar(chave, valor):
     elif chave == "uso":
         anotar(f"uso: {valor}")
         atualizar()
+    elif chave == "ritmo":
+        atualizar()
     elif chave == "mostrar":
         anotar(f"mostrar: {valor}")
         pagina_da_lista = 1
+        atualizar()
+    elif chave == "idioma":
+        anotar(f"idioma: {valor}")
         atualizar()
     aplicar_config()
 

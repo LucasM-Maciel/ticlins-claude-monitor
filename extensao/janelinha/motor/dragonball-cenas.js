@@ -3,7 +3,7 @@
 // quadro(g, t, R, m) no referencial do Clawd (x+ pra frente, y- pra fora do cartão, chão = 0);
 // R = o que ele veste agora (a transformação, se houver). Tudo função de t: k (o alvo da vez)
 // é sorteado quando a cena começa.
-const { lim, sai, entra, rgba } = require('./comum');
+const { lim, sai, entra, rgba, tr } = require('./comum');
 const {
   ALTURA, fatia, clawdDB, desenhaInimigo, chegando, disco, bolaKi, feixe, fumaca, estrelinhas, impacto, linhasVel,
   desenhaNuvemP, fiapo, largPx, textoPx,
@@ -113,10 +113,11 @@ const CENAS = {
       },
     };
   },
-  // um visor verde no olho dele lê o "poder", que sobe até estourar em 8000+; ele leva um susto
+  // um visor verde no olho dele lê o "poder", que sobe até estourar em 8000+ (em inglês, 9000+,
+  // como na dublagem americana); ele leva um susto
   rastreador: () => ({
     dur: 3.6, espaco: { frente: 24, tras: 20 },
-    quadro(g, t, R) {
+    quadro(g, t, R, m) {
       let p = {};
       if (t >= 2.4 && t < 2.75) { const u = fatia(t, 2.4, 2.75); p = { x: -5 * u, y: -6 * Math.sin(Math.PI * u), olhos: 'cima' }; }
       else if (t >= 2.75) p = { x: -5 + 5 * fatia(t, 3.3, 3.6), rot: t > 2.9 && t < 3.3 ? 5 * Math.sin((t - 2.9) * 30) : 0 };
@@ -130,7 +131,8 @@ const CENAS = {
         g.fillStyle = verm ? '#B91C1C' : '#16A34A'; g.fillRect(2, -13.5, 6, 1); g.fillRect(7, -13.5, 1, 6);
         g.restore();
         if (t >= 0.3) {
-          const u = fatia(t, 0.3, 2.1), v = t < 2.1 ? String(Math.round((100 + 7900 * entra(u)) / 10) * 10) : '8000+';
+          const teto = tr(m && m.host && m.host.idioma, 8000, 9000);
+          const u = fatia(t, 0.3, 2.1), v = t < 2.1 ? String(Math.round((100 + (teto - 100) * entra(u)) / 10) * 10) : teto + '+';
           const cor = t < 2.1 ? '#4ADE80' : (Math.floor(t / 0.15) % 2 ? '#F59E0B' : '#EF4444');
           textoPx(g, v, Math.round(-largPx(v) / 2) + 3, -38, cor);
         }

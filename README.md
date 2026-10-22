@@ -1,5 +1,7 @@
 # Claude Monitor
 
+**[English](README.en.md)**
+
 Uma janelinha que fica sempre por cima, no canto da tela, mostrando as suas
 sessões do Claude Code e quanto do seu limite você já gastou. Dá pra deixar 3,
 4 sessões rodando e ir fazer outra coisa: quando uma termina ou precisa de
@@ -10,7 +12,8 @@ você, ela avisa com um som.
 **[⬇️ Baixar o ClaudeMonitor.zip](https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip)** (Windows, Mac e Linux no mesmo arquivo)
 
 > Projeto pessoal e não oficial, sem ligação com a Anthropic (Claude), com a
-> Mojang (Minecraft) nem com os donos de Dragon Ball, de Naruto e de Star Wars (Lucasfilm).
+> Mojang (Minecraft) nem com os donos de Dragon Ball, de Naruto, de Star Wars (Lucasfilm)
+> e de Elden Ring.
 
 ## O que ela mostra
 
@@ -112,6 +115,7 @@ estiver trabalhando nele.
   próxima vez.
 - **Uso** (botão direito, ◀ ▶): quais barras de usage aparecem, as do **Claude**
   (o padrão), as do **Codex** ou **Os dois**.
+- **Idioma**: botão direito > **Idioma** > English (padrão: português).
 - **Fechar**: botão direito > Fechar.
 - **Reabrir**: no VS Code, `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) >
   **Claude Monitor: Abrir janelinha flutuante**. No Windows também tem o
@@ -184,6 +188,15 @@ a janelinha antes dos temas continua no Minecraft.
   de dez caudas** e **o Time 7 completo** (o Susanoo, a Kurama e o soco da
   Sakura). Os avisos são kunais tilintando e corda dedilhada, todos feitos do
   zero.
+- **Elden Ring**: o Clawd Maculado de cavaleiro, bandido ou feiticeiro, com uma
+  roupa nova a cada volta. Moldura de ouro com losangos e um florão da Árvore
+  Dourada, bolinhas em losango e usage dourado (âmbar em 80%, vermelho em 95%).
+  Andando, abate inimigos e recolhe runas, lê uma mensagem, abre um baú mímico
+  ou vê **VOCÊ MORREU** e volta na luz dourada. Quando acaba tudo, descobre um
+  local de graça; quando fica tudo quieto, descansa na graça ou faz carinho no
+  Torrent (uma vez cada). A cada 30 inimigos abatidos vem uma luta de chefe,
+  com som: **Margit, Godrick, Malenia e Radahn**, um por vez. Os avisos são sino
+  de ouro, acorde da graça e gongo com harpa, todos feitos do zero.
 
 As animações precisam do Node.js (que a instalação já pede); sem ele a
 janelinha mostra o Clawd simples, sem as cenas.

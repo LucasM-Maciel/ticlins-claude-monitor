@@ -1,0 +1,33 @@
+CLAUDE MONITOR — how to update
+===============================
+
+Updating is installing again over the old one, from this zip. Your sounds and
+settings stay.
+
+WINDOWS
+  1. Right-click ClaudeMonitor.zip > "Extract All".
+  2. Inside the extracted folder, double-click  instalar-windows.cmd
+     (if Windows warns "Windows protected your PC":
+      "More info" > "Run anyway").
+  3. VS Code shows the notice "Claude Monitor updated to {v}. Reload the window
+     to use it? (any Claude working in it will stop)": click Reload when no
+     Claude is working (reloading interrupts whatever it is doing). With more
+     than one VS Code window open, the notice shows up in each one.
+
+MAC
+  1. Double-click ClaudeMonitor.zip (the Mac extracts it by itself).
+  2. Open Terminal (Cmd+Space, type Terminal, Enter).
+  3. Type  bash  and a space, drag the file instalar-mac.sh into the Terminal
+     window and press Enter.
+  4. VS Code shows the notice "Claude Monitor updated to {v}. Reload the window
+     to use it? (any Claude working in it will stop)": click Reload when no
+     Claude is working (reloading interrupts whatever it is doing). With more
+     than one VS Code window open, the notice shows up in each one.
+
+The floating window reopens by itself with the new version.
+Did the reload notice not appear? Close and reopen VS Code.
+
+How you find out there is a new version: VS Code shows "Claude Monitor {v} is
+available (you have {old}). Download it, extract it and follow the HOW TO UPDATE.txt
+inside." with a Download button, and the window shows the line
+"↑ version X available · download".

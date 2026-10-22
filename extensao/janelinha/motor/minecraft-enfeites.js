@@ -4,7 +4,7 @@
 // grama e uma sombrinha embaixo dela; bolinha = o menor orbe de XP pintado com a cor da
 // situação; barra do usage = a barra de XP; números na letra do jogo em 11/9, suavizada.
 // Tudo que é caro (moldura, letreiros, orbes, barras pintadas) é feito 1x e guardado.
-const { IMG, tela, cache, temTexturas, reamostrar, desenharRitmo } = require('./comum');
+const { IMG, tela, cache, temTexturas, reamostrar, desenharRitmo, PALAVRAS_RITMO, PALAVRAS_RITMO_EN } = require('./comum');
 
 const TEXTURAS = ['terra', 'grama', 'orbe', 'xp_fundo', 'xp_barra', 'fonte'];
 // as 6 e no tamanho do jogo (a janelinha confere igual antes de usar cada uma)
@@ -153,6 +153,11 @@ function larguraLetra(k) {
   }
   return LARGURAS[k] || 0;
 }
+function larguraRitmo() {
+  if (!IMG.fonte) return 72;
+  const largura = texto => Math.ceil((1 + [...texto].reduce((w, ch) => w + larguraLetra(ch.charCodeAt(0)) + 1, 0)) * 11 / 9) + 4;
+  return Math.max(72, ...[...PALAVRAS_RITMO, ...PALAVRAS_RITMO_EN].map(largura));  // as 2 línguas: o idioma não mexe no layout
+}
 const LETREIROS = cache(200);
 // o texto pronto pra colar na tela: { img, kx, ky (onde o texto começa dentro dela, px), w (largura em DIPs) }
 function letreiro(texto, cor, esc) {
@@ -207,4 +212,4 @@ function desenharEnfeites(g, host, T) {
   }
 }
 
-module.exports = { TEXTURAS, prontos, desenharEnfeites, larguraLetra, letreiro };
+module.exports = { TEXTURAS, prontos, desenharEnfeites, larguraLetra, larguraRitmo, letreiro };

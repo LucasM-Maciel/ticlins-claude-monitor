@@ -21,10 +21,10 @@ const { Mundo } = require(path.join(MOTOR, 'mundo'));
 // cima e embaixo; traço de 10; linha do usage = rótulo + barra + % + ritmo + falta, na altura da letra + 4.
 const SITUACOES = [['working', '#22C55E', '12m'], ['finished', '#EF4444', '9m'], ['question', '#60A5FA', 'agora'], ['permission', '#FACC15', '21m']];
 const USOS = [['5h', 38, '1h20', 73], ['7d', 85, '2d23h', 57], ['7d', 97, '15h47', 91]];  // ..., decorrido
-function estadoDeMentira(tema, modo = 'andando', { sessoes = 4, usos = 2 } = {}) {
+function estadoDeMentira(tema, modo = 'andando', { sessoes = 4, usos = 2, ritmo = true } = {}) {
   let modulo = null;
   try { modulo = require(path.join(MOTOR, 'tema-' + tema)); } catch { /* tema que não existe: o layout do Padrão */ }
-  const L = layoutDe(modulo), col = L.colunas, [me, mc, md, mb] = L.moldura, [pe, pc, pd, pb] = L.padding;
+  const L = layoutDe(modulo), col = { ...L.colunas, ...(!ritmo ? { ritmo: 0 } : {}) }, [me, mc, md, mb] = L.moldura, [pe, pc, pd, pb] = L.padding;
   const conteudoW = Math.max(8 + 8 + 170 + col.tempo, col.rotulo + L.barra[0] + col.pct + col.ritmo + col.falta);
   const altUso = Math.max(L.letra, L.barra[1]) + 4;
   const conteudoH = sessoes * 20 + 10 + (usos ? usos * altUso : 20);
@@ -40,8 +40,8 @@ function estadoDeMentira(tema, modo = 'andando', { sessoes = 4, usos = 2 } = {})
     const caixa = (largura, alt = L.letra) => { const c = [ux, uy + (altUso - 4 - alt) / 2, largura, alt]; ux += largura; return c; };
     return {
       rotulo: { txt: rotulo, cor: '#9CA3AF', caixa: caixa(col.rotulo) }, barra: caixa(L.barra[0], L.barra[1]), pct, nivel,
-      pctTxt: { txt: pct + '%', cor, caixa: caixa(col.pct) }, decorrido,
-      ritmo: { ...ritmoDe(pct, decorrido, rotulo), caixa: caixa(col.ritmo) },
+      pctTxt: { txt: pct + '%', cor, caixa: caixa(col.pct) }, decorrido: ritmo ? decorrido : null,
+      ritmo: { ...ritmoDe(pct, ritmo ? decorrido : null, rotulo), caixa: caixa(col.ritmo) },
       falta: { txt: falta, cor: '#6B7280', caixa: caixa(col.falta) },
     };
   });

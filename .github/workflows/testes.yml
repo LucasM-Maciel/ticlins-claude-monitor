@@ -92,4 +92,7 @@ jobs:
         run: >
           gh release create "$GITHUB_REF_NAME" dist/ClaudeMonitor.zip dist/*.vsix
           --repo "$GITHUB_REPOSITORY" --title "Claude Monitor $GITHUB_REF_NAME"
-          --notes "Baixe o ClaudeMonitor.zip e siga o tutorial: https://github.com/$GITHUB_REPOSITORY#como-instalar"
+          --notes "Baixe o ClaudeMonitor.zip e siga o tutorial: https://github.com/$GITHUB_REPOSITORY#como-instalar
+
+
+          English: download ClaudeMonitor.zip and follow the guide: https://github.com/$GITHUB_REPOSITORY/blob/HEAD/README.en.md#how-to-install"

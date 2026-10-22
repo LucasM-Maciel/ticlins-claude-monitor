@@ -38,6 +38,7 @@ exports.run = run;
 exports.readSessions = readSessions;
 exports.claimSound = claimSound;
 exports.formatElapsed = formatElapsed;
+exports.lerIdioma = lerIdioma;
 /**
  * Leitura das sessões gravadas pelo hook (~/.claude/hooks/claude-monitor-hook.py).
  * Mesma lógica do claude_monitor.py: checa se o processo ainda vive, apaga
@@ -300,6 +301,7 @@ async function readSessions() {
     }
     const ttys = raw.some(([, d]) => !d.pid && d.tty) ? await ttysWithClaude() : null;
     const comFundo = (0, fundo_1.lerFundo)(now);
+    const semNome = lerIdioma() === "en" ? "session" : "sessão";
     for (const [entry, data] of raw) {
         const file = path.join(exports.SESS_DIR, entry);
         if (!isAlive(data, ttys, now)) {
@@ -322,7 +324,7 @@ async function readSessions() {
         sessions.push({
             id,
             file,
-            name: (data.agente === "codex" ? undefined : titles.get(transcript)) || data.name || "sessão",
+            name: (data.agente === "codex" ? undefined : titles.get(transcript)) || data.name || semNome,
             cwd: data.cwd || "",
             state: effectiveState({ ...data, since, transcript, fundo: comFundo.has(id) }),
             since,
@@ -387,5 +389,14 @@ function formatElapsed(seconds) {
     const hours = Math.floor(minutes / 60);
     minutes %= 60;
     return minutes ? `${hours}h${String(minutes).padStart(2, "0")}` : `${hours}h`;
+}
+/** Idioma do botão direito da janelinha (config.json): "en" ou "pt"; sem o arquivo ou a chave, "pt". */
+function lerIdioma() {
+    try {
+        return JSON.parse(fs.readFileSync(path.join(exports.MONITOR_DIR, "config.json"), "utf8").replace(/^﻿/, "")).idioma === "en" ? "en" : "pt";
+    }
+    catch {
+        return "pt";
+    }
 }
 //# sourceMappingURL=sessions.js.map

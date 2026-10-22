@@ -13,13 +13,19 @@ function Falhou($t) { Write-Host ''; Write-Host "   XX  $t" -ForegroundColor Red
 
 $casa = $env:USERPROFILE
 $pasta = Join-Path $casa '.claude-monitor'
+# o idioma do botão direito da janelinha (config.json): quem já escolheu inglês reinstala em inglês
+$ingles = $false
+try { $ingles = (Get-Content -Raw (Join-Path $pasta 'config.json') -ErrorAction Stop | ConvertFrom-Json).idioma -eq 'en' } catch {}
+function Tr($pt, $en) {
+    if ($ingles) { $en } else { $pt }
+}
 $vsix = Get-ChildItem (Join-Path $PSScriptRoot 'claude-monitor-*.vsix') -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending | Select-Object -First 1
-if (-not $vsix) { Falhou "Não achei o claude-monitor-*.vsix na pasta $PSScriptRoot. Extraia o .zip inteiro antes de rodar." }
+if (-not $vsix) { Falhou (Tr "Não achei o claude-monitor-*.vsix na pasta $PSScriptRoot. Extraia o .zip inteiro antes de rodar." "Couldn't find claude-monitor-*.vsix in $PSScriptRoot. Extract the whole .zip before running this.") }
 $versao = $vsix.BaseName -replace '^claude-monitor-', ''
 Write-Host "Claude Monitor $versao" -ForegroundColor Cyan
 
-Passo 'Procurando o VS Code / Cursor'
+Passo (Tr 'Procurando o VS Code / Cursor' 'Looking for VS Code / Cursor')
 $editores = @()
 foreach ($e in @(
         # o Cursor põe um code.cmd dele no PATH (...\cursor\resources\app\codeBin): esse não é o VS Code
@@ -30,16 +36,16 @@ foreach ($e in @(
     if (-not $exe) { $exe = $e.fixos | Where-Object { Test-Path $_ } | Select-Object -First 1 }
     if ($exe) { $editores += @{ nome = $e.nome; exe = $exe }; Ok "$($e.nome): $exe" }
 }
-if (-not $editores) { Falhou 'Não achei o VS Code nem o Cursor. Instale o VS Code (https://code.visualstudio.com) e rode de novo.' }
+if (-not $editores) { Falhou (Tr 'Não achei o VS Code nem o Cursor. Instale o VS Code (https://code.visualstudio.com) e rode de novo.' "Couldn't find VS Code or Cursor. Install VS Code (https://code.visualstudio.com) and run this again.") }
 
-Passo 'Instalando a extensão'
+Passo (Tr 'Instalando a extensão' 'Installing the extension')
 foreach ($e in $editores) {
     $saida = & $e.exe --install-extension $vsix.FullName --force 2>&1
-    if ($LASTEXITCODE -ne 0) { Aviso "$($e.nome) não aceitou a extensão:"; $saida | ForEach-Object { Write-Host "       $_" } }
+    if ($LASTEXITCODE -ne 0) { Aviso (Tr "$($e.nome) não aceitou a extensão:" "$($e.nome) didn't accept the extension:"); $saida | ForEach-Object { Write-Host "       $_" } }
     else { Ok $e.nome }
 }
 
-Passo 'Copiando os arquivos pra ~/.claude-monitor'
+Passo (Tr 'Copiando os arquivos pra ~/.claude-monitor' 'Copying the files to ~/.claude-monitor')
 # os mesmos que a extensão copia quando o VS Code abre; aqui já saem de dentro do .vsix (é um zip)
 New-Item -ItemType Directory -Force $pasta | Out-Null
 # instalação nova começa no tema Padrão; quem já usava (tem versao-janelinha) fica no
@@ -75,9 +81,9 @@ $zip = [IO.Compression.ZipFile]::OpenRead($vsix.FullName)
 try {
     # pastas inteiras (o motor das animações e os sons dos temas) ANTES do overlay.ps1: a
     # janelinha aberta se reabre ao ver o overlay novo e já acha o motor novo
-    foreach ($pastaDoVsix in 'motor', 'sons-padrao', 'sons-dragonball', 'sons-sith', 'sons-akatsuki') {
+    foreach ($pastaDoVsix in 'motor', 'sons-padrao', 'sons-dragonball', 'sons-sith', 'sons-akatsuki', 'sons-elden') {
         $entradas = @($zip.Entries | Where-Object { $_.FullName -like "extension/janelinha/$pastaDoVsix/*" -and $_.Name })
-        if (-not $entradas) { Falhou "O .vsix está incompleto (falta janelinha/$pastaDoVsix/). Baixe de novo." }
+        if (-not $entradas) { Falhou (Tr "O .vsix está incompleto (falta janelinha/$pastaDoVsix/). Baixe de novo." "The .vsix is incomplete (janelinha/$pastaDoVsix/ is missing). Download it again.") }
         New-Item -ItemType Directory -Force "$pasta\$pastaDoVsix" | Out-Null
         foreach ($entrada in $entradas) { Extrair $entrada (Join-Path "$pasta\$pastaDoVsix" $entrada.Name) }
     }
@@ -87,13 +93,13 @@ try {
     }
     foreach ($nome in $copias.Keys) {
         $entrada = $zip.GetEntry("extension/$nome")
-        if (-not $entrada) { Falhou "O .vsix está incompleto (falta $nome). Baixe de novo." }
+        if (-not $entrada) { Falhou (Tr "O .vsix está incompleto (falta $nome). Baixe de novo." "The .vsix is incomplete ($nome is missing). Download it again.") }
         Extrair $entrada (Join-Path $copias[$nome] (Split-Path $nome -Leaf))
     }
 } catch {
     # erro de .NET aqui dentro só parava este bloco: o instalador seguia e dizia "Pronto!"
     $motivo = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $_.Exception.Message }
-    Falhou "Não consegui trocar um arquivo em $pasta`n       $motivo`n       Feche a janelinha (botão direito > Fechar) e o que estiver usando esse arquivo, e rode o instalador de novo."
+    Falhou (Tr "Não consegui trocar um arquivo em $pasta`n       $motivo`n       Feche a janelinha (botão direito > Fechar) e o que estiver usando esse arquivo, e rode o instalador de novo." "Couldn't replace a file in $pasta`n       $motivo`n       Close the floating window (right-click > Close) and whatever is using that file, then run the installer again.")
 } finally { $zip.Dispose() }
 # a extensão só recopia quando a versão muda: só marca com tudo copiado
 [IO.File]::WriteAllText((Join-Path $pasta 'versao-janelinha'), $versao)
@@ -101,11 +107,11 @@ try {
 Anotar "copiou a janelinha $versao"
 Ok $pasta
 
-Passo 'Ligando o Claude Code na extensão (hooks)'
+Passo (Tr 'Ligando o Claude Code na extensão (hooks)' 'Connecting Claude Code to the extension (hooks)')
 $node = (Get-Command node.exe -ErrorAction SilentlyContinue | Select-Object -First 1).Source
 if (-not $node -and (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
-    Aviso 'Falta o Node.js: o Claude Code usa ele pra avisar quais sessões estão rodando.'
-    $r = Read-Host '       Instalar agora? (S/n)'
+    Aviso (Tr 'Falta o Node.js: o Claude Code usa ele pra avisar quais sessões estão rodando.' 'Node.js is missing: Claude Code uses it to report which sessions are running.')
+    $r = Read-Host (Tr '       Instalar agora? (S/n)' '       Install it now? (Y/n)')
     if ($r -notmatch '^[nN]') {
         winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
         $node = @("$env:ProgramFiles\nodejs\node.exe", "$env:LOCALAPPDATA\Programs\nodejs\node.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -113,25 +119,25 @@ if (-not $node -and (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
 }
 if ($node) {
     $saida = & $node -e "require(process.argv[1]).installHooks()" (Join-Path $temp 'install.js') 2>&1
-    if ($LASTEXITCODE -eq 0) { Ok 'hooks no ~/.claude/settings.json (cópia do anterior em settings.json.bak-claude-monitor)' }
-    else { Aviso "Não consegui mexer no ~/.claude/settings.json: $saida"; Aviso 'Depois, no VS Code: Ctrl+Shift+P > "Claude Monitor: Instalar hooks no Claude Code".' }
+    if ($LASTEXITCODE -eq 0) { Ok (Tr 'hooks no ~/.claude/settings.json (cópia do anterior em settings.json.bak-claude-monitor)' 'hooks in ~/.claude/settings.json (the previous one is copied to settings.json.bak-claude-monitor)') }
+    else { Aviso (Tr "Não consegui mexer no ~/.claude/settings.json: $saida" "Couldn't change ~/.claude/settings.json: $saida"); Aviso (Tr 'Depois, no VS Code: Ctrl+Shift+P > "Claude Monitor: Instalar hooks no Claude Code".' 'Later, in VS Code: Ctrl+Shift+P > "Claude Monitor: Instalar hooks no Claude Code".') }
 } else {
-    Aviso 'Sem Node.js as sessões não aparecem. Instale a versão LTS em https://nodejs.org e rode este instalador de novo.'
+    Aviso (Tr 'Sem Node.js as sessões não aparecem. Instale a versão LTS em https://nodejs.org e rode este instalador de novo.' "Without Node.js the sessions don't show up. Install the LTS version from https://nodejs.org and run this installer again.")
 }
 Remove-Item -Recurse -Force $temp -ErrorAction SilentlyContinue
 
-Passo 'Sons do Minecraft (do servidor da Mojang: não precisa ter o jogo)'
+Passo (Tr 'Sons do Minecraft (do servidor da Mojang: não precisa ter o jogo)' "Minecraft sounds (from Mojang's server: you don't need the game)")
 if ($node) { & $node (Join-Path $pasta 'minecraft.js') }
-else { Aviso 'Sem Node.js a janelinha fica com os sons do Windows.' }
+else { Aviso (Tr 'Sem Node.js a janelinha fica com os sons do Windows.' 'Without Node.js the floating window keeps the Windows sounds.') }
 
 if (-not $SemAtalho) {
-    Passo 'Atalho "Claude Monitor" na Área de Trabalho (reabre a janelinha)'
+    Passo (Tr 'Atalho "Claude Monitor" na Área de Trabalho (reabre a janelinha)' '"Claude Monitor" shortcut on the Desktop (reopens the floating window)')
     $atalho = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Claude Monitor.lnk'))
     $atalho.TargetPath = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
     $atalho.Arguments = "-WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File `"$pasta\overlay.ps1`""
     $atalho.WindowStyle = 7  # minimizado
     $atalho.Save()
-    Ok 'feito'
+    Ok (Tr 'feito' 'done')
 }
 
 if (-not $SemAbrir) {
@@ -139,6 +145,13 @@ if (-not $SemAbrir) {
 }
 
 Write-Host ''
-Write-Host 'Pronto! A janelinha aparece no canto de baixo à direita.' -ForegroundColor Green
-Write-Host 'Feche e abra o VS Code de novo. Sessões do Claude que já estavam abertas'
-Write-Host 'precisam ser reabertas pra aparecer (as novas aparecem sozinhas).'
+if ($ingles) {
+    Write-Host 'Done! The floating window shows up in the bottom-right corner.' -ForegroundColor Green
+    Write-Host 'Close and reopen VS Code. Claude sessions that were already open'
+    Write-Host 'need to be reopened to show up (new ones show up on their own).'
+} else {
+    Write-Host 'Pronto! A janelinha aparece no canto de baixo à direita.' -ForegroundColor Green
+    Write-Host 'Feche e abra o VS Code de novo. Sessões do Claude que já estavam abertas'
+    Write-Host 'precisam ser reabertas pra aparecer (as novas aparecem sozinhas).'
+    Write-Host 'Language: right-click the floating window > "Idioma" > English.'
+}

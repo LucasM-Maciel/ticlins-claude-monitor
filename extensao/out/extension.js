@@ -48,11 +48,13 @@ const POLL_MS = 1000;
 // ordem na lista: o mais urgente em cima
 const PRIORITY = { permission: 0, waiting: 1, working: 2, seen: 3 };
 const LOOK = {
-    permission: { icon: "shield", color: "charts.orange", label: "pedindo permissão" },
-    waiting: { icon: "bell-dot", color: "charts.red", label: "esperando você" },
-    working: { icon: "sync~spin", color: "charts.green", label: "trabalhando" },
-    seen: { icon: "circle-outline", color: "disabledForeground", label: "parado" },
+    permission: { icon: "shield", color: "charts.orange", label: "pedindo permissão", en: "needs permission" },
+    waiting: { icon: "bell-dot", color: "charts.red", label: "esperando você", en: "waiting for you" },
+    working: { icon: "sync~spin", color: "charts.green", label: "trabalhando", en: "working" },
+    seen: { icon: "circle-outline", color: "disabledForeground", label: "parado", en: "idle" },
 };
+let idioma = "pt"; // o do botão direito da janelinha (config.json): relido a cada ciclo
+const tr = (pt, en) => (idioma === "en" ? en : pt);
 let sessions = [];
 const lastStates = new Map();
 const seen = new Map(); // session id -> `since` do estado já visto
@@ -74,12 +76,13 @@ class SessionItem extends vscode.TreeItem {
         const state = displayState(session);
         const look = LOOK[state];
         const elapsed = (0, sessions_1.formatElapsed)(Date.now() / 1000 - session.since);
-        this.description = `${session.agente === "codex" ? "codex · " : ""}${look.label} há ${elapsed} · ${projectName(session)}`;
-        this.tooltip = new vscode.MarkdownString(`**${session.name}**\n\n${look.label} há ${elapsed}\n\n\`${session.cwd}\`` +
-            (session.agente === "codex" ? "\n\nagente: codex" : "") +
-            (isPanelSession(session) ? (session.agente === "codex" ? "\n\npainel do Codex no VSCode" : "\n\npainel do Claude no VSCode") : "\n\nterminal"));
+        const ha = tr(`${look.label} há ${elapsed}`, `${look.en} for ${elapsed}`);
+        this.description = `${session.agente === "codex" ? "codex · " : ""}${ha} · ${projectName(session)}`;
+        this.tooltip = new vscode.MarkdownString(`**${session.name}**\n\n${ha}\n\n\`${session.cwd}\`` +
+            (session.agente === "codex" ? tr("\n\nagente: codex", "\n\nagent: codex") : "") +
+            (isPanelSession(session) ? (session.agente === "codex" ? tr("\n\npainel do Codex no VSCode", "\n\nCodex panel in VS Code") : tr("\n\npainel do Claude no VSCode", "\n\nClaude panel in VS Code")) : "\n\nterminal"));
         this.iconPath = new vscode.ThemeIcon(look.icon, look.color ? new vscode.ThemeColor(look.color) : undefined);
-        this.command = { command: "claudeMonitor.focusSession", title: "Focar sessão", arguments: [session] };
+        this.command = { command: "claudeMonitor.focusSession", title: tr("Focar sessão", "Focus session"), arguments: [session] };
         this.contextValue = state === "waiting" ? "claudeSession.unseen" : "claudeSession";
     }
 }
@@ -94,7 +97,7 @@ class SessionsProvider {
     }
     getChildren() {
         if (sessions.length === 0) {
-            const empty = new vscode.TreeItem("Nenhuma sessão ativa");
+            const empty = new vscode.TreeItem(tr("Nenhuma sessão ativa", "No active sessions"));
             empty.iconPath = new vscode.ThemeIcon("circle-slash");
             return [empty];
         }
@@ -106,9 +109,10 @@ class SessionsProvider {
 // compilado aqui na 1ª vez (precisa das ferramentas de linha de comando da Apple).
 // Linux: overlay-linux.py (Python + GTK 3, já vem no Ubuntu/Fedora com GNOME).
 // Pastas inteiras (terminam em /): motor/ (as animações, docs/MOTOR.md), sons-padrao/ (feitos
-// pelo sons-padrao.py), sons-dragonball/ (CC0) sons-sith/ (feitos pelo sons-sith.py) e sons-akatsuki/ (pelo sons-akatsuki.py); os do Minecraft vêm da Mojang. O overlay vai
+// pelo sons-padrao.py), sons-dragonball/ (CC0), sons-sith/ (pelo sons-sith.py), sons-akatsuki/
+// (pelo sons-akatsuki.py) e sons-elden/ (pelo sons-elden.py); os do Minecraft vêm da Mojang. O overlay vai
 // por último: a janelinha aberta se reabre ao ver ele mudar e já acha o motor novo.
-const PASTAS_JANELINHA = ["motor/", "sons-padrao/", "sons-dragonball/", "sons-sith/", "sons-akatsuki/"];
+const PASTAS_JANELINHA = ["motor/", "sons-padrao/", "sons-dragonball/", "sons-sith/", "sons-akatsuki/", "sons-elden/"];
 const JANELINHA = {
     win32: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay.ps1"],
     darwin: [...PASTAS_JANELINHA, "minecraft.js", "vorbis.min.js", "overlay.swift"],
@@ -198,10 +202,11 @@ function conferirAtualizacao(versao) {
     if (instalada.localeCompare(versao, undefined, { numeric: true }) <= 0)
         return;
     avisouAtualizacao = true;
+    const recarregar = tr("Recarregar", "Reload");
     vscode.window
-        .showInformationMessage(`Claude Monitor atualizou pra ${instalada}. Recarregar a janela pra usar? (o Claude que estiver trabalhando nela para)`, "Recarregar")
+        .showInformationMessage(tr(`Claude Monitor atualizou pra ${instalada}. Recarregar a janela pra usar? (o Claude que estiver trabalhando nela para)`, `Claude Monitor updated to ${instalada}. Reload the window to use it? (any Claude working in it will stop)`), recarregar)
         .then((escolha) => {
-        if (escolha === "Recarregar")
+        if (escolha === recarregar)
             vscode.commands.executeCommand("workbench.action.reloadWindow");
     });
 }
@@ -237,8 +242,9 @@ async function conferirPublicada(versao) {
     }
     if (publicada.localeCompare(versao, undefined, { numeric: true }) <= 0)
         return;
-    const escolha = await vscode.window.showInformationMessage(`Claude Monitor ${publicada} disponível (você tem a ${versao}). Baixe, extraia e siga o COMO ATUALIZAR.txt que vem dentro.`, "Baixar");
-    if (escolha === "Baixar")
+    const baixar = tr("Baixar", "Download");
+    const escolha = await vscode.window.showInformationMessage(tr(`Claude Monitor ${publicada} disponível (você tem a ${versao}). Baixe, extraia e siga o COMO ATUALIZAR.txt que vem dentro.`, `Claude Monitor ${publicada} is available (you have ${versao}). Download it, extract it and follow the HOW TO UPDATE.txt inside.`), baixar);
+    if (escolha === baixar)
         vscode.env.openExternal(vscode.Uri.parse(`https://github.com/${REPO}/releases/latest/download/ClaudeMonitor.zip`));
 }
 /** Mac: compila overlay.swift quando o binário não existe ou ficou mais velho que ele. */
@@ -276,20 +282,21 @@ async function abrirJanelinha() {
     }
     else if (process.platform === "darwin") {
         if (!(await (0, sessions_1.run)("xcode-select", ["-p"]))) {
-            const escolha = await vscode.window.showWarningMessage("Claude Monitor: a janelinha no Mac precisa das ferramentas de linha de comando da Apple (uns minutos, uma vez só). Depois de instalar, reabra o VS Code.", "Instalar", "Não usar a janelinha");
-            if (escolha === "Instalar")
+            const instalar = tr("Instalar", "Install"), naoUsar = tr("Não usar a janelinha", "Don't use the floating window");
+            const escolha = await vscode.window.showWarningMessage(tr("Claude Monitor: a janelinha no Mac precisa das ferramentas de linha de comando da Apple (uns minutos, uma vez só). Depois de instalar, reabra o VS Code.", "Claude Monitor: the floating window on Mac needs Apple's command line tools (a few minutes, only once). After installing them, reopen VS Code."), instalar, naoUsar);
+            if (escolha === instalar)
                 (0, child_process_1.execFile)("xcode-select", ["--install"], () => { });
-            else if (escolha === "Não usar a janelinha")
+            else if (escolha === naoUsar)
                 vscode.workspace.getConfiguration("claudeMonitor").update("overlay", false, vscode.ConfigurationTarget.Global);
             return;
         }
         try {
             const compilando = compilarMac();
-            vscode.window.setStatusBarMessage("$(sync~spin) Claude Monitor: preparando a janelinha…", compilando);
+            vscode.window.setStatusBarMessage(tr("$(sync~spin) Claude Monitor: preparando a janelinha…", "$(sync~spin) Claude Monitor: preparing the floating window…"), compilando);
             await compilando;
         }
         catch (err) {
-            vscode.window.showErrorMessage(`Claude Monitor: não consegui compilar a janelinha (${err.message.slice(0, 300)})`);
+            vscode.window.showErrorMessage(tr(`Claude Monitor: não consegui compilar a janelinha (${err.message.slice(0, 300)})`, `Claude Monitor: couldn't compile the floating window (${err.message.slice(0, 300)})`));
             return;
         }
         // o binário garante um só (trava em ~/.claude-monitor/overlay.lock)
@@ -312,8 +319,9 @@ async function abrirJanelinha() {
         // GTK + a ponte com o cairo (o instalador baixa a ponte pra ~/.claude-monitor/gi-cairo se faltar)
         const teste = "import gi,os,sys; gi.__path__.append(os.path.expanduser('~/.claude-monitor/gi-cairo')); gi.require_foreign('cairo'); gi.require_version('Gtk','3.0'); from gi.repository import Gtk";
         if ((await (0, sessions_1.run)("python3", ["-c", teste])) === null) {
-            const escolha = await vscode.window.showWarningMessage("Claude Monitor: a janelinha no Linux precisa do Python com GTK 3 (sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0). Depois de instalar, reabra o VS Code.", "Não usar a janelinha");
-            if (escolha === "Não usar a janelinha")
+            const naoUsar = tr("Não usar a janelinha", "Don't use the floating window");
+            const escolha = await vscode.window.showWarningMessage(tr("Claude Monitor: a janelinha no Linux precisa do Python com GTK 3 (sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0). Depois de instalar, reabra o VS Code.", "Claude Monitor: the floating window on Linux needs Python with GTK 3 (sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0). After installing it, reopen VS Code."), naoUsar);
+            if (escolha === naoUsar)
                 vscode.workspace.getConfiguration("claudeMonitor").update("overlay", false, vscode.ConfigurationTarget.Global);
             return;
         }
@@ -399,16 +407,16 @@ function baixarMinecraft() {
 /** Comando "Usar sons do Minecraft": baixa de novo, com o andamento na tela. */
 async function usarMinecraft() {
     try {
-        const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Claude Monitor: baixando os sons do Minecraft..." }, baixarMinecraft);
+        const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: tr("Claude Monitor: baixando os sons do Minecraft...", "Claude Monitor: downloading the Minecraft sounds...") }, baixarMinecraft);
         anotar(`baixou os sons do Minecraft ${r.versao} (${r.sons} sons, ${r.texturas} texturas)`);
         if (r.sons)
-            vscode.window.showInformationMessage(`Claude Monitor: pronto, a janelinha está com os sons do Minecraft ${r.versao}.`);
+            vscode.window.showInformationMessage(tr(`Claude Monitor: pronto, a janelinha está com os sons do Minecraft ${r.versao}.`, `Claude Monitor: done, the floating window now has the Minecraft ${r.versao} sounds.`));
         else
-            vscode.window.showWarningMessage("Claude Monitor: não veio nenhum som do Minecraft; a janelinha segue com os sons do sistema.");
+            vscode.window.showWarningMessage(tr("Claude Monitor: não veio nenhum som do Minecraft; a janelinha segue com os sons do sistema.", "Claude Monitor: no Minecraft sound came through; the floating window keeps the system sounds."));
     }
     catch (err) {
         anotar(`não baixei os sons do Minecraft: ${err.message}`);
-        vscode.window.showWarningMessage(`Claude Monitor: não consegui falar com o servidor da Mojang (${err.message}). Sem internet? Tente de novo depois.`);
+        vscode.window.showWarningMessage(tr(`Claude Monitor: não consegui falar com o servidor da Mojang (${err.message}). Sem internet? Tente de novo depois.`, `Claude Monitor: couldn't reach Mojang's server (${err.message}). No internet? Try again later.`));
     }
 }
 /**
@@ -598,8 +606,9 @@ async function focusSession(s) {
         await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(s.cwd), { forceNewWindow: true });
         return;
     }
-    const action = await vscode.window.showWarningMessage(`Não achei onde "${s.name}" está rodando.`, "Ver diagnóstico");
-    if (action === "Ver diagnóstico")
+    const verDiagnostico = tr("Ver diagnóstico", "Show diagnostics");
+    const action = await vscode.window.showWarningMessage(tr(`Não achei onde "${s.name}" está rodando.`, `Couldn't find where "${s.name}" is running.`), verDiagnostico);
+    if (action === verDiagnostico)
         vscode.commands.executeCommand("claudeMonitor.debug");
 }
 let debugChannel;
@@ -607,20 +616,21 @@ async function debugTerminals() {
     debugChannel ??= vscode.window.createOutputChannel("Claude Monitor — Debug");
     const channel = debugChannel;
     channel.clear();
-    channel.appendLine(`Sessões conhecidas (${sessions_1.SESS_DIR}):`);
+    const nenhum = tr("(nenhum)", "(none)");
+    channel.appendLine(tr(`Sessões conhecidas (${sessions_1.SESS_DIR}):`, `Known sessions (${sessions_1.SESS_DIR}):`));
     for (const s of sessions) {
         channel.appendLine(`  - ${s.name}  [${s.state}]  id=${s.id}`);
-        channel.appendLine(`      cwd=${s.cwd}  pid=${s.pid ?? "(nenhum)"}  entrypoint=${s.entrypoint ?? "(nenhum)"}`);
+        channel.appendLine(`      cwd=${s.cwd}  pid=${s.pid ?? nenhum}  entrypoint=${s.entrypoint ?? nenhum}`);
     }
     channel.appendLine("");
-    channel.appendLine(`Hooks instalados no Claude Code: ${(0, install_1.hooksInstalled)() ? "sim" : "NÃO"}`);
+    channel.appendLine(tr(`Hooks instalados no Claude Code: ${(0, install_1.hooksInstalled)() ? "sim" : "NÃO"}`, `Hooks installed in Claude Code: ${(0, install_1.hooksInstalled)() ? "yes" : "NO"}`));
     channel.appendLine("");
     const table = await (0, processes_1.processTableAsync)();
-    channel.appendLine(`Abas de terminal abertas (${vscode.window.terminals.length}):`);
+    channel.appendLine(tr(`Abas de terminal abertas (${vscode.window.terminals.length}):`, `Open terminal tabs (${vscode.window.terminals.length}):`));
     for (const t of vscode.window.terminals) {
         const pid = await t.processId;
         const owner = pid ? sessions.find((s) => s.pid && table && (0, processes_1.ancestors)(table, s.pid).includes(pid)) : undefined;
-        channel.appendLine(`  - "${t.name}"  shell pid=${pid ?? "?"}  sessão=${owner?.name ?? "(nenhuma)"}`);
+        channel.appendLine(`  - "${t.name}"  shell pid=${pid ?? "?"}  ${tr("sessão", "session")}=${owner?.name ?? tr("(nenhuma)", "(none)")}`);
     }
     channel.show();
 }
@@ -628,7 +638,7 @@ const provider = new SessionsProvider();
 async function runInstall() {
     try {
         (0, install_1.installHooks)();
-        vscode.window.showInformationMessage("Hooks do Claude Monitor instalados. Sessões do Claude que já estavam abertas precisam ser reiniciadas pra aparecer.");
+        vscode.window.showInformationMessage(tr("Hooks do Claude Monitor instalados. Sessões do Claude que já estavam abertas precisam ser reiniciadas pra aparecer.", "Claude Monitor hooks installed. Claude sessions that were already open need a restart to show up."));
         conferirNode();
     }
     catch (err) {
@@ -637,19 +647,20 @@ async function runInstall() {
 }
 function activate(context) {
     contextoExt = context;
+    idioma = (0, sessions_1.lerIdioma)();
     fs.mkdirSync(sessions_1.SESS_DIR, { recursive: true });
     try {
         (0, install_1.copyHookFiles)(context.extensionPath);
         (0, install_1.gravarNodeReserva)(process.execPath); // o sem-node.sh (plano B do hook) roda neste node
     }
     catch (err) {
-        vscode.window.showErrorMessage(`Claude Monitor: não consegui copiar o hook (${err.message})`);
+        vscode.window.showErrorMessage(tr(`Claude Monitor: não consegui copiar o hook (${err.message})`, `Claude Monitor: couldn't copy the hook (${err.message})`));
     }
     try {
         copiarJanelinha(context);
     }
     catch (err) {
-        vscode.window.showErrorMessage(`Claude Monitor: não consegui copiar a janelinha (${err.message})`);
+        vscode.window.showErrorMessage(tr(`Claude Monitor: não consegui copiar a janelinha (${err.message})`, `Claude Monitor: couldn't copy the floating window (${err.message})`));
     }
     if (janelinhaLigada())
         abrirJanelinha();
@@ -668,10 +679,11 @@ function activate(context) {
         }
     }
     else {
+        const instalar = tr("Instalar", "Install");
         vscode.window
-            .showInformationMessage("Claude Monitor: instalar os hooks no Claude Code pra acompanhar as sessões?", "Instalar")
+            .showInformationMessage(tr("Claude Monitor: instalar os hooks no Claude Code pra acompanhar as sessões?", "Claude Monitor: install the hooks in Claude Code to follow your sessions?"), instalar)
             .then((action) => {
-            if (action === "Instalar")
+            if (action === instalar)
                 runInstall();
         });
     }
@@ -687,9 +699,10 @@ function activate(context) {
         // toast só na janela focada, senão aparece em todas
         if (config.get("showNotifications", true) && vscode.window.state.focused) {
             const quem = s.agente === "codex" ? "Codex" : "Claude";
-            const msg = s.state === "permission" ? `${quem} pedindo permissão: ${s.name}` : `${quem} terminou: ${s.name}`;
-            vscode.window.showInformationMessage(msg, "Abrir").then((action) => {
-                if (action === "Abrir")
+            const msg = s.state === "permission" ? tr(`${quem} pedindo permissão: ${s.name}`, `${quem} needs permission: ${s.name}`) : tr(`${quem} terminou: ${s.name}`, `${quem} finished: ${s.name}`);
+            const abrir = tr("Abrir", "Open");
+            vscode.window.showInformationMessage(msg, abrir).then((action) => {
+                if (action === abrir)
                     focusSession(s);
             });
         }
@@ -710,9 +723,9 @@ function activate(context) {
         statusBar.backgroundColor = counts.permission
             ? new vscode.ThemeColor("statusBarItem.warningBackground")
             : undefined;
-        statusBar.tooltip = "Claude Monitor — clique pra abrir a lista de sessões";
+        statusBar.tooltip = tr("Claude Monitor — clique pra abrir a lista de sessões", "Claude Monitor — click to open the session list");
         const pending = counts.permission + counts.waiting;
-        view.badge = pending ? { value: pending, tooltip: `${pending} sessão(ões) esperando você` } : undefined;
+        view.badge = pending ? { value: pending, tooltip: tr(`${pending} sessão(ões) esperando você`, `${pending} session(s) waiting for you`) } : undefined;
         provider.refresh();
     }
     let running = false;
@@ -721,6 +734,7 @@ function activate(context) {
             return;
         running = true;
         try {
+            idioma = (0, sessions_1.lerIdioma)(); // trocou no menu da janelinha: vale no próximo ciclo
             conferirAtualizacao(context.extension.packageJSON.version);
             (0, codex_1.sincronizarCodex)(); // sessões e uso do Codex viram arquivos; só mexe se ~/.codex existe
             (0, fundo_1.sincronizarFundo)(); // sessão "terminou" com comando rodando em segundo plano: avisa as janelinhas
@@ -780,7 +794,7 @@ function activate(context) {
             if (s)
                 await focusSession(s);
             else
-                vscode.window.showWarningMessage("Claude Monitor: essa sessão já fechou.");
+                vscode.window.showWarningMessage(tr("Claude Monitor: essa sessão já fechou.", "Claude Monitor: that session has already closed."));
         },
     }));
     tick();

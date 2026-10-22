@@ -28,6 +28,7 @@ const VS = 330, VB = 95, VMAX = 105;             // tiro, bomba, Clawd deslizand
 const RECUO = 0.12, CHEGA = 0.03;                // o Clawd fica parado no tiro e chega um pouco antes do próximo
 const LIGA = 0.45, CAI = [0.5, 0.82], SURGE = 1.0, SURGE_DT = 0.06, MARCHA = 2.25, FOGO = 2.55;
 const CHEFE = { ida: 6.9, dur: 3.4, tiro: 7.5 };
+const CW_REF = 276;                              // largura do cartão (px) com a qual a nave leva CHEFE.dur para cruzar
 const PAUSA = 0.45;                              // o último bug parado, antes de disparar
 const RW = 22 * PB, RH = 12 * PB;                // a nave do Bug-rei
 
@@ -122,7 +123,8 @@ function montar(m, r) {
   J.vaos = Array.from({ length: n + 1 }, (_, i) => lim(Math.round(MARG + folga / 2 + i * (EW + folga)), J.xMin, J.xMax));
   J.dir0 = r() < 0.5 ? 1 : -1;
   const daEsq = r() < 0.5;  // a nave entra por um lado e sai pelo outro
-  J.chefe = { x0: daEsq ? -RW : cw, x1: daEsq ? cw : -RW, y: -HJ + 15, dir: daEsq ? 1 : -1, morte: Infinity };
+  // a nave cruza o cartão na mesma velocidade qualquer que seja a largura dele (o Clawd tem de chegar a tempo do tiro)
+  J.chefe = { x0: daEsq ? -RW : cw, x1: daEsq ? cw : -RW, y: -HJ + 15, dir: daEsq ? 1 : -1, morte: Infinity, dur: CHEFE.dur * (cw + RW) / (CW_REF + RW) };
   return J;
 }
 
@@ -173,8 +175,8 @@ function passoEm(M, t) {
 }
 function chefeEm(J, t) {
   const c = J.chefe;
-  if (t < CHEFE.ida || t >= CHEFE.ida + CHEFE.dur || t >= c.morte) return null;
-  return { x: c.x0 + (c.x1 - c.x0) * (t - CHEFE.ida) / CHEFE.dur, y: c.y };
+  if (t < CHEFE.ida || t >= CHEFE.ida + c.dur || t >= c.morte) return null;
+  return { x: c.x0 + (c.x1 - c.x0) * (t - CHEFE.ida) / c.dur, y: c.y };
 }
 // o tiro do Clawd saindo de x em tF: em quem bate primeiro (bug, nave) ou se sai pelo topo
 function tiro(J, M, x, tF) {
@@ -244,9 +246,9 @@ function mirarFixo(J, M, x, prev, tProx) {
 }
 // a nave: tiro difícil, com ela já a 1/4 do caminho, por um vão da formação
 function mirarChefe(J, M, prev, tProx) {
-  for (let tF = tProx; tF < CHEFE.ida + CHEFE.dur - 0.5; tF += 1 / 60) {
+  for (let tF = tProx; tF < CHEFE.ida + J.chefe.dur - 0.5; tF += 1 / 60) {
     const tH = tF + (PONTA - (J.chefe.y + RH)) / VS, c = chefeEm(J, tH);
-    if (!c || (tH - CHEFE.ida) / CHEFE.dur < 0.25) continue;
+    if (!c || (tH - CHEFE.ida) / J.chefe.dur < 0.25) continue;
     const x = c.x + RW / 2;
     if (x < J.xMin || x > J.xMax || tF < chegaEm(prev, x) || !livre(J, x, tF)) continue;
     const res = tiro(J, M, x, tF);
@@ -293,7 +295,7 @@ function planejar(J, r, ritmo = 1) {
     if (!chefe && tProx >= CHEFE.tiro) {  // tenta a cada baixa, enquanto a nave passa
       const a = mirarChefe(J, M, prev, tProx);
       if (a) { chefe = true; acoes.push(a); J.chefe.morte = a.tH; prev = a; tProx = a.tH + 0.12; continue; }
-      if (tProx > CHEFE.ida + CHEFE.dur) chefe = true;
+      if (tProx > CHEFE.ida + J.chefe.dur) chefe = true;
     }
     if (!cavou && n === 4) {
       cavou = true;
@@ -697,7 +699,7 @@ function desenharEfeitos(g, t, J, X, Y, M) {
         g.globalAlpha = 1;
       }
     } else if (a.tipo === 'chefe') {
-      const c0 = J.chefe, cx = c0.x0 + (c0.x1 - c0.x0) * (a.tH - CHEFE.ida) / CHEFE.dur + RW / 2, cy = c0.y + RH / 2;
+      const c0 = J.chefe, cx = c0.x0 + (c0.x1 - c0.x0) * (a.tH - CHEFE.ida) / c0.dur + RW / 2, cy = c0.y + RH / 2;
       if (d < 0.07) { const img = reiArte(0, c0.dir > 0); g.drawImage(tingida(img, '#FFFFFF', 'rei' + c0.dir), X(cx - RW / 2), Y(c0.y), RW, RH); }
       fumaca(g, X(cx), Y(cy), d - 0.05, 1.8);
       faiscas(g, X(cx), Y(cy), d - 0.02);
@@ -763,7 +765,7 @@ function sons(J) {
     else if (a.tipo === 'chefe') L.push([a.tH, S('nave-explode'), 0.6], [a.tH + 0.2, S('pontos'), 0.35]);
     else if (a.tipo === 'final') L.push([a.tH, S('nave-explode'), 0.7]);
   }
-  L.push([CHEFE.ida, S('nave'), 0.3, 1, Math.min(CHEFE.dur, J.chefe.morte - CHEFE.ida)]);  // o apito da nave até ela explodir
+  L.push([CHEFE.ida, S('nave'), 0.3, 1, Math.min(J.chefe.dur, J.chefe.morte - CHEFE.ida)]);  // o apito da nave até ela explodir
   L.push([J.tVisto, S('clear'), 0.5], [J.tOff, S('desliga'), 0.5]);
   return L.map(([t, a, g, ...r]) => [t, a, g * VOLUME, ...r]);
 }

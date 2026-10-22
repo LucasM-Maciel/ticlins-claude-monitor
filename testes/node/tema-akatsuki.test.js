@@ -220,7 +220,7 @@ test('layout: enfeites do tema, moldura de 2 px e as colunas de sempre', () => {
   const l = layoutDe(tema);
   assert.strictEqual(l.enfeites, true);
   assert.deepStrictEqual(l.moldura, [2, 2, 2, 2]);
-  assert.deepStrictEqual(l.colunas, { tempo: 36, pct: 38, ritmo: 34, falta: 48, rotulo: 18 });
+  assert.deepStrictEqual(l.colunas, { tempo: 36, pct: 38, ritmo: 72, falta: 48, rotulo: 18 });
 });
 
 test('a moldura é chapada: um fio vermelho de 1 px na borda e, por dentro, só as nuvens (sem brilho, sem fio largo)', () => {

@@ -152,7 +152,7 @@ test('layout: enfeites do tema, moldura de 3 px e as colunas de sempre', () => {
   const l = layoutDe(tema);
   assert.strictEqual(l.enfeites, true);
   assert.deepStrictEqual(l.moldura, [3, 3, 3, 3]);
-  assert.deepStrictEqual(l.colunas, { tempo: 36, pct: 38, ritmo: 34, falta: 48, rotulo: 18 });
+  assert.deepStrictEqual(l.colunas, { tempo: 36, pct: 38, ritmo: 72, falta: 48, rotulo: 18 });
 });
 
 test('o sabre do usage muda de cor com o %: violeta, roxo, magenta, carmim e vermelho a partir de 80%', () => {

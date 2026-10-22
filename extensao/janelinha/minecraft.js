@@ -263,17 +263,23 @@ async function baixarTudo({ destino = path.join(os.homedir(), ".claude-monitor")
 
 if (require.main === module) {
     const atalho = process.platform === "darwin" ? "Cmd+Shift+P" : "Ctrl+Shift+P";
-    console.log("Baixando do servidor da Mojang...");
+    // o idioma do botão direito da janelinha (config.json); o nome do comando do VS Code fica em português
+    let ingles = false;
+    try {
+        ingles = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".claude-monitor", "config.json"), "utf8").replace(/^﻿/, "")).idioma === "en";
+    } catch {}
+    const tr = (pt, en) => (ingles ? en : pt);
+    console.log(tr("Baixando do servidor da Mojang...", "Downloading from Mojang's server..."));
     baixarTudo({ log: (t) => console.log(`   ${t}`) }).then((r) => {
         if (r.sons) {
-            console.log(`Pronto! A janelinha já está com os sons do Minecraft ${r.versao}.`);
+            console.log(tr(`Pronto! A janelinha já está com os sons do Minecraft ${r.versao}.`, `Done! The floating window now has the Minecraft ${r.versao} sounds.`));
             return;
         }
-        console.log("Nenhum som baixado (veja os avisos acima): a janelinha fica com os sons do sistema.");
+        console.log(tr("Nenhum som baixado (veja os avisos acima): a janelinha fica com os sons do sistema.", "No sound downloaded (see the warnings above): the floating window keeps the system sounds."));
         process.exitCode = 1;
     }, (err) => {
-        console.log(`Não consegui falar com o servidor da Mojang (${err.message}).`);
-        console.log(`Sem internet? Depois, no VS Code: ${atalho} > "Claude Monitor: Usar sons do Minecraft".`);
+        console.log(tr(`Não consegui falar com o servidor da Mojang (${err.message}).`, `Couldn't reach Mojang's server (${err.message}).`));
+        console.log(tr(`Sem internet? Depois, no VS Code: ${atalho} > "Claude Monitor: Usar sons do Minecraft".`, `No internet? Later, in VS Code: ${atalho} > "Claude Monitor: Usar sons do Minecraft".`));
         process.exitCode = 1;
     });
 }

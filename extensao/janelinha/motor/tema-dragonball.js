@@ -219,7 +219,7 @@ module.exports = {
       desenharRitmo(g, u, '#FFFFFF', (txt, c, caixa) => K.escrever(g, e, txt, c, caixa, true));
       if (u.pctTxt) K.escrever(g, e, u.pctTxt.txt, cor, u.pctTxt.caixa, true);
       if (u.falta) K.escrever(g, e, u.falta.txt, COR.falta, u.falta.caixa, true);
-      if (u.barra && nivel >= 1 && K.ovoAceso(t + j * 2.5) && !(m.cena && m.cena.nome === 'dragao')) K.ovo(g, e, u.barra[0] + u.barra[2] / 2, u.barra[1] + u.barra[3] / 2);
+      if (u.barra && nivel >= 1 && K.ovoAceso(t + j * 2.5) && !(m.cena && m.cena.nome === 'dragao')) K.ovo(g, e, u.barra[0] + u.barra[2] / 2, u.barra[1] + u.barra[3] / 2, h.idioma);
     });
   },
   atras(g, m) {  // as esferas ganhas, em cima da borda (no dragão, quem desenha é a cena)

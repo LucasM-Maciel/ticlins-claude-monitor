@@ -6,6 +6,9 @@ if not exist "%~dp0arquivos\instalar-windows.ps1" (
   echo  Extraia o .zip antes: botao direito no ClaudeMonitor.zip ^> "Extrair tudo".
   echo  Depois abra a pasta extraida e de duplo clique no instalar-windows.cmd de la.
   echo.
+  echo  Extract the .zip first: right-click ClaudeMonitor.zip ^> "Extract All".
+  echo  Then open the extracted folder and double-click instalar-windows.cmd in it.
+  echo.
   pause
   exit /b 1
 )

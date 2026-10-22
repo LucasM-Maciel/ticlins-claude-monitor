@@ -9,7 +9,7 @@
 # barra de XP no usage e a letra do jogo). Sons e texturas do Minecraft vêm do
 # servidor da Mojang (minecraft.js); sem eles, sons do Windows e os desenhos daqui.
 # Clique numa sessão: abre ela no VS Code. Arrastar: botão esquerdo. Duplo clique:
-# traz o VS Code. Botão direito: Temas, Clawd (liga/desliga), Opacidade, Volume e Fechar.
+# traz o VS Code. Botão direito: Temas, Clawd (liga/desliga), Opacidade, Volume, Idioma e Fechar.
 # Passar o mouse numa sessão: o estado dela.
 # Saiu versão nova (a extensão consulta o GitHub): linha roxa embaixo; o clique baixa o zip.
 # A extensão abre isto a cada janela do VS Code; o mutex deixa uma só. Quando a
@@ -56,13 +56,14 @@ if (-not $Foto) {
 $versao = (Get-Item -LiteralPath $PSCommandPath).LastWriteTimeUtc
 Anotar "abriu: arquivo de $(Hora $versao) ($(Pai))"
 $dir = Join-Path $Pasta 'sessions'
-$cred = Join-Path $HOME '.claude\.credentials.json'
+$dirClaudePadrao = Join-Path $HOME '.claude'
+if ($Foto) { $dirClaudePadrao = Join-Path $Pasta '.claude' }
 # situação da sessão (ver Situacao) -> cor da bolinha e texto do tooltip
 $estados = @{
-    working    = @('#22C55E', 'trabalhando')
-    finished   = @('#EF4444', 'terminou')
-    question   = @('#60A5FA', 'pergunta pra você')
-    permission = @('#FACC15', 'pedindo permissão')
+    working    = @('#22C55E', 'trabalhando', 'working')
+    finished   = @('#EF4444', 'terminou', 'done')
+    question   = @('#60A5FA', 'pergunta pra você', 'asking you')
+    permission = @('#FACC15', 'pedindo permissão', 'needs permission')
 }
 # Som de cada aviso por tema; com mais de um, sorteia. Sem o arquivo, o do Windows.
 # Outros na pasta sons\: pop, aldeao_sim, pling, sino, bigorna, gato. Os do Padrão
@@ -97,6 +98,11 @@ $sonsDoTema = @{
         terminou  = SonsOuWindows "$Pasta\sons-akatsuki\terminou.wav" 'Windows Notify System Generic.wav'
         tudo      = SonsOuWindows "$Pasta\sons-akatsuki\tudo.wav" 'tada.wav'
     }
+    elden = @{  # sino de ouro, acorde da graça e gongo com harpa (feitos pelo sons-elden.py)
+        esperando = SonsOuWindows "$Pasta\sons-elden\esperando.wav" 'Windows Notify Messaging.wav'
+        terminou  = SonsOuWindows "$Pasta\sons-elden\terminou.wav" 'Windows Notify System Generic.wav'
+        tudo      = SonsOuWindows "$Pasta\sons-elden\tudo.wav" 'tada.wav'
+    }
 }
 # tudo = a última terminou e não sobrou nada rodando nem esperando
 $avisoDaSituacao = @{ permission = 'esperando'; question = 'esperando'; finished = 'terminou'; tudo = 'tudo' }
@@ -106,28 +112,41 @@ $nomeDoSom = @{  # pro diário e pro .txt do -Foto
     dragonball = @{ esperando = 'esferas-esperando'; terminou = 'esferas-terminou'; tudo = 'esferas-tudo' }
     sith      = @{ esperando = 'droide-bipes'; terminou = 'sabre-liga'; tudo = 'acorde-sith' }
     akatsuki  = @{ esperando = 'kunai-corda'; terminou = 'puf-acorde'; tudo = 'frase-tambor' }
+    elden     = @{ esperando = 'sino-ouro'; terminou = 'acorde-graca'; tudo = 'gongo-harpa' }
 }
 # botão direito: tema, Clawd, opacidade e volume, gravados em config.json (o Mac lê o mesmo).
 # Sem o arquivo, tudo como antes do menu existir: Minecraft, Clawd ligado, opaca, volume
 # cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
-$temas = [ordered]@{ padrao = 'Padrão'; minecraft = 'Minecraft'; dragonball = 'Dragon Ball'; sith = 'Star Wars'; akatsuki = 'Akatsuki' }
+$temas = [ordered]@{ padrao = @('Padrão', 'Default'); minecraft = 'Minecraft'; dragonball = 'Dragon Ball'; sith = 'Star Wars'; akatsuki = 'Akatsuki'; elden = 'Elden Ring' }
 $configArquivo = Join-Path $Pasta 'config.json'
 # Uso (botão direito): quais barras de usage aparecem; o padrão é só as do Claude (nada muda sem pedir)
-$modosDeUso = [ordered]@{ claude = 'Claude'; codex = 'Codex'; ambos = 'Os dois' }
+$modosDeUso = [ordered]@{ claude = 'Claude'; codex = 'Codex'; ambos = @('Os dois', 'Both') }
 # Mostrar (botão direito): abas (o padrão), agentes (sessões automáticas: claude -p, codex exec) ou tudo
-$modosDeMostrar = [ordered]@{ abas = 'Abas'; agentes = 'Agentes'; tudo = 'Tudo' }
-$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft'; uso = 'claude'; mostrar = 'abas' }
+$modosDeMostrar = [ordered]@{ abas = @('Abas', 'Tabs'); agentes = @('Agentes', 'Agents'); tudo = @('Tudo', 'All') }
+# Idioma (botão direito): sem a chave no config.json é português, então quem já instalou não vê nada mudar
+$idiomas = [ordered]@{ pt = 'Português'; en = 'English' }
+$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft'; uso = 'claude'; mostrar = 'abas'; ritmo = $true; idioma = 'pt' }
+# o texto na língua do menu: Tr 'agora' 'now'
+function Tr($pt, $en) {
+    if ($config.idioma -eq 'en') { $en } else { $pt }
+}
+# nome do menu guardado como 'Claude' (igual nas duas línguas) ou @('Padrão', 'Default')
+function NomeNoIdioma($nomes) {
+    if ($nomes -is [array]) { Tr $nomes[0] $nomes[1] } else { $nomes }
+}
 # Exists antes: arquivo que não existe soma no $Error mesmo pego no try (o "fechou (1 erros)" do diário)
 if ([IO.File]::Exists($configArquivo)) {
     try {
         $configLido = [IO.File]::ReadAllText($configArquivo) | ConvertFrom-Json
         # 1.0, não 1: o [math]::Min(1, x) escolhe a versão inteira e 0,5 vira 0
         if ($null -ne $configLido.opacidade) { $config.opacidade = [math]::Min(1.0, [math]::Max(0.2, [double]$configLido.opacidade)) }
+        if ($configLido.ritmo -is [bool]) { $config.ritmo = $configLido.ritmo }
         if ($null -ne $configLido.clawd) { $config.clawd = [bool]$configLido.clawd }
         if ($null -ne $configLido.volume) { $config.volume = [math]::Min(1.0, [math]::Max(0.0, [double]$configLido.volume)) }
         if ($temas.Contains("$($configLido.tema)")) { $config.tema = "$($configLido.tema)" }
         if ($modosDeUso.Contains("$($configLido.uso)")) { $config.uso = "$($configLido.uso)" }
         if ($modosDeMostrar.Contains("$($configLido.mostrar)")) { $config.mostrar = "$($configLido.mostrar)" }
+        if ($idiomas.Contains("$($configLido.idioma)")) { $config.idioma = "$($configLido.idioma)" }
     } catch { Anotar "config.json com defeito, fiquei com o padrão: $_" }
 }
 function SalvarConfig {
@@ -178,11 +197,107 @@ if ($Foto -and (Test-Path -LiteralPath "$Pasta\antes.json")) {
 }
 $somDaVez = $null  # o último som decidido (o -Foto grava no .txt em vez de tocar)
 $cliqueDaVez = $null  # o link do último clique numa sessão (o -Foto grava no .txt em vez de abrir)
-$uso = @{ proxima = [DateTime]::MinValue; dados = $null; pedido = $null; http = $null; url = 'https://api.anthropic.com/api/oauth/usage' }  # usage é buscado a cada 2 min (BuscarUso)
-# o último usage que veio fica em ultimo-uso.json: reabrir com 429 ou token vencido mostra ele, não "indisponível"
-$usoGuardado = Join-Path $Pasta 'ultimo-uso.json'
-if (-not $Foto -and [IO.File]::Exists($usoGuardado)) { try { $uso.dados = [IO.File]::ReadAllText($usoGuardado) | ConvertFrom-Json } catch {} }
-if ($Foto) { $uso = @{ proxima = [DateTime]::MaxValue; dados = $(if ($ArquivoUso) { Get-Content $ArquivoUso -Raw | ConvertFrom-Json }) } }
+$usosPorConta = @{}  # dir -> dados, próxima busca e pedido independentes
+$contasDoUso = @{ dirs = @(''); pagina = 1 }
+function DirDaConta($dirDaSessao) {
+    if (-not $dirDaSessao) { return '' }
+    $dirNormalizado = ([string]$dirDaSessao).TrimEnd('\', '/')
+    if ($dirNormalizado -match '^~[\\/]') { $dirNormalizado = Join-Path $HOME $dirNormalizado.Substring(2) }
+    if ($dirNormalizado -ieq $dirClaudePadrao) { return '' }
+    $dirNormalizado
+}
+function ApelidoDaConta($dirDoApelido) {
+    if (-not $dirDoApelido) { return (Tr 'padrão' 'default') }
+    $nomeDaPastaDaConta = ($dirDoApelido -split '[\\/]')[-1]
+    if ($nomeDaPastaDaConta -match '^\.claude-conta(\d+)$') { return "$(Tr 'conta' 'account') $($Matches[1])" }
+    $nomeDaPastaDaConta
+}
+# o nome do arquivo não depende do idioma: .claude-conta2 -> ultimo-uso-conta2.json
+function CacheDaConta($dirDoCache) {
+    if (-not $dirDoCache) { return (Join-Path $Pasta 'ultimo-uso.json') }
+    $sufixoDoCache = (($dirDoCache -split '[\\/]')[-1] -replace '^\.claude-conta(\d+)$', 'conta$1') -replace '[^\p{L}\p{N}_.-]', ''
+    Join-Path $Pasta "ultimo-uso-$sufixoDoCache.json"
+}
+function CredenciaisDaConta($dirDasCredenciais) {
+    if ($dirDasCredenciais) {
+        if ($dirDasCredenciais.StartsWith('/')) {
+            foreach ($ponteiroDaConta in @(PonteirosWsl ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000))) {
+                if ($ponteiroDaConta.raiz) {
+                    $traduzidoDaConta = ([string]$ponteiroDaConta.raiz).TrimEnd('\') + $dirDasCredenciais.Replace('/', '\') + '\.credentials.json'
+                    if ([IO.File]::Exists($traduzidoDaConta)) { return $traduzidoDaConta }
+                }
+            }
+            return (CredenciaisDaConta '')  # caminho Linux sem tradução: comportamento padrão
+        }
+        $arquivoDaConta = Join-Path $dirDasCredenciais '.credentials.json'
+        if ([IO.File]::Exists($arquivoDaConta)) { return $arquivoDaConta }
+        return $null
+    }
+    $arquivoPadraoDaConta = Join-Path $dirClaudePadrao '.credentials.json'
+    if ([IO.File]::Exists($arquivoPadraoDaConta)) { return $arquivoPadraoDaConta }
+    foreach ($ponteiroPadraoDaConta in @(PonteirosWsl ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000))) {
+        if ($ponteiroPadraoDaConta.credenciais -and [IO.File]::Exists($ponteiroPadraoDaConta.credenciais)) { return $ponteiroPadraoDaConta.credenciais }
+    }
+    $null
+}
+function TokenDaConta($dirDoToken) {
+    $arquivoDoToken = CredenciaisDaConta $dirDoToken
+    if ($arquivoDoToken) {
+        try { ([IO.File]::ReadAllText($arquivoDoToken) | ConvertFrom-Json).claudeAiOauth.accessToken } catch { $Error.RemoveAt(0) }
+    }
+}
+$tokensDasContas = @{}  # só memória; nunca vai ao cache de usage ou ao diário
+function TokenParaAgrupar($dirParaAgrupar) {
+    $arquivoParaAgrupar = CredenciaisDaConta $dirParaAgrupar
+    $mtimeParaAgrupar = $(if ($arquivoParaAgrupar) { [IO.File]::GetLastWriteTimeUtc($arquivoParaAgrupar) })
+    $agoraParaAgrupar = [DateTime]::UtcNow
+    $anteriorParaAgrupar = $tokensDasContas[$dirParaAgrupar]
+    if (-not $anteriorParaAgrupar -or $anteriorParaAgrupar.arquivo -cne $arquivoParaAgrupar -or $anteriorParaAgrupar.mtime -ne $mtimeParaAgrupar -or ($agoraParaAgrupar - $anteriorParaAgrupar.lido).TotalSeconds -ge 30) {
+        $tokensDasContas[$dirParaAgrupar] = @{ arquivo = $arquivoParaAgrupar; mtime = $mtimeParaAgrupar; lido = $agoraParaAgrupar; token = (TokenDaConta $dirParaAgrupar) }
+    }
+    $tokensDasContas[$dirParaAgrupar].token
+}
+function AtualizarContas($sessoesDasContas) {
+    $recentesDasContas = @{}
+    foreach ($sessaoDaConta in @($sessoesDasContas)) {
+        if ($sessaoDaConta.agente -eq 'codex') { continue }
+        $dirVivoDaConta = DirDaConta $sessaoDaConta.configDir
+        if (-not $recentesDasContas.ContainsKey($dirVivoDaConta) -or $recentesDasContas[$dirVivoDaConta] -lt $sessaoDaConta.updated) { $recentesDasContas[$dirVivoDaConta] = $sessaoDaConta.updated }
+    }
+    $contasDoUso.dirs = @($recentesDasContas.Keys | Sort-Object @{ Expression = { $recentesDasContas[$_] }; Descending = $true }, @{ Expression = { $_ } })
+    $tokensVistosDasContas = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $contasDoUso.dirs = @($contasDoUso.dirs | Where-Object {
+        $tokenVivoDaConta = TokenParaAgrupar $_
+        -not ($tokenVivoDaConta -is [string] -and $tokenVivoDaConta) -or $tokensVistosDasContas.Add($tokenVivoDaConta)
+    })
+    foreach ($dirDoTokenInativo in @($tokensDasContas.Keys)) { if (-not $recentesDasContas.ContainsKey($dirDoTokenInativo)) { $tokensDasContas.Remove($dirDoTokenInativo) } }
+    if (-not $contasDoUso.dirs.Count) { $contasDoUso.dirs = @('') }
+    $contasDoUso.pagina = [int][math]::Min($contasDoUso.dirs.Count, [math]::Max(1, $contasDoUso.pagina))
+    foreach ($dirInativoDaConta in @($usosPorConta.Keys)) {
+        if ($contasDoUso.dirs -notcontains $dirInativoDaConta) {
+            if ($usosPorConta[$dirInativoDaConta].http) { $usosPorConta[$dirInativoDaConta].http.Dispose() }
+            $usosPorConta.Remove($dirInativoDaConta)
+        }
+    }
+    foreach ($dirAtivoDaConta in $contasDoUso.dirs) {
+        if ($usosPorConta.ContainsKey($dirAtivoDaConta)) { continue }
+        $estadoDaConta = @{ proxima = [DateTime]::MinValue; dados = $null; pedido = $null; http = $null }
+        $cacheInicialDaConta = CacheDaConta $dirAtivoDaConta
+        if ($Foto -and -not $dirAtivoDaConta -and -not [IO.File]::Exists($cacheInicialDaConta) -and $ArquivoUso) { $cacheInicialDaConta = $ArquivoUso }
+        if ([IO.File]::Exists($cacheInicialDaConta)) { try { $estadoDaConta.dados = [IO.File]::ReadAllText($cacheInicialDaConta) | ConvertFrom-Json } catch { $Error.RemoveAt(0) } }
+        $usosPorConta[$dirAtivoDaConta] = $estadoDaConta
+    }
+}
+function ContaAtual { $contasDoUso.dirs[$contasDoUso.pagina - 1] }
+function MudarConta($passoDaConta) {
+    $contasDoUso.pagina += $passoDaConta
+    Atualizar
+}
+function FotoDaConta {
+    if (@($tokensDasContas.Keys | Where-Object { $_ }).Count) {
+        "conta: $(ApelidoDaConta (ContaAtual)) ($($contasDoUso.pagina)/$($contasDoUso.dirs.Count)) | credenciais: $(if (TokenDaConta (ContaAtual)) { 'ok' } else { 'falta' })"
+    }
+}
 $margem = 34  # espaço em volta do cartão, por onde o Clawd anda e pula com a picareta
 
 # Janela de tamanho fixo que nunca se move sozinha: o cartão fica preso no canto
@@ -193,7 +308,7 @@ $margem = 34  # espaço em volta do cartão, por onde o Clawd anda e pula com a 
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
-        Width="380" Height="440" FontFamily="Segoe UI" FontSize="12">
+        Width="440" Height="440" FontFamily="Segoe UI" FontSize="12">
   <Grid>
     <Grid Name="Moldura" HorizontalAlignment="Right" VerticalAlignment="Bottom">
       <Border Name="Cartao" Background="#E6181818" CornerRadius="8" Padding="10,6">
@@ -358,7 +473,7 @@ if ($xpFundo -and $xpBarra -and $xpFundo.PixelWidth -eq 182 -and $xpBarra.PixelW
         $barraXP[$tinta[0]] = Bitmap $px 182 5
     }
 }
-$coresDoUso = @{ padrao = '#D1D5DB', '#F59E0B', '#EF4444'; minecraft = '#80FF20', '#FFAA00', '#FF5555'; dragonball = '#FDE047', '#F59E0B', '#EF4444'; sith = '#FCA5A5', '#F59E0B', '#EF4444'; akatsuki = '#FCA5A5', '#F59E0B', '#EF4444' }  # normal, >= 80%, >= 95%
+$coresDoUso = @{ padrao = '#D1D5DB', '#F59E0B', '#EF4444'; minecraft = '#80FF20', '#FFAA00', '#FF5555'; dragonball = '#FDE047', '#F59E0B', '#EF4444'; sith = '#FCA5A5', '#F59E0B', '#EF4444'; akatsuki = '#FCA5A5', '#F59E0B', '#EF4444'; elden = '#F2D77A', '#F59E0B', '#EF4444' }  # normal, >= 80%, >= 95%
 
 # letra do Minecraft (font/ascii.png: 16x16 letras de 8x8), com a sombra do jogo (cor/4,
 # 1 px pra direita e pra baixo). Cada letra vai até a última coluna pintada, como no jogo.
@@ -431,9 +546,9 @@ function TrocarTexto($elemento, $texto, $hex) {
     $elemento.Child.Width = [math]::Round($elemento.Child.Source.PixelWidth * 11 / 9)
 }
 
-function Tempo($min) {
+function Tempo($min, $menosDeUmMinuto = (Tr 'agora' 'now')) {
     $m = [math]::Max(0, [int][math]::Floor($min))
-    if ($m -lt 1) { return 'agora' }
+    if ($m -lt 1) { return $menosDeUmMinuto }
     if ($m -lt 60) { return "${m}m" }
     if ($m -lt 1440) { return '{0}h{1:00}' -f [math]::Floor($m / 60), ($m % 60) }
     return '{0}d{1}h' -f [math]::Floor($m / 1440), [math]::Floor(($m % 1440) / 60)
@@ -507,6 +622,10 @@ function Sessoes($agora) {
             try { $sessaoWsl = Get-Content -LiteralPath $arquivoWsl -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $Error.RemoveAt(0) }
             if (-not $sessaoWsl) { continue }
             $sessaoWsl | Add-Member -NotePropertyName id -NotePropertyValue "$idWsl"
+            if (([string]$sessaoWsl.configDir).StartsWith('/')) {
+                if ($raizWsl) { $sessaoWsl.configDir = $raizWsl + ([string]$sessaoWsl.configDir).Replace('/', '\') }
+                else { $sessaoWsl.configDir = $null }
+            }
             # transcript de Linux (/home/...) vira caminho de Windows pela raiz da distro
             if (([string]$sessaoWsl.transcript).StartsWith('/')) { $sessaoWsl.transcript = $raizWsl + ([string]$sessaoWsl.transcript).Replace('/', '\') }
             if ($sessaoWsl.agente -ne 'codex' -and [IO.File]::Exists($sessaoWsl.transcript)) {
@@ -517,6 +636,7 @@ function Sessoes($agora) {
             if (-not $vistas[$chaveWsl] -or $vistas[$chaveWsl].updated -lt $sessaoWsl.updated) { $vistas[$chaveWsl] = $sessaoWsl }
         }
     }
+    AtualizarContas @($vistas.Values)
     # Mostrar: o campo `automatica` vem pronto no arquivo (o hook e a extensão decidem; aqui não há regra)
     $vistas.Values | ForEach-Object { $_ | Add-Member -NotePropertyName situacao -NotePropertyValue (Situacao $_) -PassThru } |
         Sort-Object @{ Expression = { if ($_.situacao -eq 'question' -or $_.situacao -eq 'permission') { 0 } elseif ($_.situacao -eq 'working') { 1 } else { 2 } } },
@@ -676,13 +796,31 @@ function Avisar($sessoes) {
 # Gastar no ritmo = o % acompanhar o tempo. O número é o uso menos isso: + = acima do ritmo
 $duracaoDaJanela = @{ '5h' = 5 * 3600; '7d' = 7 * 86400 }
 # Limites iguais a motor/comum.js/ritmoDe, overlay.swift/ritmo e overlay-linux.py/ritmo.
+$palavrasDoRitmo = @(@('folga', 'slow'), @('no ritmo', 'on pace'), @('acima', 'fast'), @('estourando', 'too fast'))
+# a coluna cabe a maior palavra das duas línguas: trocar o idioma não mexe no tamanho do cartão
+$largurasDoRitmo = @{}
+function LarguraDoRitmo {
+    if (-not $config.ritmo) { return 0 }
+    if ($largurasDoRitmo.ContainsKey($config.tema)) { return $largurasDoRitmo[$config.tema] }
+    $medidaDoRitmo = 72
+    foreach ($palavraDoRitmo in $palavrasDoRitmo | ForEach-Object { $_ }) {
+        $larguraDoTextoRitmo = New-Object Windows.Controls.TextBlock
+        $larguraDoTextoRitmo.FontFamily = [Windows.Media.FontFamily]::new('Segoe UI')
+        $larguraDoTextoRitmo.FontSize = 12
+        $larguraDoTextoRitmo.Text = $palavraDoRitmo
+        $larguraDoTextoRitmo.Measure([Windows.Size]::new([double]::PositiveInfinity, [double]::PositiveInfinity))
+        $medidaDoRitmo = [math]::Max($medidaDoRitmo, [math]::Ceiling($larguraDoTextoRitmo.DesiredSize.Width) + 4)
+        if ($config.tema -eq 'minecraft' -and $larguraDaLetra) { $medidaDoRitmo = [math]::Max($medidaDoRitmo, [math]::Ceiling((TextoMC $palavraDoRitmo '#9CA3AF').PixelWidth * 11 / 9) + 4) }
+    }
+    $largurasDoRitmo[$config.tema] = $medidaDoRitmo
+    $medidaDoRitmo
+}
 function RitmoDe($pct, $decorrido, $rotulo) {
-    if ($null -eq $decorrido -or $rotulo -notin '5h', '7d') { return '', '#6B7280' }
+    if (-not $config.ritmo -or $null -eq $decorrido -or $rotulo -notin '5h', '7d') { return '', '#6B7280' }
     if ($rotulo -eq '5h' -and ($decorrido -lt 3.33 -or $decorrido -gt 96.67)) { return '', '#9CA3AF' }
     $d = $pct - $decorrido
-    $n = [int][math]::Round($d, [MidpointRounding]::AwayFromZero)
     $corDoRitmo = $(if ($d -ge 20) { '#EF4444' } elseif ($d -ge 6) { '#F59E0B' } elseif ($d -le -10) { '#22C55E' } else { '#9CA3AF' })
-    $(if ($n -gt 0) { "+$n" } else { "$n" }), $corDoRitmo
+    (NomeNoIdioma $palavrasDoRitmo[$(if ($d -ge 20) { 3 } elseif ($d -ge 6) { 2 } elseif ($d -le -10) { 0 } else { 1 })]), $corDoRitmo
 }
 function DadosDoMedidor($rotulo, $dado) {
     $pct = [double]$dado.utilization
@@ -698,7 +836,7 @@ function DadosDoMedidor($rotulo, $dado) {
         rotulo = $rotulo; pct = $pct; nivel = $nivel; cor = $coresDoUso[$config.tema][$nivel]; pctTexto = '{0:0}%' -f $pct
         decorrido = $decorrido; ritmo = $ritmo; corDoRitmo = $corDoRitmo
         # quanto falta pra renovar
-        falta = $(if ($dado.resets_at) { Tempo ([DateTimeOffset]$dado.resets_at - [DateTimeOffset]::Now).TotalMinutes } else { '' })
+        falta = $(if ($dado.resets_at) { Tempo ([DateTimeOffset]$dado.resets_at - [DateTimeOffset]::Now).TotalMinutes -menosDeUmMinuto '<1m' } else { '' })
     }
 }
 # a linha de um medidor (DadosDoMedidor); guarda em lugares onde ficou cada parte, pro motor
@@ -744,11 +882,11 @@ function Medidor($medidor) {
     $barraNaLinha, $tracinho = $trilho, $null
     if (-not $layoutDoTema.enfeites) {
         $p = Rotulo $pctTexto $cor 38 'Right' 38
-        $r = Rotulo $medidor.ritmo $medidor.corDoRitmo 34 'Right' 34
+        if ($config.ritmo) { $r = Rotulo $medidor.ritmo $medidor.corDoRitmo (LarguraDoRitmo) 'Right' (LarguraDoRitmo) } else { $r = Lugar 0 16 }
         $f = Rotulo $falta '#6B7280' 48 'Right' 56
         $lugarDoRotulo = Rotulo $rotulo '#9CA3AF' 18 $null 18
         # o tracinho do ritmo: onde o % estaria gastando por igual (anda no lugar, TracinhoNoLugar)
-        if ($null -ne $medidor.decorrido) {
+        if ($config.ritmo -and $null -ne $medidor.decorrido) {
             $barraNaLinha = New-Object Windows.Controls.Grid
             $barraNaLinha.Width = 118; $barraNaLinha.VerticalAlignment = 'Center'
             $tracinho = New-Object Windows.Shapes.Rectangle
@@ -780,47 +918,43 @@ function VersaoNova {
 
 # Usage a cada 2 min, sem esperar a resposta: o Invoke-RestMethod parava a janela inteira
 # (~0,4 s; até 5 s sem rede) e os quadros do motor junto. Cada tick vê se o pedido voltou.
-function BuscarUso {
-    if ($uso.pedido) {
-        if (-not $uso.pedido.IsCompleted) { return }
-        $pedidoFeito = $uso.pedido
-        $uso.pedido = $null
+function BuscarUso($dirDaBusca) {
+    if ($Foto) { return }
+    $usoDaBusca = $usosPorConta[$dirDaBusca]
+    if ($usoDaBusca.pedido) {
+        if (-not $usoDaBusca.pedido.IsCompleted) { return }
+        $usoDaBusca.proxima = [DateTime]::Now.AddSeconds(20)
+        $pedidoFeito = $usoDaBusca.pedido
+        $usoDaBusca.pedido = $null
         if ($pedidoFeito.Status -ne 'RanToCompletion') { return }  # sem rede ou demorou: tenta de novo em 20 s
         $resposta = $pedidoFeito.Result
         try {
             if ($resposta.IsSuccessStatusCode) {
                 $textoDoUso = $resposta.Content.ReadAsStringAsync().Result
-                $uso.dados = $textoDoUso | ConvertFrom-Json
-                $uso.proxima = [DateTime]::Now.AddMinutes(2)
-                [IO.File]::WriteAllText($usoGuardado, $textoDoUso)
+                $usoDaBusca.dados = $textoDoUso | ConvertFrom-Json
+                $usoDaBusca.proxima = [DateTime]::Now.AddMinutes(2)
+                [IO.File]::WriteAllText((CacheDaConta $dirDaBusca), $textoDoUso)
             } elseif ([int]$resposta.StatusCode -eq 429) {
-                $uso.proxima = [DateTime]::Now.AddMinutes(5)  # limite de requisições: espera mais
+                $usoDaBusca.proxima = [DateTime]::Now.AddMinutes(5)  # limite de requisições: espera mais
             }  # outra falha: fica o último valor e tenta de novo em 20 s
         } catch {} finally { $resposta.Dispose() }
         return
     }
-    if ([DateTime]::Now -lt $uso.proxima) { return }
-    $uso.proxima = [DateTime]::Now.AddSeconds(20)
+    if ([DateTime]::Now -lt $usoDaBusca.proxima) { return }
+    $usoDaBusca.proxima = [DateTime]::Now.AddSeconds(20)
     try {
-        if (-not $uso.http) {
+        if (-not $usoDaBusca.http) {
             Add-Type -AssemblyName System.Net.Http
-            $uso.http = [Net.Http.HttpClient]::new()
-            $uso.http.Timeout = [TimeSpan]::FromSeconds(5)
+            $usoDaBusca.http = [Net.Http.HttpClient]::new()
+            $usoDaBusca.http.Timeout = [TimeSpan]::FromSeconds(5)
         }
-        $credenciaisDaConta = $cred
-        if (-not [IO.File]::Exists($cred)) {
-            # só usa o Claude no WSL: as credenciais do primeiro ponteiro WSL fresco
-            $agoraDoUso = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000
-            foreach ($ponteiroDoUso in @(PonteirosWsl $agoraDoUso)) {
-                if ($ponteiroDoUso.credenciais -and [IO.File]::Exists($ponteiroDoUso.credenciais)) { $credenciaisDaConta = $ponteiroDoUso.credenciais; break }
-            }
-        }
-        $token = (Get-Content $credenciaisDaConta -Raw | ConvertFrom-Json).claudeAiOauth.accessToken
-        $pergunta = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $uso.url)
+        $token = TokenDaConta $dirDaBusca
+        if (-not $token) { return }
+        $pergunta = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, 'https://api.anthropic.com/api/oauth/usage')
         $pergunta.Headers.Authorization = [Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $token)
         [void]$pergunta.Headers.TryAddWithoutValidation('anthropic-beta', 'oauth-2025-04-20')
         [void]$pergunta.Headers.TryAddWithoutValidation('User-Agent', 'ClaudeMonitor')
-        $uso.pedido = $uso.http.SendAsync($pergunta)
+        $usoDaBusca.pedido = $usoDaBusca.http.SendAsync($pergunta)
     } catch {}
 }
 
@@ -882,12 +1016,15 @@ function IconeDoAgente($nomeDoAgente) {
     $icone
 }
 # a linha "◀  1/3  ▶": clicar na metade da esquerda volta uma página, na da direita avança
-function LinhaDasPaginas {
+function LinhaDasPaginas($contaDasPaginas = $false) {
     $gradeDasPaginas = New-Object Windows.Controls.Grid
     $gradeDasPaginas.Width = 222
     $gradeDasPaginas.Margin = [Windows.Thickness]::new(0, 2, 0, 0)
     for ($iColunaDaPagina = 0; $iColunaDaPagina -lt 2; $iColunaDaPagina++) { [void]$gradeDasPaginas.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition)) }
     $ladosDaPagina = @(@("◀  $($paginaDaLista.atual)/$($paginaDaLista.total)", 'pagina:-1', 'Right'), @('  ▶', 'pagina:+1', 'Left'))
+    if ($contaDasPaginas) {
+        $ladosDaPagina = @(@("◀ $(ApelidoDaConta (ContaAtual)) · $($contasDoUso.pagina)/$($contasDoUso.dirs.Count)", 'uso:-1', 'Right'), @(' ▶', 'uso:+1', 'Left'))
+    }
     for ($iLadoDaPagina = 0; $iLadoDaPagina -lt 2; $iLadoDaPagina++) {
         $textoDoLado = Texto $ladosDaPagina[$iLadoDaPagina][0] '#9CA3AF'
         $textoDoLado.FontSize = 10
@@ -930,17 +1067,17 @@ function Atualizar {
     $paginaDaLista.atual = [int][math]::Min($paginaDaLista.total, [math]::Max(1, $paginaDaLista.atual))
     $sessoesDaPagina = @($sessoes | Select-Object -Skip (($paginaDaLista.atual - 1) * $sessoesPorPagina) -First $sessoesPorPagina)
     $linhasDaLista = @(foreach ($s in $sessoesDaPagina) {
-        $cor, $rotulo = $estados[$s.situacao]
-        if (-not $cor) { $cor, $rotulo = '#9CA3AF', $s.situacao }
+        $estadoDaLinha = $estados[$s.situacao]
+        $cor, $rotulo = $(if ($estadoDaLinha) { $estadoDaLinha[0], (Tr $estadoDaLinha[1] $estadoDaLinha[2]) } else { '#9CA3AF', $s.situacao })
         @{ s = $s; cor = $cor; rotulo = $rotulo; tempo = Tempo (($agora - $s.since) / 60) }
     })
     # o tempo não entra: cada sessão vira o minuto num segundo diferente (TrocarTexto, abaixo)
-    $chaveDaLista = "$($config.tema) $doMotor $($paginaDaLista.atual)/$($paginaDaLista.total)`n" + (@($linhasDaLista | ForEach-Object { "$($_.s.id) $($_.s.agente) $($_.s.situacao) $($_.s.name)" }) -join "`n")
+    $chaveDaLista = "$($config.tema) $($config.idioma) $doMotor $($config.ritmo) $($paginaDaLista.atual)/$($paginaDaLista.total)`n" + (@($linhasDaLista | ForEach-Object { "$($_.s.id) $($_.s.agente) $($_.s.situacao) $($_.s.name)" }) -join "`n")
     if ($chaveDaLista -ne $listaFeita.sessoes) {
         $listaFeita.sessoes = $chaveDaLista
         $listaFeita.lugaresDasSessoes = @()
         $painelSessoes.Children.Clear()
-        if (-not $sessoes) { [void]$painelSessoes.Children.Add((Texto 'nenhuma sessão aberta' '#9CA3AF')) }
+        if (-not $sessoes) { [void]$painelSessoes.Children.Add((Texto (Tr 'nenhuma sessão aberta' 'no open sessions') '#9CA3AF')) }
         foreach ($linhaDaLista in $linhasDaLista) {
             $s, $cor, $rotulo, $tempoTexto = $linhaDaLista.s, $linhaDaLista.cor, $linhaDaLista.rotulo, $linhaDaLista.tempo
             if ($doMotor) {
@@ -958,7 +1095,7 @@ function Atualizar {
             $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
             $bola.VerticalAlignment = 'Center'
             # a coluna do ritmo no usage alarga o cartão: o nome ganha o espaço e o tempo fica na direita
-            $nomeSessao = Texto $s.name '#E5E7EB' (160 + $(if ($doMotor) { $layoutDoTema.colunas.ritmo } else { 34 }))
+            $nomeSessao = Texto $s.name '#E5E7EB' (160 + $(if ($doMotor) { $layoutDoTema.colunas.ritmo } else { (LarguraDoRitmo) }))
             $nomeSessao.TextTrimming = 'CharacterEllipsis'
             $tempo = $(if ($doMotor) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
             $listaFeita.lugaresDasSessoes += , @($bola, $tempo, $tempoTexto)
@@ -985,9 +1122,11 @@ function Atualizar {
         ComecarCena $(if ($luta.ferramenta -eq 'espada') { 'bug' } else { 'pedra' })
     }
 
-    BuscarUso
+    foreach ($dirParaBuscar in $contasDoUso.dirs) { BuscarUso $dirParaBuscar }
+    $dirUsoAtual = ContaAtual
+    $usoAtual = $usosPorConta[$dirUsoAtual]
     # Uso (botão direito): as barras do Claude, as do Codex ou as duas, cada grupo com o nome do agente
-    $medidoresDoClaude = @(if ($uso.dados -and $config.uso -ne 'codex') { DadosDoMedidor '5h' $uso.dados.five_hour; DadosDoMedidor '7d' $uso.dados.seven_day })
+    $medidoresDoClaude = @(if ($usoAtual.dados -and $config.uso -ne 'codex') { DadosDoMedidor '5h' $usoAtual.dados.five_hour; DadosDoMedidor '7d' $usoAtual.dados.seven_day })
     foreach ($medidorDoClaude in $medidoresDoClaude) { $medidorDoClaude.grupo = 'Claude' }
     $medidoresDoCodex = @(if ($config.uso -ne 'claude') {
         foreach ($janelaDoCodex in @(JanelasDoCodex)) { DadosDoMedidor "$($janelaDoCodex.rotulo)" ([pscustomobject]@{ utilization = $janelaDoCodex.usado; resets_at = $janelaDoCodex.reinicia }) }
@@ -995,25 +1134,43 @@ function Atualizar {
     foreach ($medidorDoCodex in $medidoresDoCodex) { $medidorDoCodex.grupo = 'Codex' }
     $medidores = @($medidoresDoClaude) + @($medidoresDoCodex)
     $listaFeita.barras = (@($medidores | ForEach-Object { "$($_.grupo) $($_.rotulo) $($_.pctTexto)" }) -join ' | ')
-    $listaFeita.ritmo = $(if ($medidoresDoClaude.Count) { @($medidoresDoClaude | ForEach-Object { "$($_.rotulo) $($_.ritmo)" }) -join ' | ' } else { 'nenhum' })
+    $listaFeita.ritmo = $(if (-not $config.ritmo) { 'desligado' } elseif ($medidoresDoClaude.Count) { @($medidoresDoClaude | ForEach-Object {
+        $descricaoDoRitmo = "$($_.rotulo) $($_.ritmo)"
+        if ($_.ritmo) {
+            $numeroDoRitmo = [int][math]::Round(($_.pct - $_.decorrido), [MidpointRounding]::AwayFromZero)
+            $descricaoDoRitmo += " ($(if ($numeroDoRitmo -gt 0) { '+' })$numeroDoRitmo)"
+        }
+        $descricaoDoRitmo
+    }) -join ' | ' } else { 'nenhum' })
     # sem o motor, a barra muda com a %; o "falta" anda a cada minuto e é trocado no lugar
-    $chaveDoUso = "$($config.tema) $doMotor $($config.uso) $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct) $($null -ne $_.decorrido)" }) }) -join '')
+    $chaveDoUso = "$($config.tema) $($config.idioma) $doMotor $($config.ritmo) $($config.uso) $dirUsoAtual $($contasDoUso.pagina)/$($contasDoUso.dirs.Count) $($medidoresDoClaude.Count) $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct) $($null -ne $_.decorrido)" }) }) -join '')
     if ($chaveDoUso -ne $listaFeita.uso) {
         $listaFeita.uso = $chaveDoUso
         $listaFeita.lugaresDoUso = @()
         $painelUso.Children.Clear()
         $grupoDoUsoAtual = ''
-        if ($config.uso -eq 'ambos' -and -not $medidoresDoClaude) { [void]$painelUso.Children.Add((Texto 'usage indisponível' '#6B7280')) }
+        if ($config.uso -eq 'claude' -and $contasDoUso.dirs.Count -eq 1 -and $dirUsoAtual) { [void]$painelUso.Children.Add((Texto (ApelidoDaConta $dirUsoAtual) '#9CA3AF')) }
+        if ($config.uso -eq 'ambos' -and -not $medidoresDoClaude) {
+            if ($contasDoUso.dirs.Count -eq 1 -and $dirUsoAtual) { [void]$painelUso.Children.Add((Texto "Claude · $(ApelidoDaConta $dirUsoAtual)" '#9CA3AF')) }
+            [void]$painelUso.Children.Add((Texto (Tr 'usage indisponível' 'usage unavailable') '#6B7280'))
+        }
         foreach ($medidor in $medidores) {
             if ($config.uso -eq 'ambos' -and $medidor.grupo -ne $grupoDoUsoAtual) {
                 $grupoDoUsoAtual = $medidor.grupo
-                [void]$painelUso.Children.Add((Texto $grupoDoUsoAtual '#9CA3AF'))
+                if ($medidor.grupo -eq 'Codex' -and $contasDoUso.dirs.Count -gt 1) { [void]$painelUso.Children.Add((LinhaDasPaginas $true)) }
+                $rotuloDoGrupo = $grupoDoUsoAtual
+                if ($grupoDoUsoAtual -eq 'Claude' -and $contasDoUso.dirs.Count -eq 1 -and $dirUsoAtual) { $rotuloDoGrupo = "Claude · $(ApelidoDaConta $dirUsoAtual)" }
+                [void]$painelUso.Children.Add((Texto $rotuloDoGrupo '#9CA3AF'))
             }
             [void]$painelUso.Children.Add((Medidor $medidor))
             $listaFeita.lugaresDoUso += , $medidor.lugares
         }
-        if ($config.uso -ne 'claude' -and -not $medidoresDoCodex) { [void]$painelUso.Children.Add((Texto 'Codex: sem uso ainda' '#6B7280')) }
-        elseif (-not $medidores) { [void]$painelUso.Children.Add((Texto 'usage indisponível' '#6B7280')) }
+        if ($config.uso -ne 'codex' -and $contasDoUso.dirs.Count -gt 1 -and -not $medidoresDoCodex) {
+            if (-not $medidoresDoClaude -and $config.uso -eq 'claude') { [void]$painelUso.Children.Add((Texto (Tr 'usage indisponível' 'usage unavailable') '#6B7280')) }
+            [void]$painelUso.Children.Add((LinhaDasPaginas $true))
+        }
+        if ($config.uso -ne 'claude' -and -not $medidoresDoCodex) { [void]$painelUso.Children.Add((Texto (Tr 'Codex: sem uso ainda' 'Codex: no usage yet') '#6B7280')) }
+        elseif (-not $medidores -and ($contasDoUso.dirs.Count -eq 1 -or $config.uso -eq 'codex')) { [void]$painelUso.Children.Add((Texto (Tr 'usage indisponível' 'usage unavailable') '#6B7280')) }
     }
     for ($iMedidor = 0; $iMedidor -lt $medidores.Count; $iMedidor++) {
         $medidor, $lugares = $medidores[$iMedidor], $listaFeita.lugaresDoUso[$iMedidor]
@@ -1021,20 +1178,20 @@ function Atualizar {
         if (-not $doMotor -and ($lugares[6] -ne $medidor.ritmo -or $lugares[8] -ne $medidor.corDoRitmo)) { TrocarTexto $lugares[5] $medidor.ritmo $medidor.corDoRitmo; $lugares[6] = $medidor.ritmo; $lugares[8] = $medidor.corDoRitmo }
         if ($lugares[7] -and $null -ne $medidor.decorrido) { TracinhoNoLugar $lugares[7] $medidor.decorrido }
         [void]$caixasDoMotor.uso.Add(@{ rotulo = @($medidor.rotulo, '#9CA3AF', $lugares[0]); barra = $lugares[1]; pct = $medidor.pct; nivel = $medidor.nivel; pctTxt = @($medidor.pctTexto, $medidor.cor, $lugares[2])
-            decorrido = $medidor.decorrido; ritmo = @($medidor.ritmo, $medidor.corDoRitmo, $lugares[5]); falta = @($medidor.falta, '#6B7280', $lugares[3]) })
+            decorrido = $(if ($config.ritmo) { $medidor.decorrido }); ritmo = @($medidor.ritmo, $medidor.corDoRitmo, $lugares[5]); falta = @($medidor.falta, '#6B7280', $lugares[3]) })
     }
     $nova = VersaoNova
-    if ("$nova" -ne $listaFeita.aviso) {
-        $listaFeita.aviso = "$nova"
+    if ("$nova $($config.idioma)" -ne $listaFeita.aviso) {
+        $listaFeita.aviso = "$nova $($config.idioma)"
         $painelAviso.Children.Clear()
         if ($nova) {
             $traco = New-Object Windows.Controls.Border
             $traco.Height = 1; $traco.Background = Cor '#33FFFFFF'; $traco.Margin = [Windows.Thickness]::new(0, 5, 0, 4)
-            $texto = Texto "↑ versão $nova disponível · baixar" '#A78BFA' 222
+            $texto = Texto (Tr "↑ versão $nova disponível · baixar" "↑ version $nova available · download") '#A78BFA' 222
             $texto.TextTrimming = 'CharacterEllipsis'
             $aviso = Linha $texto
             $aviso.Background = [Windows.Media.Brushes]::Transparent
-            $aviso.ToolTip = 'Baixa o zip: extraia e siga o COMO ATUALIZAR.txt'
+            $aviso.ToolTip = Tr 'Baixa o zip: extraia e siga o COMO ATUALIZAR.txt' 'Downloads the zip: extract it and follow HOW TO UPDATE.txt'
             $aviso.Tag = 'baixar'
             $aviso.Cursor = [Windows.Input.Cursors]::Hand
             [void]$painelAviso.Children.Add($traco)
@@ -1440,7 +1597,7 @@ function AplicarTema {
 function TrocarTema($direcao) {
     $nomesDosTemas = @($temas.Keys)
     $config.tema = $nomesDosTemas[($nomesDosTemas.IndexOf($config.tema) + $direcao + $nomesDosTemas.Count) % $nomesDosTemas.Count]
-    $nomeDoTema.Text = $temas[$config.tema]
+    $nomeDoTema.Text = NomeNoIdioma $temas[$config.tema]
     SalvarConfig
     Anotar "tema: $($config.tema)"
     AplicarTema
@@ -1469,7 +1626,11 @@ $motor = @{ obj = $null; vivo = $false; tentativas = 0; enviado = ''; pasta = (J
 $caixasDoMotor = @{ linhas = [Collections.ArrayList]::new(); uso = [Collections.ArrayList]::new() }
 function LayoutDoMotor {
     if (-not $motor.layouts -or -not ($motor.vivo -or $Foto)) { return $null }
-    $motor.layouts[$config.tema]
+    $layoutDoRitmo = $motor.layouts[$config.tema].PSObject.Copy()
+    $layoutDoRitmo.colunas = $layoutDoRitmo.colunas.PSObject.Copy()
+    if (-not $config.ritmo) { $layoutDoRitmo.colunas.ritmo = 0 }
+    elseif (-not $layoutDoRitmo.enfeites) { $layoutDoRitmo.colunas.ritmo = LarguraDoRitmo }
+    $layoutDoRitmo
 }
 function Lugar($largura, $altura) {
     $lugarVazio = New-Object Windows.Controls.Border
@@ -1571,7 +1732,7 @@ function MotorEstado {
     $fonteDaTela = [Windows.PresentationSource]::FromVisual($win)
     $escala = $(if ($Foto -or -not $fonteDaTela) { 1 } else { $fonteDaTela.CompositionTarget.TransformToDevice.M11 })
     $estadoDoMotor = [ordered]@{
-        msg = 'estado'; tema = $config.tema; clawd = [bool]$config.clawd; modo = "$($passeio.modo)"
+        msg = 'estado'; tema = $config.tema; idioma = $config.idioma; clawd = [bool]$config.clawd; modo = "$($passeio.modo)"
         escala = $escala; janela = @($win.Width, $win.Height)
         cartao = @([math]::Round($origem.X, 2), [math]::Round($origem.Y, 2), [math]::Round($cartao.ActualWidth, 2), [math]::Round($cartao.ActualHeight, 2))
         raio = $(if ($config.tema -eq 'minecraft') { 1 } else { 8 }); opacidade = $config.opacidade
@@ -1624,7 +1785,7 @@ function AlvoNoPonto($ponto) {
     # InputHitTest, não VisualTreeHelper.HitTest: esse acerta o Palco do motor (a janela
     # inteira) mesmo com IsHitTestVisible=False, e o clique não achava a sessão
     for ($e = $win.InputHitTest($ponto); $e; $e = [Windows.Media.VisualTreeHelper]::GetParent($e)) {
-        if ("$($e.Tag)" -like 'sessao:*' -or "$($e.Tag)" -like 'pagina:*' -or "$($e.Tag)" -eq 'baixar') { return "$($e.Tag)" }
+        if ("$($e.Tag)" -like 'sessao:*' -or "$($e.Tag)" -like 'pagina:*' -or "$($e.Tag)" -like 'uso:*' -or "$($e.Tag)" -eq 'baixar') { return "$($e.Tag)" }
     }
 }
 # a extensão recebe o link e abre a aba (ou o terminal) da sessão, como o clique na lista dela
@@ -1637,6 +1798,7 @@ function AbrirSessao($id) {
 $zip = 'https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip'
 function Clicar($qual) {
     if ($qual -like 'sessao:*') { AbrirSessao $qual.Substring(7); return }
+    if ($qual -like 'uso:*') { MudarConta ([int]$qual.Substring(4)); return }
     if ($qual -like 'pagina:*') { MudarPagina ([int]$qual.Substring(7)); return }
     if ($qual -ne 'baixar') { return }
     if ($Foto) { $script:cliqueDaVez = $zip; return }
@@ -1741,8 +1903,9 @@ $menu = [Windows.Markup.XamlReader]::Parse(@'
 $painelTema = New-Object Windows.Controls.StackPanel
 $painelTema.Orientation = 'Horizontal'
 $painelTema.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
-[void]$painelTema.Children.Add((Texto 'Temas' '#D1D5DB' 70))
-$nomeDoTema = Texto $temas[$config.tema] '#FFFFFF' 70
+$rotuloDoTema = Texto (Tr 'Temas' 'Themes') '#D1D5DB' 70
+[void]$painelTema.Children.Add($rotuloDoTema)
+$nomeDoTema = Texto (NomeNoIdioma $temas[$config.tema]) '#FFFFFF' 70
 $nomeDoTema.TextAlignment = 'Center'
 $nomeDoTema.FontWeight = 'SemiBold'
 function SetaDoTema($simbolo, $direcao) {
@@ -1761,14 +1924,15 @@ SetaDoTema '▶' 1
 $painelModoUso = New-Object Windows.Controls.StackPanel
 $painelModoUso.Orientation = 'Horizontal'
 $painelModoUso.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
-[void]$painelModoUso.Children.Add((Texto 'Uso' '#D1D5DB' 70))
-$nomeDoModoUso = Texto $modosDeUso[$config.uso] '#FFFFFF' 70
+$rotuloDoModoUso = Texto (Tr 'Uso' 'Usage') '#D1D5DB' 70
+[void]$painelModoUso.Children.Add($rotuloDoModoUso)
+$nomeDoModoUso = Texto (NomeNoIdioma $modosDeUso[$config.uso]) '#FFFFFF' 70
 $nomeDoModoUso.TextAlignment = 'Center'
 $nomeDoModoUso.FontWeight = 'SemiBold'
 function TrocarModoUso($direcaoDoModoUso) {
     $chavesDosModosUso = @($modosDeUso.Keys)
     $config.uso = $chavesDosModosUso[($chavesDosModosUso.IndexOf($config.uso) + $direcaoDoModoUso + $chavesDosModosUso.Count) % $chavesDosModosUso.Count]
-    $nomeDoModoUso.Text = $modosDeUso[$config.uso]
+    $nomeDoModoUso.Text = NomeNoIdioma $modosDeUso[$config.uso]
     SalvarConfig
     Anotar "uso: $($config.uso)"
     Atualizar
@@ -1789,14 +1953,15 @@ SetaDoModoUso '▶' 1
 $painelModoMostrar = New-Object Windows.Controls.StackPanel
 $painelModoMostrar.Orientation = 'Horizontal'
 $painelModoMostrar.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
-[void]$painelModoMostrar.Children.Add((Texto 'Mostrar' '#D1D5DB' 70))
-$nomeDoModoMostrar = Texto $modosDeMostrar[$config.mostrar] '#FFFFFF' 70
+$rotuloDoModoMostrar = Texto (Tr 'Mostrar' 'Show') '#D1D5DB' 70
+[void]$painelModoMostrar.Children.Add($rotuloDoModoMostrar)
+$nomeDoModoMostrar = Texto (NomeNoIdioma $modosDeMostrar[$config.mostrar]) '#FFFFFF' 70
 $nomeDoModoMostrar.TextAlignment = 'Center'
 $nomeDoModoMostrar.FontWeight = 'SemiBold'
 function TrocarModoMostrar($direcaoDoModoMostrar) {
     $chavesDosModosMostrar = @($modosDeMostrar.Keys)
     $config.mostrar = $chavesDosModosMostrar[($chavesDosModosMostrar.IndexOf($config.mostrar) + $direcaoDoModoMostrar + $chavesDosModosMostrar.Count) % $chavesDosModosMostrar.Count]
-    $nomeDoModoMostrar.Text = $modosDeMostrar[$config.mostrar]
+    $nomeDoModoMostrar.Text = NomeNoIdioma $modosDeMostrar[$config.mostrar]
     $paginaDaLista.atual = 1
     SalvarConfig
     Anotar "mostrar: $($config.mostrar)"
@@ -1814,6 +1979,14 @@ SetaDoModoMostrar '◀' -1
 SetaDoModoMostrar '▶' 1
 [void]$menu.Items.Add($painelModoMostrar)
 
+$itemRitmo = New-Object Windows.Controls.MenuItem
+$itemRitmo.Header = Tr 'Ritmo' 'Pace'
+$itemRitmo.IsCheckable = $true
+$itemRitmo.IsChecked = $config.ritmo
+$itemRitmo.Add_Checked({ $config.ritmo = $true; SalvarConfig; Atualizar })
+$itemRitmo.Add_Unchecked({ $config.ritmo = $false; SalvarConfig; Atualizar })
+[void]$menu.Items.Add($itemRitmo)
+
 # toggle do Clawd
 $itemClawd = New-Object Windows.Controls.MenuItem
 $itemClawd.Header = 'Clawd'
@@ -1828,7 +2001,8 @@ $itemClawd.Add_Unchecked({ $config.clawd = $false; SalvarConfig; Atualizar })
 $painelOpac = New-Object Windows.Controls.StackPanel
 $painelOpac.Orientation = 'Horizontal'
 $painelOpac.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
-[void]$painelOpac.Children.Add((Texto 'Opacidade' '#D1D5DB' 70))
+$rotuloDaOpacidade = Texto (Tr 'Opacidade' 'Opacity') '#D1D5DB' 70
+[void]$painelOpac.Children.Add($rotuloDaOpacidade)
 $slOpac = New-Object Windows.Controls.Slider
 $slOpac.Minimum = 20; $slOpac.Maximum = 100; $slOpac.Value = $config.opacidade * 100
 $slOpac.Width = 85; $slOpac.VerticalAlignment = 'Center'
@@ -1862,8 +2036,48 @@ $slVol.Add_ValueChanged({
 [void]$painelVol.Children.Add($lblVol)
 [void]$menu.Items.Add($painelVol)
 
+# Idioma: Idioma ◀ Português / English ▶ (fica em config.json > "idioma"; sem a chave, português)
+$painelIdioma = New-Object Windows.Controls.StackPanel
+$painelIdioma.Orientation = 'Horizontal'
+$painelIdioma.Margin = [Windows.Thickness]::new(0, 2, 0, 2)
+$rotuloDoIdioma = Texto (Tr 'Idioma' 'Language') '#D1D5DB' 70
+[void]$painelIdioma.Children.Add($rotuloDoIdioma)
+$nomeDoIdioma = Texto $idiomas[$config.idioma] '#FFFFFF' 70
+$nomeDoIdioma.TextAlignment = 'Center'
+$nomeDoIdioma.FontWeight = 'SemiBold'
+function TrocarIdioma($direcaoDoIdioma) {
+    $chavesDosIdiomas = @($idiomas.Keys)
+    $config.idioma = $chavesDosIdiomas[($chavesDosIdiomas.IndexOf($config.idioma) + $direcaoDoIdioma + $chavesDosIdiomas.Count) % $chavesDosIdiomas.Count]
+    $nomeDoIdioma.Text = $idiomas[$config.idioma]
+    # o menu é montado uma vez só: troca os textos dele no lugar
+    $rotuloDoTema.Text = Tr 'Temas' 'Themes'
+    $nomeDoTema.Text = NomeNoIdioma $temas[$config.tema]
+    $rotuloDoModoUso.Text = Tr 'Uso' 'Usage'
+    $nomeDoModoUso.Text = NomeNoIdioma $modosDeUso[$config.uso]
+    $rotuloDoModoMostrar.Text = Tr 'Mostrar' 'Show'
+    $nomeDoModoMostrar.Text = NomeNoIdioma $modosDeMostrar[$config.mostrar]
+    $itemRitmo.Header = Tr 'Ritmo' 'Pace'
+    $rotuloDaOpacidade.Text = Tr 'Opacidade' 'Opacity'
+    $rotuloDoIdioma.Text = Tr 'Idioma' 'Language'
+    $fechar.Header = Tr 'Fechar' 'Close'
+    SalvarConfig
+    Anotar "idioma: $($config.idioma)"
+    Atualizar
+}
+function SetaDoIdioma($simboloDoIdioma, $direcaoDoIdioma) {
+    $botaoDoIdioma = New-Object Windows.Controls.Button
+    $botaoDoIdioma.Content = $simboloDoIdioma
+    $botaoDoIdioma.Tag = $direcaoDoIdioma
+    $botaoDoIdioma.Add_Click({ TrocarIdioma $this.Tag })
+    [void]$painelIdioma.Children.Add($botaoDoIdioma)
+}
+SetaDoIdioma '◀' -1
+[void]$painelIdioma.Children.Add($nomeDoIdioma)
+SetaDoIdioma '▶' 1
+[void]$menu.Items.Add($painelIdioma)
+
 $fechar = New-Object Windows.Controls.MenuItem
-$fechar.Header = 'Fechar'
+$fechar.Header = Tr 'Fechar' 'Close'
 $fechar.Add_Click({ Anotar 'fechada pelo menu'; $win.Close() })
 [void]$menu.Items.Add($fechar)
 $win.ContextMenu = $menu
@@ -1964,8 +2178,8 @@ if ($Foto) {
         $visto = @(Sessoes ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000) | ForEach-Object {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)$(if ($_.agente -eq 'codex') { ' | agente=codex' })"
         }) + @(if ($config.mostrar -ne 'abas') { "mostrar: $($config.mostrar)" }) + @(if ($paginaDaLista.total -gt 1) { "pagina: $($paginaDaLista.atual)/$($paginaDaLista.total)" }) +
-            "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($uso.dados) { 'ok' } else { 'indisponivel' })" +
-            "ritmo: $($listaFeita.ritmo)" +
+            "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($usosPorConta[(ContaAtual)].dados) { 'ok' } else { 'indisponivel' })" +
+            @(FotoDaConta) + "ritmo: $($listaFeita.ritmo)" +
             @(if ($config.uso -ne 'claude') { "uso: $($config.uso)"; "barras: $($listaFeita.barras)" }) +
             "som: $(if ($somDaVez) { $nomeDoSom[$config.tema][$avisoDaSituacao[$somDaVez]] } else { 'nenhum' })" +
             "som da cena: $(if ($somDaCena) { $somDaCena } else { 'nenhum' })" +

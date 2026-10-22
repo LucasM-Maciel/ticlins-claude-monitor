@@ -91,7 +91,7 @@ t_instala() {
       || falha "$e recebeu: $(cat "$BIN/$e.log" 2>/dev/null)" || return 1
   done
   local f
-  for f in hook.js processes.js sem-node.sh overlay.swift minecraft.js vorbis.min.js ClaudeMonitor sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav sons-akatsuki/tudo.wav motor/motor.js motor/raster.js; do
+  for f in hook.js processes.js sem-node.sh overlay.swift minecraft.js vorbis.min.js ClaudeMonitor sons-padrao/terminou.wav sons-padrao/esperando.wav sons-padrao/tudo.wav sons-dragonball/tudo.wav sons-akatsuki/tudo.wav sons-elden/tudo.wav motor/motor.js motor/raster.js; do
     [ -f "$MONITOR/$f" ] || falha "falta $f" || return 1
   done
   [ -f "$MONITOR/sons/levelup.wav" ] || falha "não baixou os sons do Minecraft: $saida" || return 1
@@ -103,7 +103,9 @@ t_instala() {
   local n
   n=$(node -e "const h=require(process.argv[1]).hooks; console.log(['UserPromptSubmit','Stop','Notification','SessionEnd'].filter(e=>h[e]&&h[e].length===1).length)" "$CASA/.claude/settings.json")
   [ "$n" = 4 ] || falha "hooks: $n de 4" || return 1
-  echo "$saida" | grep -q "canto de baixo à direita" || falha "não terminou com a mensagem final: $saida"
+  echo "$saida" | grep -q "canto de baixo à direita" || falha "não terminou com a mensagem final: $saida" || return 1
+  # em português, com 1 linha em inglês ensinando a trocar
+  echo "$saida" | grep -q 'Language: right-click the floating window > "Idioma" > English' || falha "sem a dica do inglês: $saida"
 }
 teste "instala: extensão no VS Code e no Cursor, arquivos, janelinha compilada e hooks" t_instala
 if [ -s "$MONITOR/compilar.log" ]; then
@@ -125,6 +127,21 @@ t_de_novo() {
   [ "$n" = 1 ] || falha "Stop tem $n hooks (duplicou)"
 }
 teste "rodar o instalador de novo não duplica os hooks" t_de_novo
+t_ingles() {
+  local antes saida t r=0
+  antes=$(cat "$MONITOR/config.json")
+  # a janelinha do Mac grava pelo JSONSerialization: sem espaço nenhum
+  printf '{"idioma":"en","tema":"padrao"}' > "$MONITOR/config.json"
+  saida=$(com_prazo 300 instalar 2>&1) || { falha "saiu com erro: $saida"; r=1; }
+  for t in "Looking for VS Code" "Installing the extension" "Done! The floating window now has the Minecraft" "Done! The floating window shows up" "Always Allow"; do
+    [ $r = 0 ] && { echo "$saida" | grep -qF "$t" || { falha "faltou '$t': $saida"; r=1; }; }
+  done
+  [ $r = 0 ] && { echo "$saida" | grep -qE 'Pronto!|Procurando|Language: right-click' && { falha "sobrou português (ou a dica): $saida"; r=1; }; }
+  [ $r = 0 ] && { [ "$(cat "$MONITOR/config.json")" = '{"idioma":"en","tema":"padrao"}' ] || { falha "o instalador mexeu no config.json"; r=1; }; }
+  printf '%s' "$antes" > "$MONITOR/config.json"
+  return $r
+}
+teste "reinstalar com o idioma em inglês (escolhido no menu): fala inglês e não mexe no config.json" t_ingles
 t_code_do_cursor() {
   local shim="$TMP/Cursor.app/Contents/Resources/app/bin"
   mkdir -p "$shim"
@@ -198,7 +215,7 @@ t_cenario() {
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "não usou a picareta.png; perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
   elif [ "$c" = pedra ]; then
     [ "$(pixels "$foto" 255 0 255 40)" -gt 5 ] || falha "cadê o diamante (diamante.png) subindo? perto do magenta: $(pixels "$foto" 255 0 255 120 lista)" || return 1
-  elif [ "$c" = padrao ] || [ "$c" = epico ] || [ "$c" = codex ] || [ "$c" = uso-codex ] || [ "$c" = uso-codex-sem ] || [ "$c" = uso-ambos ] || [ "$c" = agentes ] || [ "$c" = agentes-tudo ] || [ "$c" = paginas ]; then
+  elif [ "$c" = padrao ] || [ "$c" = epico ] || [ "$c" = codex ] || [ "$c" = uso-codex ] || [ "$c" = uso-codex-sem ] || [ "$c" = uso-ambos ] || [ "$c" = agentes ] || [ "$c" = agentes-tudo ] || [ "$c" = paginas ] || [ "$c" = contas ] || [ "$c" = contas-sem-credencial ] || [ "$c" = contas-mesmo-login ] || [ "$c" = contas-mesmo-login-outra ] || [ "$c" = contas-mesmo-login-padrao ] || [ "$c" = ritmo-desligado ] || [ "$c" = ingles ]; then
     # picareta, pedra e bug são do Minecraft
     [ "$(pixels "$foto" 74 237 217 40)" -lt 5 ] || falha "o Clawd do Padrão apareceu com a ferramenta" || return 1
   else
@@ -260,7 +277,7 @@ enfeites_mc() {
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas contas contas-sem-credencial contas-mesmo-login contas-mesmo-login-outra contas-mesmo-login-padrao ritmo-desligado ingles; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 # Sem o motor: o Clawd daqui (Swift), o de quando falta o node. As lutas antigas (pedra, bug)

@@ -133,8 +133,12 @@ test("sem internet: rejeita com o motivo e não cria nada", async () => {
 });
 
 /** node minecraft.js numa casa de mentira (assíncrono: o servidor de mentira roda neste processo) */
-function rodarCli(url) {
+function rodarCli(url, idioma) {
     const casa = pastaNova();
+    if (idioma) {  // o idioma do botão direito da janelinha
+        fs.mkdirSync(path.join(casa, ".claude-monitor"), { recursive: true });
+        fs.writeFileSync(path.join(casa, ".claude-monitor", "config.json"), JSON.stringify({ idioma }));
+    }
     return new Promise((ok) => cp.execFile(process.execPath, [MINECRAFT], {
         env: { ...process.env, HOME: casa, USERPROFILE: casa, CLAUDE_MONITOR_MOJANG: url },
     }, (erro, saida) => ok({ codigo: erro ? erro.code : 0, saida, casa })));
@@ -157,4 +161,17 @@ test("pelo terminal, sem internet: explica como tentar de novo e sai com erro", 
     assert.match(r.saida, /Não consegui falar com o servidor da Mojang/);
     assert.match(r.saida, /Claude Monitor: Usar sons do Minecraft/);
     assert.doesNotMatch(r.saida, /Pronto!/);
+});
+
+test("pelo terminal, em inglês (idioma: en no config): \"Done!\"; sem internet, o comando do VS Code segue com o nome em português", async () => {
+    await comMojang({}, async (m) => {
+        const r = await rodarCli(m.url, "en");
+        assert.strictEqual(r.codigo, 0, r.saida);
+        assert.match(r.saida, /Downloading from Mojang's server[\s\S]*Done! The floating window now has the Minecraft 1\.99 sounds/);
+    });
+    const m = await mojang.iniciar();
+    await m.fechar();
+    const r = await rodarCli(m.url, "en");
+    assert.strictEqual(r.codigo, 1, r.saida);
+    assert.match(r.saida, /Couldn't reach Mojang's server[\s\S]*No internet\?.*"Claude Monitor: Usar sons do Minecraft"/);
 });

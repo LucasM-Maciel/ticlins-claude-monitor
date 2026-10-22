@@ -101,7 +101,7 @@ module.exports = {
   get layout() {
     return {
       raio: 0, fundo: '#F0181818', moldura: [6, 8, 6, 6], padding: [8, 6, 8, 6], enfeites: enfeites.prontos(),
-      colunas: { tempo: 44, pct: 38, falta: 56, rotulo: 18 }, letra: 11, barra: [118, 5],
+      colunas: { tempo: 44, pct: 38, ritmo: enfeites.larguraRitmo(), falta: 56, rotulo: 18 }, letra: 11, barra: [118, 5],
     };
   },
   get texturas() { return [...new Set([...TEXTURAS, ...P.texturas, ...texturasDoDragao()])]; },

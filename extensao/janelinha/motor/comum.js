@@ -114,24 +114,29 @@ function reamostrar(img, w, h) {
 }
 
 // o layout do tema com o que ele não disse igual ao Padrão (docs/MOTOR.md)
-const LAYOUT = { raio: 8, fundo: '#E6181818', moldura: [0, 0, 0, 0], padding: [10, 6, 10, 6], enfeites: false, colunas: { tempo: 36, pct: 38, ritmo: 34, falta: 48, rotulo: 18 }, letra: 16, barra: [118, 4] };
+const LAYOUT = { raio: 8, fundo: '#E6181818', moldura: [0, 0, 0, 0], padding: [10, 6, 10, 6], enfeites: false, colunas: { tempo: 36, pct: 38, ritmo: 72, falta: 48, rotulo: 18 }, letra: 16, barra: [118, 4] };
 function layoutDe(tema) {
   const l = (tema && tema.layout) || {};
   return { ...LAYOUT, ...l, colunas: { ...LAYOUT.colunas, ...(l.colunas || {}) } };
 }
 
+// o texto na língua do menu da janelinha (m.host.idioma; sem ele, português)
+const tr = (idioma, pt, en) => idioma === 'en' ? en : pt;
+
 // Limites espelhados em overlay.ps1/RitmoDe, overlay.swift/ritmo e overlay-linux.py/ritmo.
-function ritmoDe(pct, decorrido, rotulo) {
+const PALAVRAS_RITMO = ['folga', 'no ritmo', 'acima', 'estourando'];
+const PALAVRAS_RITMO_EN = ['slow', 'on pace', 'fast', 'too fast'];
+function ritmoDe(pct, decorrido, rotulo, idioma) {
   if (!['5h', '7d'].includes(rotulo) || !Number.isFinite(decorrido)) return { txt: '', cor: '#6B7280' };
   if (rotulo === '5h' && (decorrido < 3.33 || decorrido > 96.67)) return { txt: '', cor: '#9CA3AF' };
   const d = pct - decorrido;
-  const n = Math.sign(d) * Math.round(Math.abs(d));
+
   const cor = d >= 20 ? '#EF4444' : d >= 6 ? '#F59E0B' : d <= -10 ? '#22C55E' : '#9CA3AF';
-  return { txt: n > 0 ? `+${n}` : `${n}`, cor };
+  return { txt: tr(idioma, PALAVRAS_RITMO, PALAVRAS_RITMO_EN)[d >= 20 ? 3 : d >= 6 ? 2 : d <= -10 ? 0 : 1], cor };
 }
 
 // o ritmo do usage (docs/MOTOR.md): o tracinho na barra onde o % estaria se gastasse por
-// igual até renovar (u.decorrido) e o "+12" na caixa dele, com a letra do tema
+// igual até renovar (u.decorrido) e a palavra na caixa dela, com a letra do tema
 // (escrever(txt, cor, caixa)). Coordenadas da janela, em DIPs, como as do fundo()
 function desenharRitmo(g, u, cor, escrever) {
   if (u.barra && Number.isFinite(u.decorrido)) {
@@ -142,4 +147,4 @@ function desenharRitmo(g, u, cor, escrever) {
   if (u.ritmo && u.ritmo.txt) escrever(u.ritmo.txt, u.ritmo.cor, u.ritmo.caixa);
 }
 
-module.exports = { DEG, lim, sai, entra, tela, cache, IMG, carregarTexturas, temTexturas, arte, tingida, rng, sortearPeso, rgba, mistura, reamostrar, layoutDe, ritmoDe, desenharRitmo };
+module.exports = { DEG, lim, sai, entra, tela, cache, IMG, carregarTexturas, temTexturas, arte, tingida, rng, sortearPeso, rgba, mistura, reamostrar, layoutDe, tr, PALAVRAS_RITMO, PALAVRAS_RITMO_EN, ritmoDe, desenharRitmo };

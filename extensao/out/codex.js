@@ -263,7 +263,7 @@ function lerSessoesCodex(agora = Date.now() / 1000) {
         }
         if (!e.id)
             continue;
-        const nome = nomes.get(e.id) || path.basename((e.cwd || "").replace(/[\\/]+$/, "")) || "sessão";
+        const nome = nomes.get(e.id) || path.basename((e.cwd || "").replace(/[\\/]+$/, "")) || ((0, sessions_1.lerIdioma)() === "en" ? "session" : "sessão");
         const sessao = {
             agente: "codex",
             name: nome,

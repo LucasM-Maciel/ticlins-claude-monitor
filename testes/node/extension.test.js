@@ -110,8 +110,13 @@ function pastaTemp(prefixo) {
 test.after(() => { for (const p of temporarias) try { fs.rmSync(p, { recursive: true, force: true, maxRetries: 5 }); } catch {} });
 
 /** Ativa a extensão numa casa nova (ou na mesma, pra simular reabrir o VS Code). */
-async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true, semSons = false, remoto, tela = ":0" } = {}) {
+async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true, semSons = false, remoto, tela = ":0", idioma } = {}) {
     casa ??= pastaTemp("cm-ext-");
+    if (idioma) {
+        // o idioma escolhido no botão direito da janelinha
+        fs.mkdirSync(path.join(casa, ".claude-monitor"), { recursive: true });
+        fs.writeFileSync(path.join(casa, ".claude-monitor", "config.json"), JSON.stringify({ tema: "padrao", idioma }));
+    }
     if (!semSons) {
         // com os sons do Minecraft já baixados: a extensão não vai atrás da Mojang
         fs.mkdirSync(path.join(casa, ".claude-monitor", "sons"), { recursive: true });
@@ -164,10 +169,36 @@ function desativar() {
 afterEach(desativar);
 const spawns = () => processos.filter((p) => p.tipo === "spawn");
 
+// O hook roda numa casa de mentira, sem herdar a conta do processo de teste.
+function hookDaConta(casa, configDir) {
+    const env = { ...process.env, HOME: casa, USERPROFILE: casa, CLAUDE_PID: String(process.pid) };
+    delete env.CLAUDE_CONFIG_DIR;
+    if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
+    const r = cp.spawnSync(process.execPath, [path.join(RAIZ, "out", "hook.js"), "working"], {
+        env, input: JSON.stringify({ session_id: "conta", cwd: casa }), encoding: "utf8",
+    });
+    assert.strictEqual(r.status, 0, r.stderr);
+    return JSON.parse(fs.readFileSync(path.join(casa, ".claude-monitor", "sessions", "conta.json"), "utf8"));
+}
+test("hook: CLAUDE_CONFIG_DIR grava a pasta da conta", () => {
+    const casa = pastaTemp("cm-ext-conta-");
+    const dir = path.join(casa, ".claude-conta2");
+    assert.strictEqual(hookDaConta(casa, dir).configDir, dir);
+});
+test("hook: sem CLAUDE_CONFIG_DIR não grava caminho de conta", () => {
+    assert.strictEqual(hookDaConta(pastaTemp("cm-ext-conta-")).configDir, null);
+});
+test("hook: prompt sem variável mantém configDir anterior", () => {
+    const casa = pastaTemp("cm-ext-conta-");
+    const dir = path.join(casa, ".claude-conta2");
+    hookDaConta(casa, dir);
+    assert.strictEqual(hookDaConta(casa).configDir, dir);
+});
+
 test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", async () => {
     const { pasta } = await ativar({ plataforma: "win32" });
     for (const f of ["hook.js", "processes.js", "overlay.ps1", "minecraft.js", "vorbis.min.js", "sons-padrao/terminou.wav", "sons-padrao/esperando.wav", "sons-padrao/tudo.wav",
-        "sons-dragonball/tudo.wav", "sons-akatsuki/tudo.wav", "motor/motor.js", "motor/Motor.cs", "motor/raster.js", "motor/tema-padrao.js"]) {
+        "sons-dragonball/tudo.wav", "sons-akatsuki/tudo.wav", "sons-elden/tudo.wav", "motor/motor.js", "motor/Motor.cs", "motor/raster.js", "motor/tema-padrao.js"]) {
         assert.ok(fs.existsSync(path.join(pasta, f)), f);
     }
     // a pasta motor/ inteira, do jeito que está na extensão
@@ -186,7 +217,7 @@ test("Windows: copia hook + janelinha, marca a versão e abre a janelinha", asyn
 
 test("Mac: copia o .swift, compila com swift 5 e abre o binário", async () => {
     const { pasta } = await ativar({ plataforma: "darwin" });
-    for (const f of ["overlay.swift", "minecraft.js", "vorbis.min.js", "sons-padrao/tudo.wav", "sons-dragonball/tudo.wav", "sons-akatsuki/tudo.wav", "motor/motor.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
+    for (const f of ["overlay.swift", "minecraft.js", "vorbis.min.js", "sons-padrao/tudo.wav", "sons-dragonball/tudo.wav", "sons-akatsuki/tudo.wav", "sons-elden/tudo.wav", "motor/motor.js"]) assert.ok(fs.existsSync(path.join(pasta, f)), f);
     const compilou = processos.find((p) => p.cmd === "xcrun");
     assert.ok(compilou, "não chamou o xcrun swiftc");
     assert.deepStrictEqual(compilou.args.slice(0, 4), ["swiftc", "-swift-version", "5", "-O"]);
@@ -406,6 +437,36 @@ test("versão nova no GitHub: oferece baixar o zip (com o COMO ATUALIZAR), 1x po
     } finally {
         publicada = null;
     }
+});
+
+test("em inglês (idioma no menu da janelinha): versão nova oferece Download, e o clique baixa o zip", async () => {
+    publicada = "v99.0.0";
+    try {
+        const { r } = await ativar({ idioma: "en", clicar: "Download" });
+        const aviso = r.mensagens.find((m) => m.texto.includes("is available"));
+        assert.ok(aviso, JSON.stringify(r.mensagens));
+        assert.match(aviso.texto, /99\.0\.0.*HOW TO UPDATE\.txt/);
+        assert.deepStrictEqual(aviso.botoes, ["Download"]);
+        assert.deepStrictEqual(r.abertos, ["https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip"]);
+    } finally {
+        publicada = null;
+    }
+});
+
+test("trocar o idioma no menu vale no próximo ciclo, sem reabrir o VS Code: atualizou → Reload", async () => {
+    const { r, pasta } = await ativar();
+    r.vscode.window.showInformationMessage = (texto, ...botoes) => {
+        r.mensagens.push({ tipo: "info", texto, botoes });
+        return Promise.resolve(botoes[0]);  // clicou "Reload"
+    };
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao", idioma: "en" }));
+    fs.writeFileSync(path.join(pasta, "versao-janelinha"), "99.0.0");
+    await r.comandos.get("claudeMonitor.refresh")();
+    const aviso = r.mensagens.find((m) => m.texto.includes("updated to 99.0.0"));
+    assert.ok(aviso, JSON.stringify(r.mensagens));
+    assert.deepStrictEqual(aviso.botoes, ["Reload"]);
+    await new Promise(setImmediate);
+    assert.deepStrictEqual(r.executados.at(-1), ["workbench.action.reloadWindow"]);
 });
 
 test("GitHub sem versão nova, sem internet ou janela sem foco: fica quieto", async () => {

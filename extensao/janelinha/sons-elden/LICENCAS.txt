@@ -1,0 +1,2 @@
+Sons do tema Elden Ring: sintetizados do zero pelo sons-elden.py deste projeto (MIT, como o resto).
+Nenhum som de jogo ou de terceiros.

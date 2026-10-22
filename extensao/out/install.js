@@ -81,7 +81,17 @@ function readSettings() {
         return JSON.parse(fs.readFileSync(SETTINGS, "utf8"));
     }
     catch {
-        throw new Error(`Não consegui ler ${SETTINGS} (JSON inválido). Corrige o arquivo e tenta de novo.`);
+        // os instaladores rodam este arquivo sozinho (sem o sessions.js do lado): o idioma vem direto do config.json
+        let idioma;
+        try {
+            idioma = JSON.parse(fs.readFileSync(path.join(HOOK_DIR, "config.json"), "utf8").replace(/^﻿/, "")).idioma;
+        }
+        catch {
+            // sem config: português
+        }
+        throw new Error(idioma === "en"
+            ? `Couldn't read ${SETTINGS} (invalid JSON). Fix the file and try again.`
+            : `Não consegui ler ${SETTINGS} (JSON inválido). Corrige o arquivo e tenta de novo.`);
     }
 }
 function hooksInstalled() {

@@ -165,6 +165,7 @@ function main() {
         updated: now,
         pid,
         entrypoint,
+        configDir: process.env.CLAUDE_CONFIG_DIR || previous.configDir || null,
         ...((0, processes_1.ehAutomatica)(entrypoint, "claude") ? { automatica: true } : {}),
         transcript,
     }));

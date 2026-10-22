@@ -155,6 +155,63 @@ Teste 'nenhuma variável com o mesmo nome em maiúscula/minúscula diferente' {
 }
 
 Write-Host ''
+Teste 'contas: token sensível a maiúsculas, cache por mtime e prazo, representante mais recente' {
+    $astDasContas = [Management.Automation.Language.Parser]::ParseFile($overlay, [ref]$null, [ref]$null)
+    foreach ($funcaoDasContas in 'DirDaConta', 'ApelidoDaConta', 'CacheDaConta', 'CredenciaisDaConta', 'TokenDaConta', 'TokenParaAgrupar', 'AtualizarContas', 'ContaAtual') {
+        $noDaConta = $astDasContas.Find({ param($no) $no -is [Management.Automation.Language.FunctionDefinitionAst] -and $no.Name -eq $funcaoDasContas }, $true)
+        Invoke-Expression $noDaConta.Extent.Text
+    }
+    function PonteirosWsl { @() }
+    $pasta = "$tmp\cache-contas"
+    $dirClaudePadrao = "$pasta\.claude"
+    $outraContaDoTeste = "$pasta\.claude-conta1"
+    $semCredencialDoTeste = "$pasta\.claude-conta2"
+    New-Item -ItemType Directory -Force $dirClaudePadrao, $outraContaDoTeste, $semCredencialDoTeste | Out-Null
+    $contasDoUso = @{ dirs = @(''); pagina = 1 }; $tokensDasContas = @{}; $usosPorConta = @{}
+    $arquivoDoTesteConta = "$outraContaDoTeste\.credentials.json"
+    $credencialDoTesteConta = @{ claudeAiOauth = @{ accessToken = 'falso-A' } } | ConvertTo-Json -Compress
+    [IO.File]::WriteAllText("$dirClaudePadrao\.credentials.json", $credencialDoTesteConta, $utf8)
+    [IO.File]::WriteAllText($arquivoDoTesteConta, $credencialDoTesteConta, $utf8)
+    $sessoesDoTesteConta = @([pscustomobject]@{ configDir = ''; updated = 1 }, [pscustomobject]@{ configDir = $outraContaDoTeste; updated = 2 }, [pscustomobject]@{ configDir = $semCredencialDoTeste; updated = 0 })
+    AtualizarContas $sessoesDoTesteConta
+    Igual 2 $contasDoUso.dirs.Count 'conta sem credencial não pode ser fundida'
+    Igual $outraContaDoTeste (ContaAtual) 'o representante deve ser a sessão mais recente'
+    $estadoDaContaDoTeste = $usosPorConta[$outraContaDoTeste]
+    $estadoDaContaDoTeste.proxima = [DateTime]::Now.AddMinutes(2)
+    $marcaDaContaDoTeste = [IO.File]::GetLastWriteTimeUtc($arquivoDoTesteConta)
+    [IO.File]::WriteAllText($arquivoDoTesteConta, $credencialDoTesteConta.Replace('falso-A', 'falso-a'), $utf8)
+    [IO.File]::SetLastWriteTimeUtc($arquivoDoTesteConta, $marcaDaContaDoTeste)
+    AtualizarContas $sessoesDoTesteConta
+    Igual 2 $contasDoUso.dirs.Count 'não deveria reler antes de 30 s sem mudança de mtime'
+    Verdade ([object]::ReferenceEquals($estadoDaContaDoTeste, $usosPorConta[$outraContaDoTeste])) 'perdeu o relógio de busca do representante'
+    $tokensDasContas[$outraContaDoTeste].lido = [DateTime]::UtcNow.AddSeconds(-31)
+    AtualizarContas $sessoesDoTesteConta
+    Igual 3 $contasDoUso.dirs.Count 'prazo deve reler e tokens diferem por maiúsculas'
+    [IO.File]::WriteAllText($arquivoDoTesteConta, $credencialDoTesteConta, $utf8)
+    [IO.File]::SetLastWriteTimeUtc($arquivoDoTesteConta, $marcaDaContaDoTeste.AddSeconds(2))
+    AtualizarContas $sessoesDoTesteConta
+    Igual 2 $contasDoUso.dirs.Count 'mtime deve reler imediatamente'
+    $sessoesDoTesteConta[0].updated = 3
+    AtualizarContas $sessoesDoTesteConta
+    Igual '' (ContaAtual) 'a padrão deve representar quando for a sessão mais recente'
+}
+# o SalvarConfig do Windows grava só as chaves que conhece: o idioma tem que estar entre elas
+Teste 'config.json: o idioma lido volta igual no SalvarConfig; sem a chave (ou estranha) é português' {
+    $astDoIdioma = [Management.Automation.Language.Parser]::ParseFile($overlay, [ref]$null, [ref]$null)
+    $trechosDoIdioma = @($astDoIdioma.EndBlock.Statements | Where-Object { $_.Extent.Text -match '^(\$(temas|modosDeUso|modosDeMostrar|idiomas|config) =|if \(\[IO\.File\]::Exists\(\$configArquivo\)\)|function (Tr|SalvarConfig)\b)' })
+    Igual 8 $trechosDoIdioma.Count 'os pedaços do config.json no overlay.ps1'
+    function Anotar { }
+    $configArquivo = "$tmp\config-idioma.json"
+    foreach ($casoDoIdioma in @(@('{"tema":"padrao","idioma":"en"}', 'en', 'now'), @('{"tema":"padrao"}', 'pt', 'agora'), @('{"idioma":"klingon"}', 'pt', 'agora'))) {
+        [IO.File]::WriteAllText($configArquivo, $casoDoIdioma[0], $utf8)
+        foreach ($trechoDoIdioma in $trechosDoIdioma) { Invoke-Expression $trechoDoIdioma.Extent.Text }
+        Igual $casoDoIdioma[1] $config.idioma "idioma lido de $($casoDoIdioma[0])"
+        Igual $casoDoIdioma[2] (Tr 'agora' 'now') "Tr com $($casoDoIdioma[0])"
+        SalvarConfig
+        Igual $casoDoIdioma[1] (([IO.File]::ReadAllText($configArquivo) | ConvertFrom-Json).idioma) "o SalvarConfig perdeu o idioma de $($casoDoIdioma[0])"
+    }
+}
+
 Write-Host 'Janelinha (cenários de testes\cenarios.js; prints em testes\saida)'
 # picareta de teste magenta: prova que a textura do Minecraft, quando existe, é a usada
 function PngMagenta($arquivo) {
@@ -162,7 +219,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas', 'contas', 'contas-sem-credencial', 'contas-mesmo-login', 'contas-mesmo-login-outra', 'contas-mesmo-login-padrao', 'ritmo-desligado', 'ingles') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
@@ -196,7 +253,7 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         if ($cenario -eq 'andando') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 5) 'não usou a picareta.png' }
         # o diamante tem 11 px e sai suavizado: só 5-7 pixels ficam magenta puro (0 sem o diamante.png)
         elseif ($cenario -eq 'pedra') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 2) 'cadê o diamante (diamante.png) subindo?' }
-        elseif ($cenario -in 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
+        elseif ($cenario -in 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas', 'contas', 'contas-sem-credencial', 'contas-mesmo-login', 'contas-mesmo-login-outra', 'contas-mesmo-login-padrao', 'ritmo-desligado', 'ingles') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
         else { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -gt 5) 'cadê a ferramenta desenhada (ciano)?' }
         # tema Minecraft com as texturas de mentira do cenarios.js; o Padrão tem elas na pasta e não usa
         if ($cenario -in 'minecraft', 'padrao') {
@@ -412,8 +469,9 @@ Teste 'instala: extensão no VS Code e no Cursor, arquivos, versão e hooks' {
         Verdade ($log -match '--install-extension' -and $log -match [regex]::Escape("claude-monitor-$versao.vsix") -and $log -match '--force') "$editor recebeu: $log"
     }
     foreach ($f in 'hook.js', 'processes.js', 'sem-node.sh', 'overlay.ps1', 'minecraft.js', 'vorbis.min.js', 'sons-padrao\terminou.wav', 'sons-padrao\esperando.wav', 'sons-padrao\tudo.wav', 'sons-dragonball\tudo.wav', 'motor\motor.js', 'motor\Motor.cs', 'motor\raster.js') { Verdade (Test-Path "$casa\.claude-monitor\$f") "falta $f" }
-    # instalação nova começa no tema Padrão
-    Igual '{"tema":"padrao"}' ([IO.File]::ReadAllText("$casa\.claude-monitor\config.json")) 'config.json da instalação nova' 
+    # instalação nova começa no tema Padrão, em português, com 1 linha em inglês ensinando a trocar
+    Igual '{"tema":"padrao"}' ([IO.File]::ReadAllText("$casa\.claude-monitor\config.json")) 'config.json da instalação nova'
+    Verdade ($r.saida -match 'Pronto! A janelinha aparece' -and $r.saida -match 'Language: right-click the floating window > "Idioma" > English') "sem a dica do inglês: $($r.saida)"
     Verdade (Test-Path "$casa\.claude-monitor\sons\levelup.wav") "não baixou os sons do Minecraft: $($r.saida)"
     Verdade (-not (Test-Path "$casa\.claude-monitor\install.js")) 'install.js sobrou na pasta'
     Igual $versao ([IO.File]::ReadAllText("$casa\.claude-monitor\versao-janelinha")) 'versão marcada'
@@ -426,6 +484,18 @@ Teste 'rodar o instalador de novo não duplica os hooks' {
     Verdade ($r.codigo -eq 0) $r.saida
     $hooks = (Get-Content "$casa\.claude\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json).hooks
     Verdade (@($hooks.Stop).Count -eq 1) 'duplicou'
+}
+Teste 'reinstalar com o idioma em inglês (escolhido no menu): fala inglês e não mexe no config.json' {
+    $cfg = "$casa\.claude-monitor\config.json"
+    $antes = [IO.File]::ReadAllText($cfg)
+    [IO.File]::WriteAllText($cfg, '{"tema":"padrao","idioma":"en"}')
+    try {
+        $r = ComAmbiente $ambiente { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $instalador, '-SemAtalho', '-SemAbrir') 120 }
+        Verdade ($r.codigo -eq 0) $r.saida
+        foreach ($t in 'Looking for VS Code', 'Installing the extension', "Done! The floating window now has the Minecraft", 'Done! The floating window shows up') { Verdade ($r.saida -match [regex]::Escape($t)) "faltou '$t': $($r.saida)" }
+        Verdade ($r.saida -notmatch 'Pronto!|Procurando|Language: right-click') "sobrou português (ou a dica): $($r.saida)"
+        Igual '{"tema":"padrao","idioma":"en"}' ([IO.File]::ReadAllText($cfg)) 'o instalador mexeu no config.json'
+    } finally { [IO.File]::WriteAllText($cfg, $antes) }
 }
 function Hash($arquivo) { (Get-FileHash -Algorithm MD5 $arquivo).Hash }
 Teste 'com a janelinha aberta segurando um som: fecha ela, troca tudo e anota no diário' {
@@ -445,7 +515,7 @@ Teste 'com a janelinha aberta segurando um som: fecha ela, troca tudo e anota no
         $r = ComAmbiente $ambiente { Rodar powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $instalador, '-SemAtalho', '-SemAbrir') 120 }
         Verdade ($r.codigo -eq 0) $r.saida
         Verdade $janelinha.HasExited "a janelinha continuou aberta: $($r.saida)"
-        foreach ($f in 'overlay.ps1', 'sons-dragonball\tudo.wav', 'sons-sith\tudo.wav', 'sons-akatsuki\tudo.wav') {
+        foreach ($f in 'overlay.ps1', 'sons-dragonball\tudo.wav', 'sons-sith\tudo.wav', 'sons-akatsuki\tudo.wav', 'sons-elden\tudo.wav') {
             Igual (Hash "$tmp\vsix\extension\janelinha\$f") (Hash "$mon\$f") "$f não foi trocado"
         }
         Verdade ((Get-Content "$mon\janelinha.log" -Raw) -match "\[instalador \d+\] fechei a janelinha \[$($janelinha.Id)\]") 'não anotou no diário que fechou a janelinha'

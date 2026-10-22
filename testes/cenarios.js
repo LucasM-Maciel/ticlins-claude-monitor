@@ -2,7 +2,7 @@
 // usam os mesmos cenários) e grava o que ela TEM que mostrar em esperado.txt,
 // no mesmo formato do .txt que ela escreve no modo --foto/-Foto.
 //
-// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao|epico|codex|uso-codex|uso-codex-sem|uso-ambos|agentes|agentes-tudo|paginas> <pid vivo>
+// Uso: node testes/cenarios.js <pasta> <misto|andando|parado|vazio|levelup|xp-rodando|xp-esperando|aldeao|clique|pedra|bug|atualizar|preferencias|minecraft|padrao|epico|codex|uso-codex|uso-codex-sem|uso-ambos|agentes|agentes-tudo|paginas|ingles> <pid vivo>
 //   <pid vivo>: um processo que fica aberto durante o teste (o shell do teste).
 //
 // O "misto" junta os casos que já deram ou podem dar errado:
@@ -59,7 +59,7 @@ let ordem = 0;
  * (null = não pode aparecer). Quanto antes criada, mais em cima (updated maior).
  * `antes` = situação que a janelinha tinha visto antes (pra testar o som da mudança).
  */
-function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuEm, semTranscript, mostra, automatica, antes: situacaoAntes }) {
+function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuEm, semTranscript, mostra, automatica, configDir, antes: situacaoAntes }) {
     fs.mkdirSync(dirSessoes, { recursive: true });
     ordem += 1;
     if (situacaoAntes) antes[id] = situacaoAntes;
@@ -81,6 +81,7 @@ function sessao(id, { estado, linhas, nomeNoArquivo, pid, updated, since, mexeuE
         entrypoint: automatica ? "sdk-cli" : "claude-vscode",
         ...(automatica ? { automatica: true } : {}),
         transcript,
+        ...(configDir ? { configDir } : {}),
     }));
     if (mostra) esperado.push({ updated: u, since: since ?? u, situ: mostra[1], linha: `sessao: ${mostra[0]} | hook=${estado} | janelinha=${mostra[1]}` });
 }
@@ -110,9 +111,14 @@ function pidMorto() {
 
 // ritmo esperado: uso − % da janela que já passou (5h renova em 90 min: 70%; 7d em 3d1h: 56,5%)
 let ritmo = "nenhum";
+let idioma = "pt";  // o item "Idioma" do botão direito (config.json > idioma): muda o texto do ritmo e da conta, não as chaves do .txt
 function uso(cinco, sete) {
     const { ritmoDe } = require('../extensao/janelinha/motor/comum');
-    ritmo = `5h ${ritmoDe(cinco, 70, '5h').txt} | 7d ${ritmoDe(sete, 100 * (1 - (3 * 1440 + 60) / (7 * 1440)), '7d').txt}`;
+    const descricao = (pct, decorrido, rotulo) => {
+        const n = Math.sign(pct - decorrido) * Math.round(Math.abs(pct - decorrido));
+        return `${rotulo} ${ritmoDe(pct, decorrido, rotulo, idioma).txt} (${n > 0 ? '+' : ''}${n})`;
+    };
+    ritmo = `${descricao(cinco, 70, '5h')} | ${descricao(sete, 100 * (1 - (3 * 1440 + 60) / (7 * 1440)), '7d')}`;
     const daqui = (min) => new Date(Date.now() + min * 60000).toISOString().replace("Z", "+00:00");
     fs.writeFileSync(path.join(pasta, "uso.json"), JSON.stringify({
         five_hour: { utilization: cinco, resets_at: daqui(90) },
@@ -169,6 +175,7 @@ let clawd;
 let temUso = false;
 let usoMostrado = "claude";  // o item "Uso" do botão direito (config.json > uso); só vai pro .txt quando não é o padrão
 let mostrarDoCenario = "abas";  // o item "Mostrar" do botão direito (config.json > mostrar); só vai pro .txt quando não é o padrão
+let conta = "";
 let barras = "";  // as barras que a janelinha mostra, "Agente janela %", separadas por " | "
 let som = "nenhum";  // o que a janelinha tocaria: nenhum, xp, aldeao ou levelup (no Padrão: sino-terminou, sino-esperando, sino-tudo)
 let somDaCena = "nenhum";  // a cena épica cuja trilha o motor mandou tocar (mensagem S)
@@ -358,6 +365,68 @@ if (cenario === "misto") {
     mostrarDoCenario = tudo ? "tudo" : "abas";
     fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao", mostrar: mostrarDoCenario }));
     clawd = "andando";
+} else if (["contas-mesmo-login", "contas-mesmo-login-outra", "contas-mesmo-login-padrao"].includes(cenario)) {
+    const padrao = cenario === "contas-mesmo-login-padrao";
+    for (const [id, d, token, updated] of [
+        ["conta1", path.join(pasta, ".claude-conta1"), "falso-login", agora - (padrao ? 2 : 1)],
+        ["padrao", path.join(pasta, ".claude"), "falso-login", agora - (padrao ? 1 : 2)],
+        ...(cenario === "contas-mesmo-login-outra" ? [["conta2", path.join(pasta, ".claude-conta2"), "outro-falso", agora - 3]] : []),
+    ]) {
+        fs.mkdirSync(d, { recursive: true });
+        fs.writeFileSync(path.join(d, ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: token } }));
+        sessao(id, { configDir: id === "padrao" ? undefined : d, updated, estado: "working", mostra: [id, "working"], linhas: [titulo(id), ferramenta("Bash")] });
+    }
+    uso(11, 22);
+    fs.renameSync(path.join(pasta, "uso.json"), path.join(pasta, "ultimo-uso-conta2.json"));
+    uso(38, 65);
+    const cache = fs.readFileSync(path.join(pasta, "uso.json"));
+    fs.writeFileSync(path.join(pasta, "ultimo-uso-conta1.json"), cache);
+    fs.writeFileSync(path.join(pasta, "ultimo-uso.json"), cache);
+    fs.unlinkSync(path.join(pasta, "uso.json"));
+    conta = `conta: ${padrao ? "padrão" : "conta 1"} (1/${cenario === "contas-mesmo-login-outra" ? 2 : 1}) | credenciais: ok`;
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao" }));
+    temUso = true;
+    clawd = "andando";
+} else if (cenario === "ritmo-desligado") {
+    sessao("ritmo", { estado: "working", mostra: ["Ritmo", "working"], linhas: [titulo("Ritmo"), ferramenta("Bash")] });
+    uso(38, 65);
+    ritmo = "desligado";
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao", ritmo: false }));
+    temUso = true;
+    clawd = "andando";
+} else if (cenario === "contas" || cenario === "contas-sem-credencial") {
+    const configDir = path.join(pasta, ".claude-conta2");
+    fs.mkdirSync(configDir, { recursive: true });
+    const credencial = cenario === "contas";
+    if (credencial) fs.writeFileSync(path.join(configDir, ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "teste-falso" } }));
+    sessao("conta2", { configDir, estado: "working", mostra: ["Conta 2", "working"], linhas: [titulo("Conta 2"), ferramenta("Bash")] });
+    sessao("padrao", { estado: "waiting", mostra: ["Conta padrão", "finished"], linhas: [titulo("Conta padrão"), texto("Feito.")] });
+    uso(11, 22);
+    fs.renameSync(path.join(pasta, "uso.json"), path.join(pasta, "ultimo-uso.json"));
+    uso(38, 85);
+    fs.renameSync(path.join(pasta, "uso.json"), path.join(pasta, "ultimo-uso-conta2.json"));
+    usoMostrado = "ambos";
+    usoDoCodex([["5h", 20]]);
+    barras = "Claude 5h 38% | Claude 7d 85% | Codex 5h 20%";
+    conta = `conta: conta 2 (1/2) | credenciais: ${credencial ? "ok" : "falta"}`;
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao", uso: usoMostrado }));
+    temUso = true;
+    clawd = "andando";
+} else if (cenario === "ingles") {  // Idioma = English: a conta 2 vira "account 2" e o ritmo "slow"/"too fast"
+    const configDir = path.join(pasta, ".claude-conta2");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "teste-falso" } }));
+    sessao("conta2", { configDir, estado: "working", mostra: ["Conta 2", "working"], linhas: [titulo("Conta 2"), ferramenta("Bash")] });
+    sessao("padrao", { estado: "waiting", mostra: ["Conta padrão", "finished"], linhas: [titulo("Conta padrão"), texto("Feito.")] });
+    idioma = "en";
+    uso(11, 22);
+    fs.renameSync(path.join(pasta, "uso.json"), path.join(pasta, "ultimo-uso.json"));
+    uso(38, 85);
+    fs.renameSync(path.join(pasta, "uso.json"), path.join(pasta, "ultimo-uso-conta2.json"));  // o cache segue "conta2" em inglês
+    conta = "conta: account 2 (1/2) | credenciais: ok";
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "padrao", idioma }));
+    temUso = true;
+    clawd = "andando";
 } else if (cenario === "paginas") {  // 12 abas: a lista mostra 10 e a linha ◀ 1/2 ▶ leva às outras 2
     for (let i = 1; i <= 12; i++) {
         const nome = `Sessão ${String(i).padStart(2, "0")}`;
@@ -402,6 +471,7 @@ const paginasDaLista = Math.max(1, Math.ceil(esperado.length / 10));  // a lista
 if (mostrarDoCenario !== "abas") linhas.push(`mostrar: ${mostrarDoCenario}`);
 if (paginasDaLista > 1) linhas.push(`pagina: 1/${paginasDaLista}`);
 linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`);
+if (conta) linhas.push(conta);
 linhas.push(`ritmo: ${usoMostrado === "codex" ? "nenhum" : ritmo}`);  // o ritmo é só das barras do Claude (5h e 7d)
 if (usoMostrado !== "claude") linhas.push(`uso: ${usoMostrado}`, `barras: ${barras}`);
 linhas.push(`som: ${som}`, `som da cena: ${somDaCena}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);

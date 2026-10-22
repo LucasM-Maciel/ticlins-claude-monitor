@@ -24,6 +24,7 @@
 // instante da cena (pedra ou bug), em segundos. --sem-motor desenha o Clawd daqui (o
 // de antes do motor), como quando falta o node.
 import Cocoa
+import CryptoKit
 
 let ambiente = ProcessInfo.processInfo.environment
 let home = ambiente["HOME"] ?? NSHomeDirectory()
@@ -67,10 +68,16 @@ func anotar(_ texto: String) {
 // botão direito: tema, Clawd, opacidade e volume, gravados em config.json (o Windows lê o mesmo).
 // Sem o arquivo, tudo como antes do menu existir: Minecraft, Clawd ligado, opaco, volume
 // cheio. Instalação nova já nasce com o Padrão (o instalador grava o tema).
-let temas: [(id: String, nome: String)] = [("padrao", "Padrão"), ("minecraft", "Minecraft"), ("dragonball", "Dragon Ball"), ("sith", "Star Wars"), ("akatsuki", "Akatsuki")]
+// en: o nome com Idioma = English (nil = igual nas duas línguas)
+let temas: [(id: String, nome: String, en: String?)] = [("padrao", "Padrão", "Default"), ("minecraft", "Minecraft", nil), ("dragonball", "Dragon Ball", nil), ("sith", "Star Wars", nil), ("akatsuki", "Akatsuki", nil), ("elden", "Elden Ring", nil)]
+let idiomas: [(id: String, nome: String)] = [("pt", "Português"), ("en", "English")]
 let arquivoConfig = pasta + "/config.json"
 // mostrar: "abas" (o padrão), "agentes" (sessões automáticas: claude -p, codex exec) ou "tudo"
-var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft", uso: "claude", mostrar: "abas")
+// idioma: "pt" (o padrão; quem já tinha instalado não tem a chave) ou "en"
+var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft", uso: "claude", mostrar: "abas", ritmo: true, idioma: "pt")
+// o texto na língua do menu: tr("agora", "now")
+func tr(_ pt: String, _ en: String) -> String { config.idioma == "en" ? en : pt }
+func nomeNoIdioma(_ nome: String, _ en: String?) -> String { tr(nome, en ?? nome) }
 // a lista mostra 10 sessões por vez; a página só vive na memória (começa na 1, volta pra última que existe)
 let sessoesPorPagina = 10
 var paginaDaLista = 1
@@ -80,11 +87,13 @@ func lerJSON(_ caminho: String) -> [String: Any]? {
 }
 if let o = lerJSON(arquivoConfig) {
     if let v = (o["opacidade"] as? NSNumber)?.doubleValue { config.opacidade = min(1, max(0.2, v)) }
+    if let v = o["ritmo"] as? Bool { config.ritmo = v }
     if let v = o["clawd"] as? Bool { config.clawd = v }
     if let v = (o["volume"] as? NSNumber)?.doubleValue { config.volume = min(1, max(0, v)) }
     if let v = o["tema"] as? String, temas.contains(where: { $0.id == v }) { config.tema = v }
     if let v = o["uso"] as? String, ["claude", "codex", "ambos"].contains(v) { config.uso = v }
     if let v = o["mostrar"] as? String, ["abas", "agentes", "tudo"].contains(v) { config.mostrar = v }
+    if let v = o["idioma"] as? String, idiomas.contains(where: { $0.id == v }) { config.idioma = v }
 }
 func salvarConfig() {
     // por cima do que já tinha: chave que esta versão não conhece continua lá
@@ -93,11 +102,13 @@ func salvarConfig() {
     o["clawd"] = config.clawd
     o["volume"] = config.volume
     o["tema"] = config.tema
+    o["ritmo"] = config.ritmo
     o["uso"] = config.uso
     o["mostrar"] = config.mostrar
+    o["idioma"] = config.idioma
     if let d = try? JSONSerialization.data(withJSONObject: o) { try? d.write(to: URL(fileURLWithPath: arquivoConfig)) }
 }
-func nomeDoTema() -> String { temas.first(where: { $0.id == config.tema })?.nome ?? config.tema }
+func nomeDoTema() -> String { temas.first(where: { $0.id == config.tema }).map { nomeNoIdioma($0.nome, $0.en) } ?? config.tema }
 
 // motor das animações (o resto mais embaixo, depois da janela)
 var motor: Motor?                        // o processo aberto (vivo, ou ainda sem o 1º quadro)
@@ -132,11 +143,11 @@ func hex(_ codigo: String) -> NSColor {
 }
 
 // situação da sessão (ver situacao) -> cor da bolinha e texto do tooltip
-let estados: [String: (cor: String, rotulo: String)] = [
-    "working": ("#22C55E", "trabalhando"),
-    "finished": ("#EF4444", "terminou"),
-    "question": ("#60A5FA", "pergunta pra você"),
-    "permission": ("#FACC15", "pedindo permissão"),
+let estados: [String: (cor: String, rotulo: String, en: String)] = [
+    "working": ("#22C55E", "trabalhando", "working"),
+    "finished": ("#EF4444", "terminou", "done"),
+    "question": ("#60A5FA", "pergunta pra você", "asking you"),
+    "permission": ("#FACC15", "pedindo permissão", "needs permission"),
 ]
 
 // --- sons de cada aviso por tema; com mais de um, sorteia. Sem o arquivo, o do Mac.
@@ -153,6 +164,8 @@ let sonsDoTema: [String: [String: [String]]] = [
     "sith": ["esperando": ["sons-sith/esperando"], "terminou": ["sons-sith/terminou"], "tudo": ["sons-sith/tudo"]],
     "akatsuki": ["esperando": ["sons-akatsuki/esperando"], "terminou": ["sons-akatsuki/terminou"],
                  "tudo": ["sons-akatsuki/tudo"]],
+    "elden": ["esperando": ["sons-elden/esperando"], "terminou": ["sons-elden/terminou"],
+              "tudo": ["sons-elden/tudo"]],
 ]
 let somDoMac = ["esperando": "Ping", "terminou": "Glass", "tudo": "Hero"]
 let nomeDoSom: [String: [String: String]] = [  // pro diário e pro .txt do --foto
@@ -161,6 +174,7 @@ let nomeDoSom: [String: [String: String]] = [  // pro diário e pro .txt do --fo
     "dragonball": ["esperando": "esferas-esperando", "terminou": "esferas-terminou", "tudo": "esferas-tudo"],
     "sith": ["esperando": "droide-bipes", "terminou": "sabre-liga", "tudo": "acorde-sith"],
     "akatsuki": ["esperando": "kunai-corda", "terminou": "puf-acorde", "tudo": "frase-tambor"],
+    "elden": ["esperando": "sino-ouro", "terminou": "acorde-graca", "tudo": "gongo-harpa"],
 ]
 var tocando: NSSound?  // segura o som até acabar de tocar
 func tocar(_ situacao: String) {
@@ -223,6 +237,7 @@ struct Sessao {
     var situacao = ""
     var codex = false      // sessão do Codex (sem hook, sem transcript do Claude)
     var pergunta = false   // o Codex terminou com uma pergunta
+    var configDir: String? = nil
     var automatica = false // não é uma aba (claude -p, codex exec): o hook e a extensão decidem e gravam no arquivo
 }
 
@@ -241,7 +256,7 @@ func lerFundo(agora: Double) -> Set<String> {
 func lerSessoes(agora: Double) -> [Sessao] {
     idsDeFundo = lerFundo(agora: agora)
     let fm = FileManager.default
-    guard let arquivos = try? fm.contentsOfDirectory(atPath: dirSessoes) else { return [] }
+    guard let arquivos = try? fm.contentsOfDirectory(atPath: dirSessoes) else { atualizarContas([]); return [] }
     var vistas: [String: Sessao] = [:]
     for arquivo in arquivos where arquivo.hasSuffix(".json") {
         guard let dados = fm.contents(atPath: dirSessoes + "/" + arquivo),
@@ -255,14 +270,15 @@ func lerSessoes(agora: Double) -> [Sessao] {
         let id = String(arquivo.dropLast(5))
         let ehCodex = (d["agente"] as? String) == "codex"
         let transcript = ehCodex ? "" : d["transcript"] as? String ?? ""
-        let s = Sessao(id: id, nome: (ehCodex ? nil : titulo(transcript)) ?? (d["name"] as? String ?? "sessão"),
+        let s = Sessao(id: id, nome: (ehCodex ? nil : titulo(transcript)) ?? (d["name"] as? String ?? tr("sessão", "session")),
                        estado: d["state"] as? String ?? "waiting", since: numero(d["since"]) ?? updated,
                        updated: updated, pid: pid, transcript: transcript,
-                       codex: ehCodex, pergunta: d["pergunta"] as? Bool == true, automatica: d["automatica"] as? Bool == true)
+                       codex: ehCodex, pergunta: d["pergunta"] as? Bool == true, configDir: d["configDir"] as? String, automatica: d["automatica"] as? Bool == true)
         let chave = pid.map { "pid:\($0)" } ?? "id:\(id)"
         if let v = vistas[chave], v.updated >= s.updated { continue }
         vistas[chave] = s
     }
+    atualizarContas(Array(vistas.values))
     return vistas.values.map { s -> Sessao in
         var s = s
         s.situacao = situacao(s)
@@ -416,10 +432,10 @@ func avisar(_ sessoes: [Sessao]) {
     if arquivoFoto == nil { tocar(t) }
 }
 
-func tempo(_ minutos: Double) -> String {
+func tempo(_ minutos: Double, menosDeUmMinuto: String? = nil) -> String {
     guard minutos.isFinite else { return "" }
     let m = max(0, Int(minutos.rounded(.down)))
-    if m < 1 { return "agora" }
+    if m < 1 { return menosDeUmMinuto ?? tr("agora", "now") }
     if m < 60 { return "\(m)m" }
     if m < 1440 { return "\(m / 60)h" + (m % 60 < 10 ? "0" : "") + "\(m % 60)" }
     return "\(m / 1440)d\((m % 1440) / 60)h"
@@ -427,11 +443,83 @@ func tempo(_ minutos: Double) -> String {
 
 // --- usage: o mesmo endpoint do /usage, a cada 2 min ---
 struct Medida { let pct: Double; let renova: Date? }
-var uso: [(rotulo: String, medida: Medida)]? = nil
-var proximaBusca = Date.distantPast
-var buscando = false
+final class UsoDaConta {
+    var dados: [(rotulo: String, medida: Medida)]?
+    var proxima = Date.distantPast
+    var pedido: URLSessionDataTask?
+    var buscando = false
+}
+var usosPorConta: [String: UsoDaConta] = [:]
+var contasDoUso = [""]
+var paginaDoUso = 1
+func contaAtual() -> String { contasDoUso[paginaDoUso - 1] }
+var uso: [(rotulo: String, medida: Medida)]? { usosPorConta[contaAtual()]?.dados }
+func dirDaConta(_ dir: String?) -> String {
+    guard let dir = dir, !dir.isEmpty else { return "" }
+    let d = (dir as NSString).expandingTildeInPath as NSString
+    let normalizado = d.standardizingPath
+    return normalizado == home + "/.claude" ? "" : normalizado
+}
+func apelidoDaConta(_ dir: String) -> String {
+    if dir.isEmpty { return tr("padrão", "default") }
+    let nome = (dir as NSString).lastPathComponent
+    if nome.range(of: "^\\.claude-conta[0-9]+$", options: .regularExpression) != nil {
+        return tr("conta", "account") + " " + String(nome.dropFirst(".claude-conta".count))
+    }
+    return nome
+}
+func cacheDaConta(_ dir: String) -> String {
+    // o nome do arquivo não depende do idioma: .claude-conta2 -> ultimo-uso-conta2.json
+    let nome = (dir as NSString).lastPathComponent.replacingOccurrences(of: "^\\.claude-conta([0-9]+)$", with: "conta$1", options: .regularExpression).unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || "_.-".unicodeScalars.contains($0) }.map { String($0) }.joined()
+    return pasta + "/ultimo-uso" + (dir.isEmpty ? "" : "-" + nome) + ".json"
+}
+var tokensDasContas: [String: (mtime: Date?, lido: Date, token: String?)] = [:]  // só memória
+func arquivoDasCredenciais(_ dir: String) -> String {
+    return (dir.isEmpty ? (arquivoFoto == nil ? home : pasta) + "/.claude" : dir) + "/.credentials.json"
+}
+func tokenParaAgrupar(_ dir: String) -> String? {
+    let mtime = (try? FileManager.default.attributesOfItem(atPath: arquivoDasCredenciais(dir)))?[.modificationDate] as? Date
+    let agora = Date()
+    if let anterior = tokensDasContas[dir], anterior.mtime == mtime, agora.timeIntervalSince(anterior.lido) < 30 { return anterior.token }
+    let token = credenciaisDaConta(dir, somenteArquivo: true)
+    tokensDasContas[dir] = (mtime, agora, token)
+    return token
+}
+func atualizarContas(_ sessoes: [Sessao]) {
+    var recentes: [String: Double] = [:]
+    for s in sessoes where !s.codex {
+        let d = dirDaConta(s.configDir)
+        recentes[d] = max(recentes[d] ?? 0, s.updated)
+    }
+    contasDoUso = recentes.keys.sorted { recentes[$0] == recentes[$1] ? $0 < $1 : (recentes[$0] ?? 0) > (recentes[$1] ?? 0) }
+    var vistos = Set<String>()
+    contasDoUso = contasDoUso.filter { dir in
+        guard let token = tokenParaAgrupar(dir) else { return true }
+        return vistos.insert(token).inserted
+    }
+    for dir in Array(tokensDasContas.keys) where recentes[dir] == nil { tokensDasContas.removeValue(forKey: dir) }
+    if contasDoUso.isEmpty { contasDoUso = [""] }
+    paginaDoUso = min(contasDoUso.count, max(1, paginaDoUso))
+    for d in Array(usosPorConta.keys) where !contasDoUso.contains(d) {
+        usosPorConta[d]?.pedido?.cancel()
+        usosPorConta.removeValue(forKey: d)
+    }
+    for d in contasDoUso where usosPorConta[d] == nil {
+        let estado = UsoDaConta()
+        var o = lerJSON(cacheDaConta(d))
+        if o == nil, d.isEmpty, arquivoFoto != nil, let f = argumento("--uso") { o = lerJSON(f) }
+        if let o = o { estado.dados = usoDe(o) }
+        usosPorConta[d] = estado
+    }
+}
+func paginasDoUso() -> String { "◀ \(apelidoDaConta(contaAtual())) · \(paginaDoUso)/\(contasDoUso.count) ▶" }
+func fotoDaConta() -> [String] {
+    if !tokensDasContas.keys.contains(where: { !$0.isEmpty }) { return [] }
+    let cred = credenciaisDaConta(contaAtual()) == nil ? "falta" : "ok"
+    return ["conta: \(apelidoDaConta(contaAtual())) (\(paginaDoUso)/\(contasDoUso.count)) | credenciais: \(cred)"]
+}
 // quanto falta pra renovar
-func faltaPraRenovar(_ m: Medida) -> String { m.renova.map { tempo($0.timeIntervalSinceNow / 60) } ?? "" }
+func faltaPraRenovar(_ m: Medida) -> String { m.renova.map { tempo($0.timeIntervalSinceNow / 60, menosDeUmMinuto: "<1m") } ?? "" }
 // ritmo: quanto da janela (5h ou 7d) já passou, em %; é onde fica o tracinho na barra.
 // Gastar no ritmo = o % acompanhar o tempo. O número é o uso menos isso: + = acima do ritmo
 let duracaoDaJanela: [String: TimeInterval] = ["5h": 5 * 3600, "7d": 7 * 86400]
@@ -440,13 +528,14 @@ func decorrido(_ rotulo: String, _ m: Medida) -> Double? {
     return min(max(100 * (1 - r.timeIntervalSinceNow / d), 0), 100)
 }
 // Limites iguais a motor/comum.js/ritmoDe, overlay.ps1/RitmoDe e overlay-linux.py/ritmo.
+let palavrasRitmo = [("folga", "slow"), ("no ritmo", "on pace"), ("acima", "fast"), ("estourando", "too fast")]
 func ritmo(_ rotulo: String, _ m: Medida) -> (txt: String, cor: String) {
-    guard let passado = decorrido(rotulo, m) else { return ("", "#6B7280") }
+    guard config.ritmo, let passado = decorrido(rotulo, m) else { return ("", "#6B7280") }
     if rotulo == "5h" && (passado < 3.33 || passado > 96.67) { return ("", "#9CA3AF") }
     let d = m.pct - passado
-    let n = Int(d.rounded())
     let cor = d >= 20 ? "#EF4444" : d >= 6 ? "#F59E0B" : d <= -10 ? "#22C55E" : "#9CA3AF"
-    return (n > 0 ? "+\(n)" : "\(n)", cor)
+    let palavra = palavrasRitmo[d >= 20 ? 3 : d >= 6 ? 2 : d <= -10 ? 0 : 1]
+    return (tr(palavra.0, palavra.1), cor)
 }
 
 func dataISO(_ texto: String?) -> Date? {
@@ -460,26 +549,32 @@ func medida(_ v: Any?) -> Medida? {
     if let r = renova, r <= Date() { return Medida(pct: 0, renova: nil) }  // o guardado já renovou: zerou
     return Medida(pct: pct, renova: renova)
 }
-// o último usage que veio fica em ultimo-uso.json: reabrir com 429 ou token vencido mostra ele, não "indisponível"
-let usoGuardado = pasta + "/ultimo-uso.json"
-// Login do Claude Code: no Mac fica no Keychain (item "Claude Code-credentials");
-// em alguns casos, no arquivo ~/.claude/.credentials.json.
-func token() -> String? {
-    var dados = FileManager.default.contents(atPath: home + "/.claude/.credentials.json")
-    if dados == nil {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        p.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
-        let saida = Pipe()
-        p.standardOutput = saida
-        p.standardError = FileHandle.nullDevice
-        do { try p.run() } catch { return nil }
-        dados = saida.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        if p.terminationStatus != 0 { return nil }
+// Somente leitura: arquivo da conta, Keychain com sufixo, depois o login padrão.
+func tokenNosDados(_ dados: Data?) -> String? {
+    guard let d = dados, let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+          let tk = (o["claudeAiOauth"] as? [String: Any])?["accessToken"] as? String, !tk.isEmpty else { return nil }
+    return tk
+}
+func tokenNoKeychain(_ servico: String) -> String? {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+    p.arguments = ["find-generic-password", "-s", servico, "-w"]
+    let saida = Pipe()
+    p.standardOutput = saida
+    p.standardError = FileHandle.nullDevice
+    do { try p.run() } catch { return nil }
+    let dados = saida.fileHandleForReading.readDataToEndOfFile()
+    p.waitUntilExit()
+    return p.terminationStatus == 0 ? tokenNosDados(dados) : nil
+}
+func credenciaisDaConta(_ dir: String, somenteArquivo: Bool = false) -> String? {
+    if let tk = tokenNosDados(FileManager.default.contents(atPath: arquivoDasCredenciais(dir))) { return tk }
+    if somenteArquivo || arquivoFoto != nil { return nil }  // foto só lê a casa de mentira; nunca o Keychain
+    if !dir.isEmpty {
+        let sufixo = SHA256.hash(data: Data(dir.utf8)).map { String(format: "%02x", $0) }.joined().prefix(8)
+        return tokenNoKeychain("Claude Code-credentials-" + String(sufixo))  // outra conta nunca cai nas credenciais da padrão
     }
-    guard let d = dados, let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return nil }
-    return (o["claudeAiOauth"] as? [String: Any])?["accessToken"] as? String
+    return tokenNoKeychain("Claude Code-credentials")
 }
 func usoDe(_ o: [String: Any]) -> [(rotulo: String, medida: Medida)]? {
     let pares: [(String, Medida?)] = [("5h", medida(o["five_hour"])), ("7d", medida(o["seven_day"]))]
@@ -504,6 +599,7 @@ func lerUsoDoCodex() {
 // (com os dois, cada grupo ganha o nome do agente). Linhas de texto ou barras.
 enum LinhaDoUso {
     case texto(String)
+    case paginas(String)
     case barra(rotulo: String, medida: Medida)
 }
 func soUmTexto(_ linhas: [LinhaDoUso]) -> Bool {
@@ -516,13 +612,19 @@ func linhasDoUso() -> [LinhaDoUso] {
     let doCodex = config.uso == "claude" ? [] : usoDoCodex
     let ambos = config.uso == "ambos"
     var r: [LinhaDoUso] = []
-    if ambos && doClaude.isEmpty { r.append(.texto("usage indisponível")) }
-    if ambos && !doClaude.isEmpty { r.append(.texto("Claude")) }
+    let outraSozinha = contasDoUso.count == 1 && !contaAtual().isEmpty
+    if config.uso != "codex" && outraSozinha { r.append(.texto((ambos ? "Claude · " : "") + apelidoDaConta(contaAtual()))) }
+    if ambos && doClaude.isEmpty { r.append(.texto(tr("usage indisponível", "usage unavailable"))) }
+    if ambos && !doClaude.isEmpty && !outraSozinha { r.append(.texto("Claude")) }
     for m in doClaude { r.append(.barra(rotulo: m.rotulo, medida: m.medida)) }
+    if config.uso != "codex" && contasDoUso.count > 1 {
+        if doClaude.isEmpty && !ambos { r.append(.texto(tr("usage indisponível", "usage unavailable"))) }
+        r.append(.paginas(paginasDoUso()))
+    }
     if ambos && !doCodex.isEmpty { r.append(.texto("Codex")) }
     for m in doCodex { r.append(.barra(rotulo: m.rotulo, medida: m.medida)) }
-    if config.uso != "claude" && doCodex.isEmpty { r.append(.texto("Codex: sem uso ainda")) }
-    else if doClaude.isEmpty && doCodex.isEmpty { r.append(.texto("usage indisponível")) }
+    if config.uso != "claude" && doCodex.isEmpty { r.append(.texto(tr("Codex: sem uso ainda", "Codex: no usage yet"))) }
+    else if doClaude.isEmpty && doCodex.isEmpty && contasDoUso.count == 1 { r.append(.texto(tr("usage indisponível", "usage unavailable"))) }
     return r
 }
 // "Claude 5h 38% | Codex 30d 12%": o que o --foto grava no .txt (o teste compara com o do Windows)
@@ -532,49 +634,59 @@ func barrasComGrupo() -> String {
     let f = { (g: String, l: [(rotulo: String, medida: Medida)]) in l.map { "\(g) \($0.rotulo) \(Int($0.medida.pct.rounded()))%" } }
     return (f("Claude", doClaude) + f("Codex", doCodex)).joined(separator: " | ")
 }
-// "5h -28 | 7d +28": o ritmo das barras do Claude que estão na tela (o Codex não entra); o --foto grava no .txt
+// Palavra e diferença exata: o ritmo das barras do Claude que estão na tela (o Codex não entra); o --foto grava no .txt
 func ritmoDoClaude() -> String {
+    if !config.ritmo { return "desligado" }
     let doClaude = config.uso == "codex" ? [] : (uso ?? [])
-    return doClaude.isEmpty ? "nenhum" : doClaude.map { "\($0.rotulo) \(ritmo($0.rotulo, $0.medida).txt)" }.joined(separator: " | ")
+    return doClaude.isEmpty ? "nenhum" : doClaude.map { par in
+        let palavra = ritmo(par.rotulo, par.medida).txt
+        guard !palavra.isEmpty, let passado = decorrido(par.rotulo, par.medida) else { return par.rotulo + " " }
+        let n = Int((par.medida.pct - passado).rounded())
+        return "\(par.rotulo) \(palavra) (\(n > 0 ? "+" : "")\(n))"
+    }.joined(separator: " | ")
 }
-func buscarUso() {
-    if arquivoFoto != nil {  // teste: nada de internet
-        if uso == nil, let f = argumento("--uso"), let d = FileManager.default.contents(atPath: f),
-           let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] { uso = usoDe(o) }
-        return
-    }
-    if proximaBusca == .distantPast, let d = FileManager.default.contents(atPath: usoGuardado),
-       let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] { uso = usoDe(o) }
-    if buscando || Date() < proximaBusca { return }
-    buscando = true
-    proximaBusca = Date().addingTimeInterval(20)  // se falhar, tenta de novo logo
+func buscarUsoDaConta(_ dir: String, _ estado: UsoDaConta) {
+    if estado.buscando || Date() < estado.proxima { return }
+    estado.buscando = true
     DispatchQueue.global().async {
-        guard let tk = token(), let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
-            DispatchQueue.main.async { buscando = false }
+        guard let tk = credenciaisDaConta(dir), let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
+            DispatchQueue.main.async { estado.buscando = false; estado.proxima = Date().addingTimeInterval(20) }
             return
         }
         var req = URLRequest(url: url, timeoutInterval: 5)
         req.setValue("Bearer " + tk, forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        URLSession.shared.dataTask(with: req) { dados, resposta, _ in
-            let status = (resposta as? HTTPURLResponse)?.statusCode ?? 0
-            let novo: [(rotulo: String, medida: Medida)]? = {
-                guard status == 200, let d = dados,
-                      let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return nil }
-                return usoDe(o)
-            }()
-            DispatchQueue.main.async {
-                buscando = false
-                if let n = novo {
-                    uso = n
-                    proximaBusca = Date().addingTimeInterval(120)
-                    try? dados?.write(to: URL(fileURLWithPath: usoGuardado))
-                } else if status == 429 {
-                    proximaBusca = Date().addingTimeInterval(300)  // limite de requisições: espera mais
+        DispatchQueue.main.async {
+            guard usosPorConta[dir] === estado else { return }
+            let pedido = URLSession.shared.dataTask(with: req) { dados, resposta, _ in
+                let status = (resposta as? HTTPURLResponse)?.statusCode ?? 0
+                let novo: [(rotulo: String, medida: Medida)]? = {
+                    guard status == 200, let d = dados,
+                          let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return nil }
+                    return usoDe(o)
+                }()
+                DispatchQueue.main.async {
+                    guard usosPorConta[dir] === estado else { return }
+                    estado.buscando = false
+                    estado.pedido = nil
+                    estado.proxima = Date().addingTimeInterval(20)
+                    if let n = novo {
+                        estado.dados = n
+                        estado.proxima = Date().addingTimeInterval(120)
+                        try? dados?.write(to: URL(fileURLWithPath: cacheDaConta(dir)))
+                    } else if status == 429 {
+                        estado.proxima = Date().addingTimeInterval(300)
+                    }
                 }
             }
-        }.resume()
+            estado.pedido = pedido
+            pedido.resume()
+        }
     }
+}
+func buscarUso() {
+    if arquivoFoto != nil { return }
+    for d in contasDoUso { if let estado = usosPorConta[d] { buscarUsoDaConta(d, estado) } }
 }
 
 // clique numa sessão: a extensão recebe o link e abre a aba (ou o terminal) dela,
@@ -602,6 +714,7 @@ func versaoNova() -> String? {
 let zip = "https://github.com/LucasM-Maciel/ticlins-claude-monitor/releases/latest/download/ClaudeMonitor.zip"
 func clicar(_ alvo: String) {
     if alvo.hasPrefix("sessao:") { abrirSessao(String(alvo.dropFirst(7))); return }
+    if alvo.hasPrefix("uso:") { paginaDoUso = min(contasDoUso.count, max(1, paginaDoUso + (Int(alvo.dropFirst(4)) ?? 0))); atualizar(); return }
     if alvo.hasPrefix("pagina:") { paginaDaLista += Int(alvo.dropFirst(7)) ?? 0; atualizar(); return }
     guard alvo == "baixar" else { return }
     if arquivoFoto != nil { cliqueDaVez = zip; return }
@@ -621,7 +734,7 @@ func trazerEditor() {
 
 // --- desenho ---
 // janela fixa (a mesma do Windows: o motor desenha nela inteira); o resto é transparente e o clique passa
-let L: CGFloat = 380, A: CGFloat = 440
+let L: CGFloat = 440, A: CGFloat = 440
 let M: CGFloat = 34                      // espaço em volta do cartão, por onde o Clawd anda
 let fonte = NSFont.systemFont(ofSize: 12)
 
@@ -686,6 +799,7 @@ let coresDoUso: [String: [String]] = [
     "padrao": ["#D1D5DB", "#F59E0B", "#EF4444"], "minecraft": ["#80FF20", "#FFAA00", "#FF5555"],
     "dragonball": ["#FDE047", "#F59E0B", "#EF4444"], "sith": ["#FCA5A5", "#F59E0B", "#EF4444"],
     "akatsuki": ["#FCA5A5", "#F59E0B", "#EF4444"],
+    "elden": ["#F2D77A", "#F59E0B", "#EF4444"],
 ]
 
 // A cara do cartão: a de sempre ou, com o motor vivo, o layout do tema (mensagem P,
@@ -698,7 +812,7 @@ struct Aparencia {
     var padding: [CGFloat] = [10, 6, 10, 6]
     var enfeites = false
     var colTempo: CGFloat = 36, colPct: CGFloat = 38, colFalta: CGFloat = 48, colRotulo: CGFloat = 18
-    var colRitmo: CGFloat = 34             // o "+12" do ritmo; com enfeites, só se o tema pedir
+    var colRitmo: CGFloat = 72             // a palavra do ritmo; com enfeites, só se o tema pedir
     var letra: CGFloat = 16                // altura das caixas de número
     var barra = CGSize(width: 118, height: 4)
 }
@@ -731,8 +845,12 @@ func aparencia(_ o: [String: Any]) -> Aparencia {
 // as colunas do layout do tema, como o do Windows (que tem os do Minecraft em WPF);
 // sem motor, o de sempre em todos os temas.
 func aparenciaAtual() -> Aparencia {
-    if let l = layouts, motorVivo || arquivoFoto != nil, let a = l[config.tema] { return a }
-    return Aparencia()
+    var a = Aparencia()
+    if let l = layouts, motorVivo || arquivoFoto != nil, let tema = l[config.tema] { a = tema }
+    if !config.ritmo { a.colRitmo = 0 }
+    // a maior palavra das duas línguas: trocar o idioma não mexe no tamanho do cartão
+    else if !a.enfeites { a.colRitmo = palavrasRitmo.flatMap { [$0.0, $0.1] }.reduce(a.colRitmo) { max($0, ceil(($1 as NSString).size(withAttributes: [.font: fonte]).width) + 4) } }
+    return a
 }
 
 // botão direito: os itens que mexem no config.json (o Fechar fica no Cartao)
@@ -767,7 +885,7 @@ final class Preferencias: NSObject {
     // "Temas ◀ Minecraft ▶": setinhas são botões (e não itens) pro menu ficar aberto enquanto troca
     func itemDosTemas() -> NSMenuItem {
         let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
-        let rotulo = NSTextField(labelWithString: "Temas")
+        let rotulo = NSTextField(labelWithString: tr("Temas", "Themes"))
         rotulo.font = NSFont.menuFont(ofSize: 0)
         rotulo.frame = NSRect(x: 20, y: 4, width: 72, height: 18)
         caixa.addSubview(rotulo)
@@ -791,8 +909,14 @@ final class Preferencias: NSObject {
         return item
     }
     // "Uso ◀ Claude ▶": quais barras de usage aparecem (Claude, Codex ou os dois)
-    static let modosDeUso: [(id: String, nome: String)] = [("claude", "Claude"), ("codex", "Codex"), ("ambos", "Os dois")]
-    func nomeDoModoUso() -> String { Preferencias.modosDeUso.first(where: { $0.id == config.uso })?.nome ?? config.uso }
+    static let modosDeUso: [(id: String, nome: String, en: String?)] = [("claude", "Claude", nil), ("codex", "Codex", nil), ("ambos", "Os dois", "Both")]
+    func nomeDoModoUso() -> String { Preferencias.modosDeUso.first(where: { $0.id == config.uso }).map { nomeNoIdioma($0.nome, $0.en) } ?? config.uso }
+    @objc func alternarRitmo(_ item: NSMenuItem) {
+        config.ritmo.toggle()
+        item.state = config.ritmo ? .on : .off
+        salvarConfig()
+        atualizar()
+    }
     @objc func trocarUso(_ b: NSButton) {
         let modos = Preferencias.modosDeUso
         guard let i = modos.firstIndex(where: { $0.id == config.uso }) else { return }
@@ -804,7 +928,7 @@ final class Preferencias: NSObject {
     }
     func itemDoUso() -> NSMenuItem {
         let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
-        let rotulo = NSTextField(labelWithString: "Uso")
+        let rotulo = NSTextField(labelWithString: tr("Uso", "Usage"))
         rotulo.font = NSFont.menuFont(ofSize: 0)
         rotulo.frame = NSRect(x: 20, y: 4, width: 72, height: 18)
         caixa.addSubview(rotulo)
@@ -828,8 +952,8 @@ final class Preferencias: NSObject {
         return item
     }
     // "Mostrar ◀ Abas ▶": quais sessões aparecem (abas, agentes ou tudo)
-    static let modosDeMostrar: [(id: String, nome: String)] = [("abas", "Abas"), ("agentes", "Agentes"), ("tudo", "Tudo")]
-    func nomeDoModoMostrar() -> String { Preferencias.modosDeMostrar.first(where: { $0.id == config.mostrar })?.nome ?? config.mostrar }
+    static let modosDeMostrar: [(id: String, nome: String, en: String?)] = [("abas", "Abas", "Tabs"), ("agentes", "Agentes", "Agents"), ("tudo", "Tudo", "All")]
+    func nomeDoModoMostrar() -> String { Preferencias.modosDeMostrar.first(where: { $0.id == config.mostrar }).map { nomeNoIdioma($0.nome, $0.en) } ?? config.mostrar }
     @objc func trocarMostrar(_ b: NSButton) {
         let modos = Preferencias.modosDeMostrar
         guard let i = modos.firstIndex(where: { $0.id == config.mostrar }) else { return }
@@ -842,7 +966,7 @@ final class Preferencias: NSObject {
     }
     func itemDoMostrar() -> NSMenuItem {
         let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
-        let rotulo = NSTextField(labelWithString: "Mostrar")
+        let rotulo = NSTextField(labelWithString: tr("Mostrar", "Show"))
         rotulo.font = NSFont.menuFont(ofSize: 0)
         rotulo.frame = NSRect(x: 20, y: 4, width: 72, height: 18)
         caixa.addSubview(rotulo)
@@ -882,6 +1006,43 @@ final class Preferencias: NSObject {
         pct.tag = 1
         pct.frame = NSRect(x: 186, y: 4, width: 36, height: 18)
         for v in [rotulo, slider, pct] as [NSView] { caixa.addSubview(v) }
+        let item = NSMenuItem()
+        item.view = caixa
+        return item
+    }
+    // "Idioma ◀ Português ▶": o nome na própria língua, pra quem não lê português achar o English.
+    // Troca e fecha o menu: o próximo botão direito já abre todo na língua nova
+    func nomeDoIdioma() -> String { idiomas.first(where: { $0.id == config.idioma })?.nome ?? config.idioma }
+    @objc func trocarIdioma(_ b: NSButton) {
+        guard let i = idiomas.firstIndex(where: { $0.id == config.idioma }) else { return }
+        config.idioma = idiomas[(i + b.tag + idiomas.count) % idiomas.count].id
+        (b.superview?.viewWithTag(2) as? NSTextField)?.stringValue = nomeDoIdioma()
+        salvarConfig()
+        anotar("idioma: \(config.idioma)")
+        b.enclosingMenuItem?.menu?.cancelTracking()
+        atualizar()
+    }
+    func itemDoIdioma() -> NSMenuItem {
+        let caixa = NSView(frame: NSRect(x: 0, y: 0, width: 230, height: 26))
+        let rotulo = NSTextField(labelWithString: tr("Idioma", "Language"))
+        rotulo.font = NSFont.menuFont(ofSize: 0)
+        rotulo.frame = NSRect(x: 20, y: 4, width: 72, height: 18)
+        caixa.addSubview(rotulo)
+        let nome = NSTextField(labelWithString: nomeDoIdioma())
+        nome.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        nome.alignment = .center
+        nome.tag = 2
+        nome.frame = NSRect(x: 112, y: 4, width: 86, height: 18)
+        caixa.addSubview(nome)
+        let setas: [(String, Int, CGFloat)] = [("◀", -1, 92), ("▶", 1, 198)]
+        for (simbolo, direcao, x) in setas {
+            let b = NSButton(title: simbolo, target: self, action: #selector(trocarIdioma(_:)))
+            b.isBordered = false
+            b.font = NSFont.menuFont(ofSize: 11)
+            b.tag = direcao
+            b.frame = NSRect(x: x, y: 4, width: 20, height: 18)
+            caixa.addSubview(b)
+        }
         let item = NSMenuItem()
         item.view = caixa
         return item
@@ -937,7 +1098,7 @@ final class Cartao: NSView {
             addToolTip(NSRect(x: 0, y: y0 + CGFloat(i) * alturaLinha, width: w, height: alturaLinha), owner: d, userData: nil)
         }
         if aviso != nil {
-            dicas.append("Baixa o zip: extraia e siga o COMO ATUALIZAR.txt")
+            dicas.append(tr("Baixa o zip: extraia e siga o COMO ATUALIZAR.txt", "Downloads the zip: extract it and follow HOW TO UPDATE.txt") as NSString)
             addToolTip(NSRect(x: 0, y: yAviso, width: w, height: 20), owner: dicas[dicas.count - 1], userData: nil)
         }
         needsDisplay = true
@@ -962,7 +1123,7 @@ final class Cartao: NSView {
                      xRadius: raio, yRadius: raio).fill()
         var y = y0
         if linhas.isEmpty {
-            escrever("nenhuma sessão aberta", hex("#9CA3AF"), NSRect(x: x0, y: y, width: largura, height: 20))
+            escrever(tr("nenhuma sessão aberta", "no open sessions"), hex("#9CA3AF"), NSRect(x: x0, y: y, width: largura, height: 20))
             y += 20
         }
         for l in linhas {
@@ -989,7 +1150,7 @@ final class Cartao: NSView {
         if let nova = aviso {
             hex("#33FFFFFF").setFill()
             NSRect(x: x0, y: yAviso - 5, width: largura, height: 1).fill()
-            escrever("↑ versão \(nova) disponível · baixar", hex("#A78BFA"), NSRect(x: x0, y: yAviso, width: largura, height: 20))
+            escrever(tr("↑ versão \(nova) disponível · baixar", "↑ version \(nova) available · download"), hex("#A78BFA"), NSRect(x: x0, y: yAviso, width: largura, height: 20))
         }
         let linhasUso = linhasDoUso()
         let soTexto = soUmTexto(linhasUso)
@@ -997,8 +1158,10 @@ final class Cartao: NSView {
         let r = min(2, b.height / 2)
         for linhaUso in linhasUso {
             switch linhaUso {
+            case .paginas(let txt):
+                escrever(txt, hex("#9CA3AF"), NSRect(x: x0, y: y, width: largura, height: alturaUso), .center)
             case .texto(let txt):
-                let ehNomeDeGrupo = txt == "Claude" || txt == "Codex"
+                let ehNomeDeGrupo = txt == "Claude" || txt == "Codex" || txt.hasPrefix("Claude · ") || txt == apelidoDaConta(contaAtual())
                 escrever(txt, hex(ehNomeDeGrupo ? "#9CA3AF" : "#6B7280"),
                          NSRect(x: x0, y: y, width: largura, height: soTexto ? 20 : alturaUso))
             case .barra(let rotulo, let m):
@@ -1011,7 +1174,7 @@ final class Cartao: NSView {
                 c.setFill()
                 let cheio = b.width * CGFloat(min(max(m.pct, 0), 100)) / 100
                 NSBezierPath(roundedRect: NSRect(x: trilho.minX, y: trilho.minY, width: cheio, height: b.height), xRadius: r, yRadius: r).fill()
-                if let d = decorrido(rotulo, m) {  // o tracinho do ritmo: onde o % estaria gastando por igual
+                if config.ritmo, let d = decorrido(rotulo, m) {  // o tracinho do ritmo: onde o % estaria gastando por igual
                     hex("#E5E7EB").setFill()
                     NSRect(x: (trilho.minX + b.width * CGFloat(d) / 100 - 1).rounded(), y: trilho.minY - 3, width: 2, height: b.height + 6).fill()
                 }
@@ -1063,7 +1226,7 @@ final class Cartao: NSView {
                 "pctTxt": texto(String(format: "%.0f%%", m.pct), cores[nivel], naJanela(xp, yl, ap.colPct, ap.letra)),
                 "falta": texto(faltaPraRenovar(m), "#6B7280", naJanela(xf, yl, ap.colFalta, ap.letra)),
             ]
-            if let d = decorrido(par.rotulo, m) { medidor["decorrido"] = (d * 100).rounded() / 100 }
+            if config.ritmo, let d = decorrido(par.rotulo, m) { medidor["decorrido"] = (d * 100).rounded() / 100 }
             if ap.colRitmo > 0 { medidor["ritmo"] = texto(rt.txt, rt.cor, naJanela(xr, yl, ap.colRitmo, ap.letra)) }
             r.append(medidor)
         }
@@ -1076,6 +1239,9 @@ final class Cartao: NSView {
     func alvoNoPonto(_ p: NSPoint) -> String? {
         guard bounds.contains(p), p.y >= y0 else { return nil }
         if aviso != nil, p.y >= yAviso, p.y < yAviso + 20 { return "baixar" }
+        for (j, linha) in linhasDoUso().enumerated() {
+            if case .paginas = linha, p.y >= yUso + CGFloat(j) * alturaUso, p.y < yUso + CGFloat(j + 1) * alturaUso { return p.x < x0 + largura / 2 ? "uso:-1" : "uso:+1" }
+        }
         if paginas > 1, p.y >= yPaginas, p.y < yPaginas + alturaPaginas { return p.x < x0 + largura / 2 ? "pagina:-1" : "pagina:+1" }
         let i = Int((p.y - y0) / alturaLinha)
         return i < linhas.count ? "sessao:" + linhas[i].id : nil
@@ -1108,14 +1274,19 @@ final class Cartao: NSView {
         menu.addItem(preferencias.itemDosTemas())
         menu.addItem(preferencias.itemDoUso())
         menu.addItem(preferencias.itemDoMostrar())
+        let ritmo = NSMenuItem(title: tr("Ritmo", "Pace"), action: #selector(Preferencias.alternarRitmo(_:)), keyEquivalent: "")
+        ritmo.target = preferencias
+        ritmo.state = config.ritmo ? .on : .off
+        menu.addItem(ritmo)
         let clawd = NSMenuItem(title: "Clawd", action: #selector(Preferencias.alternarClawd(_:)), keyEquivalent: "")
         clawd.target = preferencias
         clawd.state = config.clawd ? .on : .off
         menu.addItem(clawd)
-        menu.addItem(preferencias.itemComSlider("Opacidade", 20, config.opacidade * 100, #selector(Preferencias.mudouOpacidade(_:))))
+        menu.addItem(preferencias.itemComSlider(tr("Opacidade", "Opacity"), 20, config.opacidade * 100, #selector(Preferencias.mudouOpacidade(_:))))
         menu.addItem(preferencias.itemComSlider("Volume", 0, config.volume * 100, #selector(Preferencias.mudouVolume(_:))))
+        menu.addItem(preferencias.itemDoIdioma())
         menu.addItem(.separator())
-        let fechar = NSMenuItem(title: "Fechar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        let fechar = NSMenuItem(title: tr("Fechar", "Close"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         fechar.target = NSApp
         menu.addItem(fechar)
         NSMenu.popUpContextMenu(menu, with: event, for: self)
@@ -1932,7 +2103,7 @@ func motorEstado() {
     guard let m = motor, cartao.frame.width > 0 else { return }
     let f = cartao.frame
     let estado: [String: Any] = [
-        "msg": "estado", "tema": config.tema, "clawd": config.clawd, "modo": palco.modo,
+        "msg": "estado", "tema": config.tema, "idioma": config.idioma, "clawd": config.clawd, "modo": palco.modo,
         "escala": Double(janela.backingScaleFactor), "janela": [Double(L), Double(A)],
         "cartao": cartao.naJanela(0, 0, f.width, f.height), "raio": Double(cartao.ap.raio), "opacidade": config.opacidade,
         "linhas": cartao.caixasDasLinhas(), "uso": cartao.caixasDoUso(),
@@ -1974,9 +2145,9 @@ func atualizar() {
     cartao.pagina = paginaDaLista
     cartao.paginas = totalDePaginas
     cartao.linhas = daPagina.map { s -> LinhaDoCartao in
-        let e = estados[s.situacao] ?? (cor: "#9CA3AF", rotulo: s.situacao)
+        let e = estados[s.situacao] ?? (cor: "#9CA3AF", rotulo: s.situacao, en: s.situacao)
         return LinhaDoCartao(id: s.id, sit: s.situacao, cor: e.cor, nome: s.nome, tempo: tempo((agora - s.since) / 60),
-                             rotulo: e.rotulo, codex: s.codex)
+                             rotulo: tr(e.rotulo, e.en), codex: s.codex)
     }
     buscarUso()
     lerUsoDoCodex()
@@ -2002,7 +2173,7 @@ func atualizar() {
             + (config.mostrar == "abas" ? [] : ["mostrar: \(config.mostrar)"])
             + (totalDePaginas > 1 ? ["pagina: \(paginaDaLista)/\(totalDePaginas)"] : [])
             + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")"]
-            + ["ritmo: " + ritmoDoClaude()]
+            + fotoDaConta() + ["ritmo: " + ritmoDoClaude()]
             + (config.uso == "claude" ? [] : ["uso: \(config.uso)", "barras: \(barrasComGrupo())"])
             + ["som: \(som)", "som da cena: \(somDaCenaVisto ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
                "atualizacao: \(cartao.aviso ?? "nenhuma")"]

@@ -90,7 +90,7 @@ test('o tema: layout dos enfeites, trilha e os eventos da prévia', () => {
   const L = layoutDe(tema);
   assert.deepStrictEqual(L, {
     raio: 0, fundo: '#F0181818', moldura: [6, 8, 6, 6], padding: [8, 6, 8, 6], enfeites: true,
-    colunas: { tempo: 44, pct: 38, ritmo: 34, falta: 56, rotulo: 18 }, letra: 11, barra: [118, 5],
+    colunas: { tempo: 44, pct: 38, ritmo: REAIS ? require(path.join(MOTOR, 'minecraft-enfeites')).larguraRitmo() : 79, falta: 56, rotulo: 18 }, letra: 11, barra: [118, 5],
   });
   assert.strictEqual(tema.trilha.raio, 1);
   for (const n of ['terra', 'grama', 'orbe', 'xp_fundo', 'xp_barra', 'fonte', 'zumbi', 'rocha', 'racha9', 'explosao15']) assert.ok(tema.texturas.includes(n), n);
