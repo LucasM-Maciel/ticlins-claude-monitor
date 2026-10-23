@@ -2169,14 +2169,27 @@ func atualizar() {
         }
         let clawd = config.clawd ? palco.modo + (palco.luta.map { " (\($0))" } ?? "") : "desligado"
         let som = somDaVez.flatMap { avisoDaSituacao[$0] }.flatMap { nomeDoSom[config.tema]?[$0] } ?? "nenhum"
-        let visto = sessoes.map { "sessao: \($0.nome) | hook=\($0.estado) | janelinha=\($0.situacao)" + ($0.codex ? " | agente=codex" : "") }
-            + (config.mostrar == "abas" ? [] : ["mostrar: \(config.mostrar)"])
-            + (totalDePaginas > 1 ? ["pagina: \(paginaDaLista)/\(totalDePaginas)"] : [])
-            + ["clawd: \(clawd)", "usage: \(uso == nil ? "indisponivel" : "ok")"]
-            + fotoDaConta() + ["ritmo: " + ritmoDoClaude()]
-            + (config.uso == "claude" ? [] : ["uso: \(config.uso)", "barras: \(barrasComGrupo())"])
-            + ["som: \(som)", "som da cena: \(somDaCenaVisto ?? "nenhum")", "clique: \(cliqueDaVez ?? "nenhum")",
-               "atualizacao: \(cartao.aviso ?? "nenhuma")"]
+        // montado aos poucos: uma só expressão com tantos "+" estoura o tempo do compilador (Mac)
+        var visto: [String] = sessoes.map { s -> String in
+            var linha: String = "sessao: \(s.nome) | hook=\(s.estado) | janelinha=\(s.situacao)"
+            if s.codex { linha += " | agente=codex" }
+            return linha
+        }
+        if config.mostrar != "abas" { visto.append("mostrar: \(config.mostrar)") }
+        if totalDePaginas > 1 { visto.append("pagina: \(paginaDaLista)/\(totalDePaginas)") }
+        let temUso: String = uso == nil ? "indisponivel" : "ok"
+        visto.append("clawd: \(clawd)")
+        visto.append("usage: \(temUso)")
+        visto.append(contentsOf: fotoDaConta())
+        visto.append("ritmo: " + ritmoDoClaude())
+        if config.uso != "claude" {
+            visto.append("uso: \(config.uso)")
+            visto.append("barras: \(barrasComGrupo())")
+        }
+        visto.append("som: \(som)")
+        visto.append("som da cena: \(somDaCenaVisto ?? "nenhum")")
+        visto.append("clique: \(cliqueDaVez ?? "nenhum")")
+        visto.append("atualizacao: \(cartao.aviso ?? "nenhuma")")
         try? (visto.joined(separator: "\n") + "\n").write(toFile: foto + ".txt", atomically: true, encoding: .utf8)
     }
     seAtualizou()
