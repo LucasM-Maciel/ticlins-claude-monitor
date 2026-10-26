@@ -49,7 +49,8 @@ function montar(m, r) {
   const cw = c[2], HJ = Math.round(lim(c[1] - 14, 72, 184)), X0 = casa.x - c[0];
   const J = { cw, HJ, X0 };
   // o macaco: o maior que cabe no palco (P = DIPs por célula), no meio do Clawd se couber inteiro
-  J.P = lim((HJ - 10) / Mc.MH, 2.2, 3.4);
+  // (sem piso alto: com o palco baixo, de lista grande, o piso de 2,2 deixava o macaco mais alto que ele e cortava a cabeça)
+  J.P = lim((HJ - 10) / Mc.MH, 1, 3.4);
   const AW = Mc.MW * J.P;
   J.Xa = cw - AW - 8 > 0 ? lim(X0, AW / 2 + 4, cw - AW / 2 - 4) : cw / 2;
   J.kmin = (A.ALTURA * 1.5) / ((Mc.MH - Mc.MY) * J.P);  // do tamanho do Clawd
@@ -225,7 +226,8 @@ function desenhar(g, t, m, J) {
 }
 
 function desenharMacaco(g, t, J, e, OX, OY, sx, sy, M) {
-  const Pp = Math.max(1, Math.round(J.P * e)), w = Math.max(1, Math.round(Mc.MW * Pp * M.k)), h = Math.max(1, Math.round(Mc.MH * Pp * M.k));
+  // célula inteira em pixels, mas nunca a ponto de o macaco passar do teto do palco (o arredondamento pra cima cortava a cabeça)
+  const Pp = Math.max(1, Math.min(Math.round(J.P * e), Math.floor((J.HJ * e - 4) / Mc.MH))), w = Math.max(1, Math.round(Mc.MW * Pp * M.k)), h = Math.max(1, Math.round(Mc.MH * Pp * M.k));
   const x = Math.round((OX + M.x + sx) * e - w / 2), y = Math.round((OY + sy) * e) - h;
   const img = Mc.macaco(M.pose);
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0);

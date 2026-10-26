@@ -233,6 +233,24 @@ test('o plano, em 50 sementes, 3 lugares da reta e 2 cartões: o macaco e a lua 
   }
 });
 
+test('palco baixo (lista grande, 22/10): o macaco cabe inteiro, sem cortar a cabeça, em qualquer escala', () => {
+  const { T, macacoEm } = epico;
+  for (const topo of [86, 88, 100, 150]) {  // o topo do cartão = a altura do palco
+    const m = novoMundo({ cena: null });
+    m.host = { ...m.host, cartao: [98, topo, 248, 300] };
+    let sem = 0; const r = () => ((sem = (sem * 9301 + 49297) % 233280) / 233280);
+    const J = epico.montar(m, r);
+    for (let t = T.cresce[0]; t < T.encolhe[1]; t += 0.05) {
+      const M = macacoEm(J, t), h = Mc.MH * J.P * M.k;
+      assert.ok(h + M.treme <= J.HJ, `o macaco passa do teto em ${t.toFixed(2)} (palco ${topo})`);
+    }
+    for (const e of [1, 1.25, 1.5, 2]) {  // e o pixel inteiro por célula (desenharMacaco)
+      const Pp = Math.max(1, Math.min(Math.round(J.P * e), Math.floor((J.HJ * e - 4) / Mc.MH)));
+      assert.ok(Mc.MH * Pp <= J.HJ * e, `o macaco desenhado passa do palco (palco ${topo}, escala ${e})`);
+    }
+  }
+});
+
 // ============================== as regras da lua ==============================
 test('a lua: a cada 400 voltas no cartão (contadas e salvas), fica pendente; sobrevive a reabrir', () => {
   comPasta(pasta => {
