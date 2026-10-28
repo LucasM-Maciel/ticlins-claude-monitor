@@ -41,6 +41,8 @@ Tudo em DIPs, relativo à janela (o motor multiplica por `escala` pra desenhar e
 ```js
 {
   msg: 'estado', tema: 'minecraft', clawd: true, modo: 'andando' | 'pulando' | 'parado',
+  // parado vindo de andando, sem o evento 'tudo' nos 2 s antes, só vale se durar 5 s (segura no motor.js):
+  // a lista que pisca por uma atualização não congela o Clawd. Por isso o 'tudo' vai ANTES do estado parado
   escala: 1.25, janela: [380, 440], cartao: [x, y, w, h], raio: 8, opacidade: 1,
   idioma: 'pt' | 'en',  // o do menu da janelinha (sem ele, português); as cenas leem m.host.idioma (tr do comum.js)
   // uma por sessão, na ordem da lista

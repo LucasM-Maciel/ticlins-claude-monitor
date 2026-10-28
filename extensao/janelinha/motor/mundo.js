@@ -18,9 +18,10 @@ const { trilha, perimetro } = require('./clawd');
 const VELOCIDADE = 50;           // px/s pela trilha, como sempre foi
 const PARADA = [20, 45];         // s andando entre uma parada e outra (sorteio de cena)
 const ESPACO = { frente: 120, tras: 30 };
+const TUDO_ANTES = 2;            // s: o 'tudo' chega antes do estado 'parado' (overlay.ps1: Avisar vem antes do Clawd)
 
 class Mundo {
-  constructor({ tema, semente = Date.now(), pasta = null, relogio = null } = {}) {
+  constructor({ tema, semente = Date.now(), pasta = null, relogio = null, segura = 0 } = {}) {
     this.tema = tema;
     this.sorteio = rng(semente);
     this.pasta = pasta;
@@ -33,6 +34,9 @@ class Mundo {
     this.andando = false;
     this.modo = 'oculto';
     this.desdeModo = 0;          // T em que entrou no modo atual (dormir depois de um tempo parado)
+    this.segura = segura;        // s que um parado sem o 'tudo' espera andando antes de valer (motor.js: 5)
+    this.paradoEm = null;        // T do parado que está esperando o segura
+    this.tudoEm = -Infinity;     // T do último 'tudo'
     this.roupa = null;
     this.relogio = relogio;      // () => Date (o teste fixa a hora pra "de noite")
     this.salvo = this.lerSalvo();
@@ -48,6 +52,17 @@ class Mundo {
     this.host = { ...this.host, ...host };
     const h = this.host;
     const modo = !h.clawd || !h.cartao ? 'oculto' : h.modo === 'andando' ? 'andando' : h.modo === 'pulando' ? 'pulando' : 'parado';
+    // parado no meio da caminhada sem o 'tudo': a lista piscou (uma sessão sumiu por uma
+    // atualização) e ele congelava e voltava pro meio de cima (dono 28/10). Segue andando;
+    // só para se durar o segura (passo)
+    if (modo === 'parado' && this.modo === 'andando' && this.segura && this.T - this.tudoEm > TUDO_ANTES) {
+      if (this.paradoEm == null) this.paradoEm = this.T;
+      return;
+    }
+    this.paradoEm = null;
+    this.mudarModo(modo);
+  }
+  mudarModo(modo) {
     if (modo === this.modo) return;
     const antes = this.modo;
     this.modo = modo;
@@ -62,12 +77,19 @@ class Mundo {
     }
     if (this.tema.aoMudarModo) this.tema.aoMudarModo(this, antes, modo);
   }
-  evento(tipo) { if (this.tema.aoEvento) this.tema.aoEvento(this, tipo); }
+  evento(tipo) {
+    if (tipo === 'tudo') {  // acabou mesmo: o parado que esperava vale já
+      this.tudoEm = this.T;
+      if (this.paradoEm != null) { this.paradoEm = null; this.mudarModo('parado'); }
+    }
+    if (this.tema.aoEvento) this.tema.aoEvento(this, tipo);
+  }
 
   // -- relógio --
   passo(T) {
     const dt = Math.min(0.1, Math.max(0, T - this.T));  // depois de hibernar não dá um salto de minutos
     this.T = T;
+    if (this.paradoEm != null && T - this.paradoEm >= this.segura) { this.paradoEm = null; this.mudarModo('parado'); }
     if (this.tema.passo) this.tema.passo(this, dt);
     if (this.cena && T - this.cena.t0 >= this.cena.dur) this.fimCena(false);
     const c = this.host.cartao;

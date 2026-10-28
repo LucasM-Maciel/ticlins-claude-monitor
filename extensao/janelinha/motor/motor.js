@@ -82,7 +82,7 @@ function tocarSom(cena) {
 function trocarTema(nome) {
   if (mundo && mundo.cena && mundo.cena.sons) tocarSom(null);  // a cena do tema velho acaba aqui
   const salvoAntes = mundo && { dist: mundo.dist, T: mundo.T };
-  mundo = new Mundo({ tema: tema(nome), semente: args.semente != null ? Number(args.semente) : Date.now(), pasta: args.foto ? null : PASTA, relogio });
+  mundo = new Mundo({ tema: tema(nome), semente: args.semente != null ? Number(args.semente) : Date.now(), pasta: args.foto ? null : PASTA, relogio, segura: 5 });
   if (salvoAntes) { mundo.dist = salvoAntes.dist; mundo.T = salvoAntes.T; }
   mundo.nomeTema = nome;
   mundo.aoErro = texto => anotar(`motor: ${texto}`);
@@ -90,9 +90,12 @@ function trocarTema(nome) {
 }
 function receber(m) {
   if (m.msg === 'estado') {
+    const antes = host && host.modo;
     host = { ...(host || {}), ...m };
     if (!mundo || mundo.nomeTema !== host.tema) trocarTema(host.tema);
     mundo.receber(host);
+    // no diário: a lista piscando (parado de um instante) aparece aqui, com a situação de cada linha
+    if (antes != null && host.modo !== antes) anotar(`motor: modo ${antes || '-'} -> ${host.modo || '-'} (${(host.linhas || []).map(l => l.sit).join(',')})`);
   } else if (m.msg === 'evento' && mundo) mundo.evento(m.tipo);
   else if (m.msg === 'foto' && args.foto && mundo && host.janela) foto();
 }
