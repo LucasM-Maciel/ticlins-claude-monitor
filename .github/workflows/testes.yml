@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15]  # Xcode 15 (Swift 5.10) e Xcode 16 (Swift 6)
+        os: [macos-15]  # Xcode 16 (Swift 6); o macos-14 o GitHub aposentou (nov/2026)
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
