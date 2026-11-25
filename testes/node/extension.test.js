@@ -110,7 +110,7 @@ function pastaTemp(prefixo) {
 test.after(() => { for (const p of temporarias) try { fs.rmSync(p, { recursive: true, force: true, maxRetries: 5 }); } catch {} });
 
 /** Ativa a extensão numa casa nova (ou na mesma, pra simular reabrir o VS Code). */
-async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true, semSons = false, remoto, tela = ":0", idioma } = {}) {
+async function ativar({ plataforma = "win32", config = {}, casa, versao = manifesto.version, hooks = true, clicar, focada = true, semSons = false, soSonsAntigos = false, remoto, tela = ":0", idioma } = {}) {
     casa ??= pastaTemp("cm-ext-");
     if (idioma) {
         // o idioma escolhido no botão direito da janelinha
@@ -119,8 +119,10 @@ async function ativar({ plataforma = "win32", config = {}, casa, versao = manife
     }
     if (!semSons) {
         // com os sons do Minecraft já baixados: a extensão não vai atrás da Mojang
+        // (soSonsAntigos: só os de antes do portal do Nether e da bússola, como quem atualizou)
         fs.mkdirSync(path.join(casa, ".claude-monitor", "sons"), { recursive: true });
-        fs.writeFileSync(path.join(casa, ".claude-monitor", "sons", "levelup.wav"), "");
+        const ja = soSonsAntigos ? [["sons", "levelup.wav"]] : [["sons", "levelup.wav"], ["sons", "nether_pan.wav"], ["portal_nether.png"], ["bussola31.png"]];
+        for (const p of ja) fs.writeFileSync(path.join(casa, ".claude-monitor", ...p), "");
     }
     process.env.HOME = casa;
     process.env.USERPROFILE = casa;
@@ -695,6 +697,14 @@ test("sem os sons do Minecraft: a extensão baixa sozinha, calada, e anota no di
         await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha \(\d+ sons, \d+ texturas\)/);
         assert.ok(fs.existsSync(path.join(pasta, "sons", "levelup.wav")));
         assert.ok(!r.mensagens.some((m) => /Minecraft/.test(m.texto)), "não era pra mostrar nada");
+    });
+});
+
+test("atualizou com só os sons antigos (sem os do portal do Nether e a bússola): a extensão baixa sozinha", async () => {
+    await comMojang(async (m) => {
+        const { pasta } = await ativar({ soSonsAntigos: true });
+        await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha/);
+        assert.ok(m.pedidos.length > 0, "não foi atrás da Mojang");
     });
 });
 

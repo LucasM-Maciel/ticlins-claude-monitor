@@ -71,7 +71,8 @@ class Mundo {
     if (this.cena && !(this.cena.modos || ['andando']).includes(modo)) this.fimCena(true);
     if (this.andando) {
       // parado e pulando ficam no meio de cima: sai andando dali, sem pular pra outro ponto da trilha
-      if (antes === 'parado' || antes === 'pulando') { const g = this.geometria(); this.dist = g.w / 2 - g.r; }
+      // (menos no meio de uma cena naTrilha: ela já está no ponto dela da trilha)
+      if ((antes === 'parado' || antes === 'pulando') && !(this.cena && this.cena.naTrilha)) { const g = this.geometria(); this.dist = g.w / 2 - g.r; }
       this.proxima = this.T + this.entre(...PARADA);
       if (this.tema.aoComecarAndar) this.tema.aoComecarAndar(this);
     }
@@ -164,7 +165,8 @@ class Mundo {
   // onde o Clawd está: na trilha andando (ou parado no meio dela, em cena); senão no meio de cima
   pose() {
     const g = this.geometria();
-    if (!this.andando) return { x: g.x + g.w / 2, y: g.y, a: 0, reta: true, andou: g.w / 2 - g.r, falta: g.w / 2 - g.r };
+    // cena naTrilha (o portal pelo menu com o Clawd parado): fica no ponto da trilha (dist), não no meio de cima
+    if (!this.andando && !(this.cena && this.cena.naTrilha)) return { x: g.x + g.w / 2, y: g.y, a: 0, reta: true, andou: g.w / 2 - g.r, falta: g.w / 2 - g.r };
     const p = trilha(g.w, g.h, this.dist, g.r);
     return { ...p, x: g.x + p.x, y: g.y + p.y };
   }

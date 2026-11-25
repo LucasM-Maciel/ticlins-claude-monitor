@@ -8,10 +8,20 @@
  *               diamante) e as do tema Minecraft da janelinha (terra, grama,
  *               orbe de XP, barra de XP, letra): do jar da versão, só os pedaços
  *               que interessam (o jar tem ~40 MB, baixa ~4 MB)
+ *   bussola00..31.png  a bússola do modo compacto (item/compass_00..31)
+ *   o portal do Nether (motor/minecraft-nether.js): as texturas (obsidiana, portal,
+ *               netherrack, soul sand, basalto, magma, os 2 fogos, isqueiro, piglin
+ *               zumbi, magma cube) e os sons nether_* em sons/ (obsidiana, isqueiro,
+ *               portal, fogo, os mobs, o susto e as 3 músicas do Nether)
+ * Som longo vai cortado: as músicas do Nether (RECORTES) guardam só os 11 s mais
+ * fortes dos 2 primeiros minutos, com fade e no mesmo volume (~1 MB cada, não a
+ * faixa de ~4 MB); os que começam baixinho e crescem (ATAQUES: o PAN e os de clima
+ * do susto) começam no ataque, pra entrar forte na hora certa da cena.
  * Sem internet, fica o que tinha (sons do sistema e os desenhos da janelinha).
  * Uso: node minecraft.js  (o instalador roda; o comando "Usar sons do Minecraft"
  * e a extensão, quando falta som, chamam baixarTudo()).
- * Pra trocar/adicionar som, mexa em SONS (os nomes estão no índice de assets do jogo).
+ * Pra trocar/adicionar som, mexa em SONS (os nomes estão no índice de assets do jogo;
+ * as cenas usam como sons/<nome>.wav, ver docs/MOTOR.md).
  * Teste: CLAUDE_MONITOR_MOJANG=http://127.0.0.1:porta troca a Mojang por
  * testes/mojang-falso.js.
  */
@@ -51,7 +61,61 @@ const SONS = {
     critico1: "entity/player/attack/crit1",
     critico2: "entity/player/attack/crit2",
     teleporte: "mob/endermen/portal",
+    // a cena do portal do Nether (motor/minecraft-nether.js)
+    nether_pedra1: "dig/stone1", nether_pedra2: "dig/stone2", nether_pedra3: "dig/stone3", nether_pedra4: "dig/stone4",
+    nether_isqueiro: "fire/ignite", nether_fogo: "fire/fire",
+    nether_portal: "portal/portal", nether_entra: "portal/trigger", nether_viagem: "portal/travel",
+    nether_piglin1: "mob/zombified_piglin/zpig1", nether_piglin2: "mob/zombified_piglin/zpigangry1",
+    nether_esqueleto: "mob/skeleton/say1", nether_magma1: "mob/magmacube/jump1", nether_magma2: "mob/magmacube/jump2",
+    nether_susto_netherrack: "ambient/nether/nether_wastes/mood1", nether_susto_almas: "ambient/nether/soulsand_valley/mood1",
+    nether_susto_basalto: "ambient/nether/basalt_deltas/twist1",
+    nether_pan: "mob/endermen/death",  // o "PAN" do susto: a morte do enderman
+    // as músicas do Nether: só um trecho (RECORTES), não a faixa inteira
+    nether_musica_netherrack: "music/game/nether/nether_wastes/rubedo", nether_musica_almas: "music/game/nether/soulsand_valley/so_below",
+    nether_musica_basalto: "music/game/nether/dead_voxel",
 };
+// som longo (as músicas): guarda só `dur` s, o trecho mais forte dos primeiros 2 minutos, com fade
+const RECORTES = { nether_musica_netherrack: 11, nether_musica_almas: 11, nether_musica_basalto: 11 };
+// som que começa baixinho e cresce (o "stare" do enderman, os de clima): guarda `dur` s a partir
+// do ataque (o 1º ponto com metade do volume máximo), pra ele já entrar forte na hora do susto
+const ATAQUES = { nether_pan: 2.5, nether_susto_netherrack: 3, nether_susto_almas: 3, nether_susto_basalto: 3 };
+function doAtaque(audio, dur) {
+    const taxa = audio.sampleRate, canais = audio.channelData, n = canais[0].length, bloco = Math.floor(taxa / 50);
+    const rms = [];
+    for (let i = 0; i + bloco <= n; i += bloco) { let s = 0; for (let k = i; k < i + bloco; k++) s += canais[0][k] * canais[0][k]; rms.push(Math.sqrt(s / bloco)); }
+    const maximo = Math.max(...rms), b = Math.max(0, rms.findIndex((v) => v >= maximo * 0.5) - 2);
+    const i0 = b * bloco, w = Math.min(n - i0, Math.floor(dur * taxa)), sai = Math.floor(0.6 * taxa);
+    const channelData = canais.map((c) => {
+        const r = c.slice(i0, i0 + w);
+        for (let i = 0; i < w; i++) r[i] *= Math.min(1, (w - 1 - i) / sai);
+        return r;
+    });
+    return { ...audio, channelData, samplesDecoded: w };
+}
+function recortar(audio, dur) {
+    const taxa = audio.sampleRate, canais = audio.channelData, n = canais[0].length, w = Math.floor(dur * taxa);
+    if (n <= w) return audio;
+    // energia por segundo, e a janela de `dur` s com mais energia que começa nos primeiros 120 s
+    const seg = Math.floor(n / taxa), energia = new Float64Array(seg);
+    for (let s = 0; s < seg; s++) for (let i = s * taxa; i < (s + 1) * taxa; i += 8) energia[s] += canais[0][i] * canais[0][i];
+    let melhor = 0, maior = -1;
+    for (let s = 0; s + dur <= seg && s <= 120; s++) {
+        let e = 0;
+        for (let k = 0; k < dur; k++) e += energia[s + k];
+        if (e > maior) { maior = e; melhor = s; }
+    }
+    const i0 = melhor * taxa, entra = Math.floor(0.5 * taxa), sai = Math.floor(1.2 * taxa);
+    // as faixas têm volumes bem diferentes: o trecho sai com o mesmo volume (rms 0,15, sem passar de 0,98)
+    let soma = 0, pico = 0;
+    for (const c of canais) for (let i = i0; i < i0 + w; i++) { soma += c[i] * c[i]; pico = Math.max(pico, Math.abs(c[i])); }
+    const k = Math.min(0.15 / Math.max(1e-6, Math.sqrt(soma / (w * canais.length))), 0.98 / Math.max(1e-6, pico));
+    const channelData = canais.map((c) => {
+        const r = c.slice(i0, i0 + w);
+        for (let i = 0; i < w; i++) r[i] *= k * Math.min(1, i / entra, (w - 1 - i) / sai);
+        return r;
+    });
+    return { ...audio, channelData, samplesDecoded: w };
+}
 const TONS = { xp: [0.8, 1.0, 1.25] }; // como o jogo, o XP muda de tom a cada vez: xp1, xp2, xp3
 const TEXTURAS = {
     picareta: "item/diamond_pickaxe", espada: "item/diamond_sword", diamante: "item/diamond", pedra: "block/diamond_ore",
@@ -89,6 +153,15 @@ const TEXTURAS = {
 for (let i = 0; i < 8; i++) Object.assign(TEXTURAS, { [`poof${i}`]: `particle/generic_${i}`, [`varrida${i}`]: `particle/sweep_${i}`, [`brilho${i}`]: `particle/glitter_${i}` });
 for (let i = 0; i < 16; i++) TEXTURAS[`explosao${i}`] = `particle/explosion_${i}`;
 for (let i = 0; i < 10; i++) TEXTURAS[`racha${i}`] = `block/destroy_stage_${i}`;
+// a cena do portal do Nether (motor/minecraft-nether.js): portal, blocos dos 3 biomas, fogos, isqueiro e os mobs
+Object.assign(TEXTURAS, {
+    obsidiana: "block/obsidian", portal_nether: "block/nether_portal", netherrack: "block/netherrack",
+    areia_almas: "block/soul_sand", basalto_lado: "block/basalt_side", basalto_topo: "block/basalt_top", magma: "block/magma",
+    fogo: "block/fire_0", fogo_almas: "block/soul_fire_0", isqueiro: "item/flint_and_steel",
+    piglin_zumbi: "entity/piglin/zombified_piglin", cubo_magma: "entity/slime/magmacube",
+});
+// modo compacto do tema Minecraft: a bússola no lugar da barra de XP (32 quadros da agulha)
+for (let i = 0; i < 32; i++) TEXTURAS[`bussola${String(i).padStart(2, "0")}`] = `item/compass_${String(i).padStart(2, "0")}`;
 const TAXA = 44100;
 
 function enderecos() {
@@ -232,7 +305,9 @@ async function baixarTudo({ destino = path.join(os.homedir(), ".claude-monitor")
             continue;
         }
         try {
-            const audio = await decodificar(await baixar(`${end.objetos}/${objeto.hash.slice(0, 2)}/${objeto.hash}`));
+            let audio = await decodificar(await baixar(`${end.objetos}/${objeto.hash.slice(0, 2)}/${objeto.hash}`));
+            if (RECORTES[nome]) audio = recortar(audio, RECORTES[nome]);
+            if (ATAQUES[nome]) audio = doAtaque(audio, ATAQUES[nome]);
             const tons = TONS[nome] || [1];
             tons.forEach((tom, i) => {
                 const arquivo = tons.length > 1 ? `${nome}${i + 1}.wav` : `${nome}.wav`;

@@ -11,11 +11,13 @@ const { registrarRoupas, desenhaClawd, andando, pulando } = require('./clawd');
 const enfeites = require('./minecraft-enfeites');
 const { MOB, desenhaMob, desenhaCoracoes } = require('./minecraft-kit');
 const { EVENTOS, EV, MINERIOS, sorteiaMinerio, quadroEvento } = require('./minecraft-eventos');
+const { fundoNether, T: T_NETHER } = require('./minecraft-nether');
 const P = require('./parado').paradas('minecraft', ['cama', 'pesca']);
 
 const NIVEL = 5;      // mortes por nível
 const DRAGAO = 20;    // mortes por Ender Dragon (o dono mudou de 30 pra 20 em 06/10)
 const PET = 25;       // s que o lobo manso segue o Clawd
+const PORTAL = 12;    // eventos comuns por portal do Nether (a cena épica, minecraft-nether.js)
 const PESO = { comum: 4, incomum: 2, raro: 1 };
 // 1 nível a cada 5 mortes + os que o Ender Dragon deu (o dono quis que o +28 da cena ficasse)
 const nivelDe = (m, mortes = m.salvo.mortes || 0) => Math.floor(mortes / NIVEL) + (m.salvo.niveisDoDragao || 0);
@@ -76,20 +78,22 @@ function cenaDoDragao(m) {
 // pacíficos x0,3 e o enderman x2 a mais
 function pesosDosEventos(m) {
   const noite = m.noite();
-  let lista = EVENTOS.filter(ev => !ev.especial && !m.ruins.has(ev.id) && temTexturas(...ev.texturas));
+  // soCima (o portal do Nether): só na borda de cima, que tem altura pro portal
+  const emCima = Math.cos(m.pose().a) > 0.99;
+  let lista = EVENTOS.filter(ev => !ev.especial && !m.ruins.has(ev.id) && temTexturas(...ev.texturas) && !(ev.soCima && !emCima));
   if (lista.length > 1) lista = lista.filter(ev => ev.id !== m.estado.ultimo);
   const peso = ev => PESO[ev.raridade] * (noite ? (ev.grupo === 'hostil' ? 3 : ev.grupo === 'pacifico' ? 0.3 : 1) * (ev.id === 'enderman' ? 2 : 1) : 1);
   return Object.fromEntries(lista.map(ev => [ev.id, peso(ev)]));
 }
 // a cena de um evento: vida, nível e sorteios ficam presos na hora (o quadro é função do tempo)
-function cenaDoEvento(m, ev, minerio) {
+function cenaDoEvento(m, ev, minerio, variante) {
   const mortes = m.salvo.mortes || 0, nivel = nivelDe(m, mortes), r = rng(Math.floor(m.sorteio() * 4294967296));
-  const ctx = { vida: Math.max(1, Math.round(m.estado.vida)), nivel, sobe: false, semente: Math.floor(r() * 999), minerio: minerio || sorteiaMinerio(r()) };
+  const ctx = { vida: Math.max(1, Math.round(m.estado.vida)), nivel, sobe: false, semente: Math.floor(r() * 999), minerio: minerio || sorteiaMinerio(r()), variante };
   if (ev.mortes) { ctx.nivel = nivelDe(m, mortes + ev.mortes); ctx.sobe = ctx.nivel > nivel; }
   const c = ev.fazer(ctx);
   return {
-    nome: ev.id, dur: c.dur, espaco: ev.espaco, evento: c, ctx,
-    quadro(g, t, mundo) { quadroEvento(c, g, t, mundo.roupa || 'mc_steve', mundo.T); },
+    nome: ev.id, dur: c.dur, espaco: ev.espaco, evento: c, ctx, ...(c.sons ? { sons: c.sons } : {}),
+    quadro(g, t, mundo) { quadroEvento(c, g, t, mundo.roupa || 'mc_steve', mundo.T, mundo); },
   };
 }
 
@@ -104,7 +108,7 @@ module.exports = {
       colunas: { tempo: 44, pct: 38, ritmo: enfeites.larguraRitmo(), falta: 56, rotulo: 18 }, letra: 11, barra: [118, 5],
     };
   },
-  get texturas() { return [...new Set([...TEXTURAS, ...P.texturas, ...texturasDoDragao()])]; },
+  get texturas() { return [...new Set([...TEXTURAS, ...enfeites.BUSSOLAS, ...P.texturas, ...texturasDoDragao()])]; },
   trilha: { raio: 1 },
   roupas: ROUPAS,
   cenas: EVENTOS.map(ev => ev.id),
@@ -122,7 +126,15 @@ module.exports = {
     if (e.ouro && m.T > e.ouroAte) e.ouro = 0;
     P.passo(m);
   },
-  fundo(g, m) { enfeites.desenharEnfeites(g, m.host, m.T); },
+  fundo(g, m) {
+    enfeites.desenharEnfeites(g, m.host, m.T);
+    // o portal do Nether: a borda vira Nether a partir de onde o portal ficou
+    const c = m.cena && m.cena.evento;
+    if (c && c.nether && m.host.cartao) {
+      const n = c.nether(m.T - m.cena.t0);
+      if (n.k > 0) fundoNether(g, { ...n, cartao: m.host.cartao, portalJanela: m.pose().x + n.portalX }, m.T);
+    }
+  },
   // o lobo manso segue 30 px atrás, na trilha, por 25 s
   atras(g, m) {
     const e = m.estado;
@@ -147,6 +159,12 @@ module.exports = {
       if (c) return c;
       m.salvo.dragao = false; m.salvar();
     }
+    // a cada 12 eventos: o portal do Nether (épico), na próxima vez que ele passar pelo começo
+    // da borda de cima (nos outros lados: tenta de novo já já)
+    if (m.salvo.portal && EV.portal && !m.ruins.has('portal') && temTexturas(...EV.portal.texturas)) {
+      if (Math.cos(m.pose().a) < 0.99) return undefined;
+      return e.pendente && e.pendente.nome === 'portal' ? e.pendente : (e.pendente = cenaDoEvento(m, EV.portal));
+    }
     if (e.pendente) return e.pendente;  // já sorteado, esperando espaço na reta
     // como na prévia, só em cima ou embaixo do cartão (nos lados os mobs ficariam deitados)
     if (Math.abs(Math.sin(m.pose().a)) > 0.01) return undefined;
@@ -155,12 +173,29 @@ module.exports = {
     return id ? (e.pendente = cenaDoEvento(m, EV[id])) : null;
   },
   aoComecarAndar(m) { m.estado.pendente = null; },
+  // botão direito > "Abrir portal do Nether": a cena na hora, no começo da borda de cima (a cena
+  // precisa da reta), andando ou parado (naTrilha: parado, ele sai do meio de cima e vai pra lá;
+  // no fim volta pro meio). Não gasta o portal ganho.
+  aoEvento(m, tipo) {
+    if (tipo !== 'portal' || !EV.portal || m.modo === 'oculto' || m.modo === 'pulando') return;
+    if (m.cena) m.fimCena(true);
+    m.dist = 0;
+    const c = cenaDoEvento(m, EV.portal);
+    m.comecarCena({ ...c, modos: ['andando', 'parado'], manual: true, naTrilha: true });
+  },
   aoDarVolta(m) { m.roupa = sortearRoupa(m); },
   aoComecarCena(m, cena) {
     P.aoComecarCena(m, cena);
     m.estado.pendente = null;
     if (cena.dragao) { m.salvo.dragao = false; m.salvar(); }
     if (cena.evento) m.estado.ultimo = cena.nome;
+    // conta os eventos comuns; o 12º arma o portal (que sobrevive a reabrir, como o dragão)
+    if (cena.nome === 'portal') { if (!cena.manual) { m.salvo.portal = false; m.salvar(); } }
+    else if (cena.evento) {
+      m.salvo.eventos = (m.salvo.eventos || 0) + 1;
+      if (m.salvo.eventos % PORTAL === 0) m.salvo.portal = true;
+      m.salvar();
+    }
   },
   // cortada (pergunta/permissão): só conta o que já aconteceu
   aoFimCena(m, cena, cortada) {
@@ -176,6 +211,10 @@ module.exports = {
     const c = cena && cena.evento;
     if (!c) return;
     const e = m.estado, foi = m.T - cena.t0;
+    // a cena andou com o Clawd (o portal): a trilha continua de onde ele ficou, sem pular
+    if (c.avanca && !cortada) m.dist += c.avanca;
+    // portal cortado antes de ele chegar no Nether (pergunta, permissão) não gasta a vez
+    if (cena.nome === 'portal' && !cena.manual && cortada && foi < T_NETHER.vira0 && !m.ruins.has('portal')) { m.salvo.portal = true; m.salvar(); }
     if (c.totem && foi >= c.tTotem) Object.assign(e, { vida: 1, ouro: 4, ouroAte: m.T + 5 });
     else e.vida = Math.max(1, e.vida - c.danos.reduce((s, [t, d]) => s + (foi >= t ? d : 0), 0));
     const n = c.mortes.reduce((s, [t, k]) => s + (foi >= t ? k : 0), 0);
@@ -193,7 +232,7 @@ module.exports = {
     if (P.ids.includes(nome)) return P.cena(m, nome);
     if (nome === 'dragao') return dragao() && typeof dragao().cena === 'function' ? cenaDoDragao(m) : null;
     const [id, minerio] = String(nome).split(':');
-    return EV[id] ? cenaDoEvento(m, EV[id], minerio && MINERIOS.find(x => x.id === minerio)) : null;
+    return EV[id] ? cenaDoEvento(m, EV[id], minerio && MINERIOS.find(x => x.id === minerio), minerio) : null;
   },
   // parado, só o orbe de quem está trabalhando mexe
   animado(m) { return enfeites.prontos() && (m.host.linhas || []).some(l => l.sit === 'working'); },

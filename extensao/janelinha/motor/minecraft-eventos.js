@@ -506,7 +506,10 @@ evento({
   },
 });
 
-// o quadro de um evento: guarda o relógio do motor pro brilho do Herobrine
-function quadroEvento(c, g, t, roupa, T) { T_AGORA = T; c.quadro(g, t, roupa); }
+// o portal do Nether (minecraft-nether.js): só na borda de cima (soCima), e a borda do cartão vira Nether
+evento(require('./minecraft-nether').evento);
+
+// o quadro de um evento: guarda o relógio do motor pro brilho do Herobrine (o mundo vai junto: o portal quer saber a reta)
+function quadroEvento(c, g, t, roupa, T, mundo) { T_AGORA = T; c.quadro(g, t, roupa, mundo); }
 
 module.exports = { EVENTOS, EV, MINERIOS, sorteiaMinerio, quadroEvento };

@@ -422,9 +422,12 @@ async function usarMinecraft() {
 /**
  * Quem atualiza sem o instalador (ou instalou sem internet) fica sem os sons do
  * Minecraft: a extensão baixa sozinha, calada. Se falhar, tenta de novo em 6 h.
+ * Um arquivo de cada leva: quem já tinha os sons antigos e atualizou também recebe
+ * os novos (o portal do Nether só é sorteado com as texturas dele; a bússola do compacto).
  */
+const MARCAS_MINECRAFT = [["sons", "levelup.wav"], ["sons", "nether_pan.wav"], ["portal_nether.png"], ["bussola31.png"]];
 function garantirMinecraft() {
-    if (fs.existsSync(path.join(sessions_1.MONITOR_DIR, "sons", "levelup.wav")))
+    if (MARCAS_MINECRAFT.every((p) => fs.existsSync(path.join(sessions_1.MONITOR_DIR, ...p))))
         return;
     const marca = path.join(sessions_1.MONITOR_DIR, "tentativa-minecraft");
     try {
