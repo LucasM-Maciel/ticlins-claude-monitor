@@ -1,9 +1,10 @@
 'use strict';
 // Tema Akatsuki: o que enfeita o cartão. Tudo chapado, só branco, preto e vermelho (dono, 16/10:
-// "menos neon", sem brilho, halo nem degradê). Moldura = um fio vermelho de 1 px na borda e, montadas
-// nele, nuvens pretas do manto (contorno branco, sombrinha vermelha de 1 px), sempre em pé, que dão a
-// volta no cartão enquanto alguém trabalha. Elas andam EM CIMA da borda (como a nuvem do Dragon Ball):
-// metade fica pra fora, então não encostam no texto. Bolinha = nuvenzinha da cor da situação. Barra do
+// "menos neon", sem brilho, halo nem degradê). Moldura = uma faixa cinza fosco quase preta de 3 DIPs na
+// borda (onde o Clawd anda) e, montadas nela, as nuvens vermelhas da Akatsuki (contorno branco, os
+// caracóis por dentro; dono, 28/10: "exatamente iguais as da akatsuki, pixel a pixel"),
+// que dão a volta no cartão com o pé na borda, girando com ela como o Clawd: ficam todas pra fora, então
+// não encostam no texto. Bolinha = nuvenzinha da cor da situação. Barra do
 // usage = um fio branco até o quanto foi gasto (vermelho a partir de 80%) com o Sharingan na ponta, as
 // 3 vírgulas girando; a partir de 95% vira o Mangekyō. No lado Time 7 (o tema troca de lado a cada 50
 // voltas): a bandana da Folha, ou seja, uma faixa azul parada com a placa de aço da Folha no meio do alto,
@@ -13,6 +14,7 @@
 // (prontas 1x por escala e guardadas): em escala quebrada (1,25) a nuvem andando não "tremula".
 const { lim, arte, tela, cache } = require('./comum');
 const { escrever } = require('./dragonball-cartao');
+const { trilha, perimetro } = require('./clawd');
 const { COR } = require('./akatsuki-arte');
 
 const corHex = (c, reserva) => (/^#[0-9a-f]{6}$/i.test(c) ? c : reserva);
@@ -106,31 +108,28 @@ function colarAnel(g, img, X, Y) {
   }
 }
 
-// a nuvem do manto (20x8): preta, contorno branco, 3 lombadas e o caracol no lóbulo da esquerda; a
-// sombrinha vermelha de 1 px (embaixo à direita) entra em comSombra
-const NUVEM_MANTO = [
-  '.....www.....www....',
-  '...wwkkkw.wwwkkkw...',
-  '..wkkkkkkwkkkwkkkw..',
-  '.wkkkwwkkkkkkkkkkkw.',
-  'wkkkwkkwkkkkkkkkkkkw',
-  'wkkkkkwkkkkkkkkkkkw.',
-  '.wwkkkkkkkkkkkkkww..',
-  '...wwwwwwwwwwwww....',
+// a nuvem da Akatsuki (28x12): vermelha, contorno branco, a lombada grande no meio, a média à direita, o
+// lóbulo da esquerda com o caracol, o gancho embaixo à direita e o pé com a dobra no meio
+const NUVEM_BORDA = [
+  '...........wwwww............',
+  '.........wwrrrrrww..........',
+  '........wrrrrrrrrrw.........',
+  '...wwww.wrrrrrrrrrrw.wwww...',
+  '..wrrrrwrrrrrrrrrrrrwrrrrw..',
+  '.wrrwwrrwrrrrrrrrrrrrrrrrrw.',
+  'wrrwrrwrrrrrrrrrrrrrrrrrrrrw',
+  'wrrwrrrrrrrrrrrrrrrrrwwrrrrw',
+  'wrrrwwwrrrrrrrrrrrrrwrrwrrw.',
+  '.wrrrrrrrrrrrrrrrrrrwrrrrw..',
+  '..wwrrrrrrrwwwwrrrrrrwwww...',
+  '....wwwwwww....wwwwww.......',
 ];
-const NW = NUVEM_MANTO[0].length, NH = NUVEM_MANTO.length;
-function comSombra(L) {
-  const o = Array.from({ length: L.length + 1 }, () => Array(L[0].length + 1).fill('.'));
-  L.forEach((l, y) => [...l].forEach((ch, x) => { if (ch !== '.') o[y + 1][x + 1] = 'r'; }));
-  L.forEach((l, y) => [...l].forEach((ch, x) => { if (ch !== '.') o[y][x] = ch; }));
-  return o.map(l => l.join(''));
-}
-const ARTE_NUVEM = comSombra(NUVEM_MANTO);
+const CINZA = '#292929', FAIXA = 3;  // a faixa da borda: cinza fosco quase preto, 3 DIPs
 const NUVENS = cache(8);
 function nuvemNaTela(e) {  // a nuvem na escala da tela, ampliada pixel a pixel
   const pronta = NUVENS.get(e);
   if (pronta) return pronta;
-  const base = arte(ARTE_NUVEM, { w: BRANCO, k: PRETO, r: VERMELHO });
+  const base = arte(NUVEM_BORDA, { w: BRANCO, r: VERMELHO });
   const c = tela(Math.round(base.width * e), Math.round(base.height * e));
   c.getContext('2d').drawImage(base, 0, 0, c.width, c.height);
   return NUVENS.set(e, c);
@@ -145,30 +144,12 @@ function andar(t, mexendo) {
   ultimoT = t;
   return fase;
 }
-// O trilho das nuvens (o centro delas): um retângulo de cantos redondos (raio CURVA) com o alto e o pé
-// SOBE DIPs pra dentro da borda e os lados LADO DIPs pra fora; assim a nuvem fica montada no fio e no
-// máximo 5 a 7 DIPs dela entram no cartão (o texto começa a 10-12). QTD_NUVENS: quantas dão a volta (8, dono,
-// 17/10: "tem nuvens demais, ficou poluído"); VEL: DIPs/s, no sentido horário.
-const RAIO = 8, SOBE = 1, LADO = 3, CURVA = 8, QTD_NUVENS = 8, VEL = 20;
-function noTrilho(s, rx, ry, rw, rh) {  // o ponto a s DIPs do começo do alto do trilho
-  const a = CURVA, Lh = rw - 2 * a, Lv = rh - 2 * a, arco = Math.PI * a / 2;
-  const seg = [Lh, arco, Lv, arco, Lh, arco, Lv, arco];
-  const per = 2 * (Lh + Lv) + 4 * arco;
-  s = ((s % per) + per) % per;
-  let i = 0;
-  while (s > seg[i] && i < 7) s -= seg[i++];
-  const q = s / a;  // nas curvas: o ângulo andado
-  switch (i) {
-    case 0: return [rx + a + s, ry];
-    case 1: return [rx + rw - a + a * Math.sin(q), ry + a - a * Math.cos(q)];
-    case 2: return [rx + rw, ry + a + s];
-    case 3: return [rx + rw - a + a * Math.cos(q), ry + rh - a + a * Math.sin(q)];
-    case 4: return [rx + rw - a - s, ry + rh];
-    case 5: return [rx + a - a * Math.sin(q), ry + rh - a + a * Math.cos(q)];
-    case 6: return [rx, ry + rh - a - s];
-    default: return [rx + a - a * Math.cos(q), ry + a - a * Math.sin(q)];
-  }
-}
+// As nuvens andam na trilha do Clawd (a borda do cartão, cantos de raio RAIO) com o pé nela e giram
+// junto, como ele: em cima de pé, no lado direito deitadas pra fora, embaixo de cabeça pra baixo (dono,
+// 28/10: "coladas, a base sempre na borda"). Ficam todas pra fora, então não encostam no texto.
+// QTD_NUVENS: quantas dão a volta (8, dono, 17/10: "tem nuvens demais, ficou poluído"); VEL: DIPs/s,
+// no sentido horário.
+const RAIO = 8, QTD_NUVENS = 8, VEL = 20;
 function moldura(g, [x, y, w, h], t) {
   const T = escalaDe(g), e = T.e;
   const X = Math.round(T.ox + x * e), Y = Math.round(T.oy + y * e);
@@ -176,14 +157,14 @@ function moldura(g, [x, y, w, h], t) {
   if (W < 4 || H < 4) return;
   g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
   if (COR.lado === 'time7') { molduraT7(g, T, [x, y, w, h], [X, Y, W, H], rr, fio, t); g.restore(); return; }
-  colarAnel(g, anel(W, H, rr, [[0, fio, VERMELHO]]), X, Y);
-  const rx = x - LADO, ry = y + SOBE, rw = w + 2 * LADO, rh = h - 2 * SOBE;
-  if (rw > 2 * CURVA && rh > 2 * CURVA) {
-    const per = 2 * (rw + rh) - 8 * CURVA + 2 * Math.PI * CURVA;
-    const n = QTD_NUVENS, esp = per / n, img = nuvemNaTela(e);
+  colarAnel(g, anel(W, H, rr, [[0, Math.max(FAIXA, Math.round(FAIXA * e)), CINZA]]), X, Y);
+  if (w > 2 * RAIO && h > 2 * RAIO) {
+    const n = QTD_NUVENS, esp = perimetro(w, h, RAIO) / n, img = nuvemNaTela(e), meio = Math.round(img.width / 2);
     for (let i = 0; i < n; i++) {
-      const [cx, cy] = noTrilho(i * esp + t * VEL, rx, ry, rw, rh);
-      g.drawImage(img, Math.round(T.ox + (cx - NW / 2) * e), Math.round(T.oy + (cy - NH / 2) * e));
+      const p = trilha(w, h, i * esp + t * VEL, RAIO), cos = Math.cos(p.a), sen = Math.sin(p.a);
+      // o pé no ponto da borda; nas retas o giro é de 90° certinho e a nuvem sai sem borrar
+      g.setTransform(cos, sen, -sen, cos, Math.round(T.ox + (x + p.x) * e), Math.round(T.oy + (y + p.y) * e));
+      g.drawImage(img, -meio, -img.height);
     }
   }
   g.restore();

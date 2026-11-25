@@ -223,23 +223,59 @@ test('layout: enfeites do tema, moldura de 2 px e as colunas de sempre', () => {
   assert.deepStrictEqual(l.colunas, { tempo: 36, pct: 38, ritmo: 72, falta: 48, rotulo: 18 });
 });
 
-test('a moldura é chapada: um fio vermelho de 1 px na borda e, por dentro, só as nuvens (sem brilho, sem fio largo)', () => {
-  const W = 220, H = 110, tela = new Tela(W, H), g = tela.getContext('2d');
-  K.moldura(g, [0, 0, W, H], 0);
-  let fio = 0; for (let x = 12; x < W - 12; x++) if ((tela.pixels[x] >>> 0) === 0xFFDC2626) fio++;
-  assert.ok(fio > 100, `o fio vermelho liso na borda de cima: ${fio} px`);
-  for (let y = 2; y < 8; y++) {  // por dentro do fio, o antigo era uma linha de ~175 px seguidos (vinho ou vermelho, com o brilho)
+test('a moldura é chapada: uma faixa cinza fosco de 3 px na borda e, montadas nela, só as nuvens vermelhas (sem brilho, sem fio largo)', () => {
+  const M = 20, W = 220, H = 110, TW = W + 2 * M, tela = new Tela(TW, H + 2 * M), g = tela.getContext('2d');
+  K.moldura(g, [M, M, W, H], 0);
+  for (const y of [M, M + 2]) {
+    let faixa = 0; for (let x = M + 12; x < M + W - 12; x++) if ((tela.pixels[y * TW + x] >>> 0) === 0xFF292929) faixa++;
+    assert.ok(faixa > 100, `a faixa cinza lisa na borda de cima, linha ${y - M}: ${faixa} px`);
+  }
+  let nuvem = 0; for (const p of tela.pixels) if ((p >>> 0) === 0xFFDC2626) nuvem++;
+  assert.ok(nuvem > 300, `as nuvens vermelhas: ${nuvem} px`);
+  for (let y = M + 3; y < M + 8; y++) {  // por dentro da faixa, o antigo era uma linha de ~175 px seguidos (vinho ou vermelho, com o brilho)
     let corrida = 0, maior = 0;
-    for (let x = 12; x < W - 12; x++) {
-      const p = tela.pixels[y * W + x], r = (p >>> 16) & 255, gg = (p >>> 8) & 255, b = p & 255;
+    for (let x = M + 12; x < M + W - 12; x++) {
+      const p = tela.pixels[y * TW + x], r = (p >>> 16) & 255, gg = (p >>> 8) & 255, b = p & 255;
       corrida = r > 100 && gg < 70 && b < 70 ? corrida + 1 : 0; maior = Math.max(maior, corrida);
     }
-    assert.ok(maior < 30, `linha ${y}: ${maior} px seguidos de vermelho`);
+    assert.ok(maior < 30, `linha ${y - M}: ${maior} px seguidos de vermelho`);
+  }
+});
+
+// dono, 28/10 (print): "as nuvens todas coladas, sem ficar pra fora, seguindo colado: a base sempre na borda"
+test('as nuvens andam com o pé na borda e giram com ela, como o Clawd: nada entra no cartão e as 4 bordas têm nuvem colada', () => {
+  const M = 20, W = 220, H = 110, TW = W + 2 * M, TH = H + 2 * M, R = 8;
+  const dentro = (x, y) => {  // o pixel está no cartão (cantos de raio R)?
+    const cx = x + 0.5 - M, cy = y + 0.5 - M;
+    if (cx < 0 || cy < 0 || cx > W || cy > H) return false;
+    const qx = Math.max(Math.abs(cx - W / 2) - (W / 2 - R), 0), qy = Math.max(Math.abs(cy - H / 2) - (H / 2 - R), 0);
+    return qx * qx + qy * qy <= R * R;
+  };
+  for (const t of [0, 0.7, 1.9, 3.3]) {
+    const tela = new Tela(TW, TH), g = tela.getContext('2d');
+    K.moldura(g, [M, M, W, H], t);
+    const nuvem = (x, y) => { const p = tela.pixels[y * TW + x] >>> 0; return p === 0xFFDC2626 || p === 0xFFF3F4F6; };
+    let dentroDoCartao = 0;
+    for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) if (nuvem(x, y) && dentro(x, y)) dentroDoCartao++;
+    assert.strictEqual(dentroDoCartao, 0, `t=${t}: ${dentroDoCartao} px de nuvem dentro do cartão`);
+    // colada: o pé (contorno branco) encosta na borda, no pixel logo fora dela, nos 4 lados
+    const cima = [], baixo = [], esq = [], dir = [];
+    for (let x = M + R; x < M + W - R; x++) { cima.push(nuvem(x, M - 1)); baixo.push(nuvem(x, M + H)); }
+    for (let y = M + R; y < M + H - R; y++) { esq.push(nuvem(M - 1, y)); dir.push(nuvem(M + W, y)); }
+    for (const [lado, px] of Object.entries({ cima, baixo, esq, dir })) {
+      if (t === 0) assert.ok(px.filter(Boolean).length >= 10, `t=0, ${lado}: o pé da nuvem não encosta na borda (${px.filter(Boolean).length} px)`);
+    }
+    // e nada solto: fora da borda, uma nuvem não passa da altura dela (12 px)
+    for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) {
+      if (!nuvem(x, y)) continue;
+      const dx = Math.max(M - x, x - (M + W - 1), 0), dy = Math.max(M - y, y - (M + H - 1), 0);
+      assert.ok(Math.hypot(dx, dy) <= 13, `t=${t}: nuvem solta em (${x}, ${y}), ${Math.hypot(dx, dy).toFixed(1)} px longe da borda`);
+    }
   }
 });
 
 test('a moldura anda: o quadro em t=0 difere do de t=3', () => {
-  const quadro = t => { const tela = new Tela(120, 60), g = tela.getContext('2d'); K.moldura(g, [0, 0, 120, 60], t); return tela.pixels; };
+  const quadro = t => { const tela = new Tela(160, 100), g = tela.getContext('2d'); K.moldura(g, [20, 20, 120, 60], t); return tela.pixels; };
   const a = quadro(0), b = quadro(3);
   let dif = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) dif++;
   assert.ok(dif > 100, `${dif} pixels diferentes`);
