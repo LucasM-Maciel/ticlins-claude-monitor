@@ -195,6 +195,82 @@ Teste 'contas: token sensível a maiúsculas, cache por mtime e prazo, represent
     AtualizarContas $sessoesDoTesteConta
     Igual '' (ContaAtual) 'a padrão deve representar quando for a sessão mais recente'
 }
+# a pasta subagents de uma conversa longa junta centenas de arquivos: olhar um por um com Get-Item travava a
+# janelinha (e o Clawd junto) ~180 ms a cada 2 s (medido 31/10, sessão parada com 163)
+Teste 'sessão parada com 300 subagentes: o "voltou a trabalhar" acerta e não trava a janelinha' {
+    $astDoVoltou = [Management.Automation.Language.Parser]::ParseFile($overlay, [ref]$null, [ref]$null)
+    foreach ($funcaoDoVoltou in 'MexeuDepoisDoStop', 'VoltouATrabalhar') {
+        Invoke-Expression $astDoVoltou.Find({ param($no) $no -is [Management.Automation.Language.FunctionDefinitionAst] -and $no.Name -eq $funcaoDoVoltou }, $true).Extent.Text
+    }
+    $pastaDoVoltou = "$tmp\voltou"
+    $transcriptDoVoltou = "$pastaDoVoltou\conversa.jsonl"
+    New-Item -ItemType Directory -Force "$pastaDoVoltou\conversa\subagents" | Out-Null
+    $agoraDoVoltou = [DateTime]::UtcNow
+    $antigoDoVoltou = $agoraDoVoltou.AddMinutes(-10)
+    [IO.File]::WriteAllText($transcriptDoVoltou, "{}`n", $utf8)
+    [IO.File]::SetLastWriteTimeUtc($transcriptDoVoltou, $antigoDoVoltou)
+    $subagentesDoVoltou = @(foreach ($numeroDoSubagente in 1..300) {
+        $arquivoDoSubagente = "$pastaDoVoltou\conversa\subagents\agent-$numeroDoSubagente.jsonl"
+        [IO.File]::WriteAllText($arquivoDoSubagente, "{}`n", $utf8)
+        [IO.File]::SetLastWriteTimeUtc($arquivoDoSubagente, $antigoDoVoltou)
+        $arquivoDoSubagente
+    })
+    # o Stop foi há 5 min
+    $sessaoDoVoltou = [pscustomobject]@{ id = 'parada'; transcript = $transcriptDoVoltou; since = ([DateTimeOffset]$agoraDoVoltou).ToUnixTimeMilliseconds() / 1000 - 300 }
+    $script:idsDeFundo = @()
+    Igual $false (VoltouATrabalhar $sessaoDoVoltou) 'tudo antigo: não voltou'
+    $temposDoVoltou = @(@(foreach ($vezDoVoltou in 1..5) { $relogioDoVoltou = [Diagnostics.Stopwatch]::StartNew(); $null = VoltouATrabalhar $sessaoDoVoltou; $relogioDoVoltou.Elapsed.TotalMilliseconds }) | Sort-Object)
+    Verdade ($temposDoVoltou[2] -lt 100) ('300 subagentes levaram {0:N0} ms (mediana): a janelinha trava a cada 2 s' -f $temposDoVoltou[2])
+    [IO.File]::SetLastWriteTimeUtc($subagentesDoVoltou[150], $agoraDoVoltou)
+    Igual $true (VoltouATrabalhar $sessaoDoVoltou) 'subagente escrito agora: voltou'
+    [IO.File]::SetLastWriteTimeUtc($subagentesDoVoltou[150], $agoraDoVoltou.AddSeconds(-60))
+    Igual $false (VoltouATrabalhar $sessaoDoVoltou) 'subagente escrito depois do Stop, mas há 60 s: não voltou'
+    [IO.File]::SetLastWriteTimeUtc($subagentesDoVoltou[150], $antigoDoVoltou)
+    [IO.File]::SetLastWriteTimeUtc($transcriptDoVoltou, $agoraDoVoltou)
+    Igual $true (VoltouATrabalhar $sessaoDoVoltou) 'transcript escrito agora: voltou'
+    [IO.File]::SetLastWriteTimeUtc($transcriptDoVoltou, $antigoDoVoltou)
+    Remove-Item -Recurse -Force "$pastaDoVoltou\conversa"
+    Igual $false (VoltouATrabalhar $sessaoDoVoltou) 'sem a pasta subagents: não voltou'
+    $script:idsDeFundo = @('parada')
+    Igual $true (VoltouATrabalhar $sessaoDoVoltou) 'comando em segundo plano: voltou'
+    $script:idsDeFundo = @()
+}
+# o título se repete o tempo todo no transcript (medido 31/10: 5.169 vezes em 365 MB), então basta o fim. Ler a
+# conversa inteira ao abrir travava a janelinha ~1 min, e a regex em cada pedaço novo custava ~140 ms por MB
+Teste 'título de conversa gigante: lê só o fim, acha o mais novo e não trava a janelinha' {
+    $astDoTitulo = [Management.Automation.Language.Parser]::ParseFile($overlay, [ref]$null, [ref]$null)
+    Invoke-Expression $astDoTitulo.Find({ param($no) $no -is [Management.Automation.Language.FunctionDefinitionAst] -and $no.Name -eq 'Titulo' }, $true).Extent.Text
+    $titulos = @{}
+    $megaDeConversa = ('{"type":"user","message":{"content":"' + ('x' * 979) + '"}}' + "`n") * 1024  # linhas de 1 KB
+    $conversaGigante = "$tmp\titulo-gigante.jsonl"
+    $gravadorDoTitulo = [IO.StreamWriter]::new($conversaGigante, $false, $utf8)
+    $gravadorDoTitulo.Write('{"type":"custom-title","customTitle":"velho"}' + "`n")
+    foreach ($megaDoTitulo in 1..30) { $gravadorDoTitulo.Write($megaDeConversa) }
+    $gravadorDoTitulo.Write('{"type":"custom-title","customTitle":"novo"}' + "`n" + '{"type":"ai-title","aiTitle":"novo da IA"}' + "`n")
+    $gravadorDoTitulo.Dispose()
+    $relogioDoTitulo = [Diagnostics.Stopwatch]::StartNew()
+    Igual 'novo' (Titulo $conversaGigante) 'a 1ª leitura tem que achar o título mais novo (o custom ganha do ai)'
+    Verdade ($relogioDoTitulo.ElapsedMilliseconds -lt 500) "a 1ª leitura de 30 MB levou $($relogioDoTitulo.ElapsedMilliseconds) ms: a janelinha trava ao abrir"
+    [IO.File]::AppendAllText($conversaGigante, '{"type":"custom-title","customTitle":"renomeado"}' + "`n", $utf8)
+    Igual 'renomeado' (Titulo $conversaGigante) 'o /rename novo tem que trocar o título'
+    [IO.File]::AppendAllText($conversaGigante, '{"type":"custom-title","customTitle":"pela me', $utf8)
+    Igual 'renomeado' (Titulo $conversaGigante) 'linha pela metade (gravando) não conta'
+    [IO.File]::AppendAllText($conversaGigante, 'tade"}' + "`n", $utf8)
+    Igual 'pela metade' (Titulo $conversaGigante) 'a linha terminada tem que contar'
+    [IO.File]::WriteAllText($conversaGigante, '{"type":"ai-title","aiTitle":"curto"}' + "`n", $utf8)
+    Igual 'curto' (Titulo $conversaGigante) 'arquivo que encolheu: recomeça do zero'
+    # a borda dos 4 MB cai no meio de uma linha de título: o pedaço não vira título nem dá erro
+    $conversaCortada = "$tmp\titulo-cortado.jsonl"
+    $linhaCortada = '{"type":"custom-title","customTitle":"cortado"}' + "`n"
+    $gravadorDoTitulo = [IO.StreamWriter]::new($conversaCortada, $false, $utf8)
+    $gravadorDoTitulo.Write($megaDeConversa)
+    $gravadorDoTitulo.Write($linhaCortada)
+    $gravadorDoTitulo.Write((('y' * 1023 + "`n") * 4095) + ('y' * 1003) + "`n")  # 4 MB menos 20 bytes
+    $gravadorDoTitulo.Dispose()
+    Igual $null (Titulo $conversaCortada) 'o título cortado na borda dos 4 MB não pode virar título'
+    [IO.File]::AppendAllText($conversaCortada, '{"type":"ai-title","aiTitle":"depois do corte"}' + "`n", $utf8)
+    Igual 'depois do corte' (Titulo $conversaCortada) 'o título novo depois do corte tem que contar'
+}
 # o SalvarConfig do Windows grava só as chaves que conhece: o idioma tem que estar entre elas
 Teste 'config.json: o idioma lido volta igual no SalvarConfig; sem a chave (ou estranha) é português' {
     $astDoIdioma = [Management.Automation.Language.Parser]::ParseFile($overlay, [ref]$null, [ref]$null)

@@ -695,7 +695,9 @@ function Sessoes($agora) {
 
 # Título da aba: o do /rename ("custom-title") ganha do automático ("ai-title").
 # O hook só grava o nome quando você manda mensagem, e na 1ª ainda não existe
-# título (ficava o nome da pasta). Lê só o pedaço novo do transcript.
+# título (ficava o nome da pasta). Lê só o pedaço novo do transcript, e no máximo os últimos 4 MB: o título
+# se repete o tempo todo (5.169 vezes em 365 MB, medido 31/10), e ler a conversa inteira ao abrir travava a
+# janelinha ~1 min.
 $titulos = @{}  # transcript -> @{ lido; custom; ai }
 function Titulo($transcript) {
     if (-not $transcript) { return $null }
@@ -705,6 +707,8 @@ function Titulo($transcript) {
         $fs = [IO.File]::Open($transcript, 'Open', 'Read', 'ReadWrite')
         try {
             if ($fs.Length -lt $t.lido) { $t.lido = 0L; $t.custom = $null; $t.ai = $null }
+            $cortou = $fs.Length - $t.lido -gt 4MB  # leu do meio: a 1ª linha pode ter vindo pela metade
+            if ($cortou) { $t.lido = $fs.Length - 4MB }
             $n = [int]($fs.Length - $t.lido)
             if ($n -gt 0) {
                 [void]$fs.Seek($t.lido, 'Begin')
@@ -714,8 +718,14 @@ function Titulo($transcript) {
                 $fim = [Array]::LastIndexOf($buf, [byte]10, $lidos - 1) + 1  # não consome linha pela metade
                 $t.lido += $fim
                 $texto = [Text.Encoding]::UTF8.GetString($buf, 0, $fim)
-                foreach ($m in [regex]::Matches($texto, '(?m)^.*"type":"(?:custom|ai)-title".*$')) {
-                    try { $o = $m.Value | ConvertFrom-Json } catch { continue }
+                # IndexOf e não uma regex no texto todo: a regex custava ~140 ms por MB, no thread da janela
+                $posDaBusca = $(if ($cortou) { $texto.IndexOf([char]10) + 1 } else { 0 })
+                while (($posDoTitulo = $texto.IndexOf('-title"', $posDaBusca, [StringComparison]::Ordinal)) -ge 0) {
+                    $inicioDaLinha = $texto.LastIndexOf([char]10, $posDoTitulo) + 1
+                    $posDaBusca = $texto.IndexOf([char]10, $posDoTitulo) + 1  # o texto termina em \n: sempre acha
+                    $linhaDoTitulo = $texto.Substring($inicioDaLinha, $posDaBusca - 1 - $inicioDaLinha)
+                    if ($linhaDoTitulo -notmatch '"type":"(?:custom|ai)-title"') { continue }
+                    try { $o = $linhaDoTitulo | ConvertFrom-Json } catch { continue }
                     if ($o.type -eq 'custom-title' -and $o.customTitle) { $t.custom = $o.customTitle }
                     elseif ($o.type -eq 'ai-title' -and $o.aiTitle) { $t.ai = $o.aiTitle }
                 }
@@ -775,21 +785,26 @@ function Situacao($s) {
     if ($r -eq 'question' -and $s.automatica -eq $true) { return 'finished' }
     $r
 }
-function MexeuDepoisDoStop($arquivoDoTranscript, $since) {
-    $quando = (Get-Item -LiteralPath $arquivoDoTranscript -ErrorAction Ignore).LastWriteTimeUtc
-    if (-not $quando) { return $false }
-    $segundos = ([DateTimeOffset]$quando).ToUnixTimeMilliseconds() / 1000
-    $segundos -gt $since + 2 -and ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000 - $segundos) -le 45
+# Algum dos arquivos foi escrito depois do Stop e há pouco (45 s)? Um laço só, com [IO.File] e sem Get-Item: a pasta
+# subagents de uma conversa longa junta centenas, e um Get-Item (mais uma chamada de função) por arquivo travava a
+# janelinha e os quadros do motor a cada 2 s (medido 31/10: 163 subagentes = 180 ms; assim, ~15 ms)
+function MexeuDepoisDoStop($arquivosDaSessao, $since) {
+    $depoisDoStop = [DateTimeOffset]::FromUnixTimeMilliseconds([long](($since + 2) * 1000)).UtcDateTime
+    $haPouco = [DateTime]::UtcNow.AddSeconds(-45)
+    foreach ($arquivoDaSessao in $arquivosDaSessao) {
+        $quando = [IO.File]::GetLastWriteTimeUtc($arquivoDaSessao)  # arquivo apagado volta 1601: não mexeu
+        if ($quando -gt $depoisDoStop -and $quando -ge $haPouco) { return $true }
+    }
+    $false
 }
 function VoltouATrabalhar($s) {
     if ($script:idsDeFundo -contains $s.id) { return $true }
     if (-not $s.transcript) { return $false }
-    if (MexeuDepoisDoStop $s.transcript $s.since) { return $true }
+    $arquivosDaSessao = @($s.transcript)
     $pastaDosSub = ($s.transcript -replace '\.jsonl$', '') + '\subagents'
-    foreach ($arqSub in @(Get-ChildItem -LiteralPath $pastaDosSub -Filter '*.jsonl' -ErrorAction Ignore)) {
-        if (MexeuDepoisDoStop $arqSub.FullName $s.since) { return $true }
-    }
-    $false
+    # catch: a pasta pode sumir entre o Exists e a leitura (e o erro não conta no "fechou")
+    if ([IO.Directory]::Exists($pastaDosSub)) { try { $arquivosDaSessao += [IO.Directory]::GetFiles($pastaDosSub, '*.jsonl') } catch { $Error.RemoveAt(0) } }
+    MexeuDepoisDoStop $arquivosDaSessao $s.since
 }
 function SituacaoDaConversa($s) {
     # sessão do Codex (ou com "pergunta": true): a extensão já leu a conversa e deixou a resposta no arquivo
