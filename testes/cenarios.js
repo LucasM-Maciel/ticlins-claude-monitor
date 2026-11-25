@@ -169,7 +169,10 @@ function texturasDoMinecraft() {
     png("xp_fundo.png", 182, 5, () => [32, 32, 32, 255]);
     png("xp_barra.png", 182, 5, () => [0, 200, 0, 255]);
     png("fonte.png", 128, 128, (x, y) => (Math.floor(y / 8) >= 2 && x % 8 < 5 && y % 8 < 7 ? [255, 255, 255, 255] : TRANSPARENTE));
+    // a bússola do modo compacto: 32 quadros magenta (cor que nada mais do cartão usa), 16x16
+    for (let q = 0; q < 32; q++) png(`bussola${String(q).padStart(2, "0")}.png`, 16, 16, (x, y) => (x >= 2 && x < 14 && y >= 2 && y < 14 ? [255, 0, 255, 255] : TRANSPARENTE));
 }
+let compacto = false;  // o item "Compacto" do botão direito (config.json > compacto); só vai pro .txt quando ligado
 
 let clawd;
 let temUso = false;
@@ -327,12 +330,14 @@ if (cenario === "misto") {
     sessaoCodex("a", { estado: "working", nome: "Rodando testes", mostra: "working" });
     fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ opacidade: 0.5, clawd: false, volume: 0 }));
     clawd = "desligado";
-} else if (cenario === "minecraft") {  // tema Minecraft com as texturas: orbe, terra com grama, barra de XP e a letra
+} else if (cenario === "minecraft" || cenario === "compacto") {  // tema Minecraft com as texturas: orbe, terra com grama, barra de XP e a letra
+    // compacto: o mesmo, com a bússola (magenta) que o motor desenha no lugar da barra de XP
     sessao("a", { estado: "working", mostra: ["Rodando testes", "working"], linhas: [titulo("Rodando testes"), ferramenta("Bash")] });
     sessao("b", { estado: "waiting", antes: "working", mostra: ["Deploy pronto", "finished"], linhas: [titulo("Deploy pronto"), texto("Feito.")] });
     sessao("c", { estado: "permission", since: agora - 5, mexeuEm: agora - 60, mostra: ["Migrar o banco", "permission"], linhas: [titulo("Migrar o banco"), ferramenta("Bash")] });
     texturasDoMinecraft();
-    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify({ tema: "minecraft" }));
+    compacto = cenario === "compacto";
+    fs.writeFileSync(path.join(pasta, "config.json"), JSON.stringify(compacto ? { tema: "minecraft", compacto: true } : { tema: "minecraft" }));
     clawd = "pulando";
     som = "xp";
     uso(38, 85);
@@ -473,6 +478,7 @@ if (paginasDaLista > 1) linhas.push(`pagina: 1/${paginasDaLista}`);
 linhas.push(`clawd: ${clawd}`, `usage: ${temUso ? "ok" : "indisponivel"}`);
 if (conta) linhas.push(conta);
 linhas.push(`ritmo: ${usoMostrado === "codex" ? "nenhum" : ritmo}`);  // o ritmo é só das barras do Claude (5h e 7d)
+if (compacto) linhas.push("compacto: ligado");
 if (usoMostrado !== "claude") linhas.push(`uso: ${usoMostrado}`, `barras: ${barras}`);
 linhas.push(`som: ${som}`, `som da cena: ${somDaCena}`, `clique: ${clique}`, `atualizacao: ${atualizacao}`);
 fs.writeFileSync(path.join(pasta, "esperado.txt"), linhas.join("\n") + "\n");

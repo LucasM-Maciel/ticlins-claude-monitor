@@ -196,8 +196,14 @@ t_cenario() {
   if [ -z "$sem" ]; then
     [ "$(pixels "$foto" 215 119 87 30)" -gt 30 ] || falha "cadê o Clawd (laranja)? perto: $(pixels "$foto" 215 119 87 80 lista)" || return 1
   fi
+  # modo compacto: a bússola (magenta no cenarios.js) que o motor desenha no lugar da barra de XP; sem ele, nada dela
+  if [ "$c" = compacto ] && [ -z "$sem" ]; then
+    [ "$(pixels "$foto" 255 0 255 40)" -gt 20 ] || falha "cadê a bússola do compacto (magenta)? perto: $(pixels "$foto" 255 0 255 120 lista)" || return 1
+  elif [ "$c" = minecraft ]; then
+    [ "$(pixels "$foto" 255 0 255 40)" -lt 5 ] || falha "a bússola apareceu sem o compacto" || return 1
+  fi
 }
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas contas contas-sem-credencial contas-mesmo-login contas-mesmo-login-outra contas-mesmo-login-padrao ritmo-desligado ingles; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft compacto padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas contas contas-sem-credencial contas-mesmo-login contas-mesmo-login-outra contas-mesmo-login-padrao ritmo-desligado ingles; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 # Sem o motor fica só o cartão. As lutas antigas do Mac sem motor (pedra, bug: "andando (pedra)")

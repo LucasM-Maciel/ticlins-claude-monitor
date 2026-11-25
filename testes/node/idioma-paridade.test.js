@@ -19,7 +19,7 @@ const ROTULOS = [['Tema', 'Theme'], ['Uso', 'Usage'], ['Mostrar', 'Show'], ['Idi
 // [pt, en]: o que a janelinha escreve na tela e no menu; o par fica na mesma linha (no tr(...) ou na tabela)
 const GLOSSARIO = [
   ['Padrão', 'Default'], ['Os dois', 'Both'], ['Abas', 'Tabs'], ['Agentes', 'Agents'], ['Tudo', 'All'],
-  ['Ritmo', 'Pace'], ['Opacidade', 'Opacity'], ['Fechar', 'Close'], ['Português', 'English'],
+  ['Ritmo', 'Pace'], ['Compacto', 'Compact'], ['Opacidade', 'Opacity'], ['Fechar', 'Close'], ['Português', 'English'],
   ['trabalhando', 'working'], ['terminou', 'done'], ['pergunta pra você', 'asking you'], ['pedindo permissão', 'needs permission'],
   ['agora', 'now'], ['folga', 'slow'], ['no ritmo', 'on pace'], ['acima', 'fast'], ['estourando', 'too fast'],
   ['padrão', 'default'], ['conta', 'account'],

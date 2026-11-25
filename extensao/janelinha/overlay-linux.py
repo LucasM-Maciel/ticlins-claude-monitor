@@ -124,7 +124,7 @@ temas = [("padrao", ("Padrão", "Default")), ("minecraft", "Minecraft"), ("drago
 arquivo_config = os.path.join(pasta, "config.json")
 # mostrar: "abas" (o padrão), "agentes" (sessões automáticas: claude -p, codex exec) ou "tudo"
 # idioma: sem a chave é português, então quem já instalou não vê nada mudar
-config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft", "uso": "claude", "mostrar": "abas", "ritmo": True, "idioma": "pt"}
+config = {"opacidade": 1.0, "clawd": True, "volume": 1.0, "tema": "minecraft", "uso": "claude", "mostrar": "abas", "ritmo": True, "idioma": "pt", "compacto": False}
 idiomas = (("pt", "Português"), ("en", "English"))
 
 
@@ -160,6 +160,8 @@ if _o:
         config["opacidade"] = min(1.0, max(0.2, numero(_o["opacidade"])))
     if isinstance(_o.get("ritmo"), bool):
         config["ritmo"] = _o["ritmo"]
+    if isinstance(_o.get("compacto"), bool):
+        config["compacto"] = _o["compacto"]
     if isinstance(_o.get("clawd"), bool):
         config["clawd"] = _o["clawd"]
     if numero(_o.get("volume")) is not None:
@@ -1092,9 +1094,28 @@ layouts = None
 pediu_foto = False
 
 
+# Modo compacto (botão direito > Compacto, igual ao overlay.ps1/UsaBussola): no Minecraft, com o
+# motor, a bússola do jogo (bussola00..31.png, 16x16) fica no lugar da barra de XP e o cartão
+# estreita; nos outros temas (ou sem o motor, que aqui não tem o visual do Minecraft) só some a
+# coluna do ritmo. Quem desenha a bússola é o motor (minecraft-enfeites.js, host.compacto).
+def _png_16(caminho):
+    try:
+        with open(caminho, "rb") as f:
+            cab = f.read(24)
+        return cab[:8] == b"\x89PNG\r\n\x1a\n" and struct.unpack(">II", cab[16:24]) == (16, 16)
+    except OSError:
+        return False
+
+
+tem_bussola = all(_png_16(os.path.join(pasta, "bussola%02d.png" % q)) for q in range(32))
+
+
 def aparencia_atual():
     a = dict(layouts[config["tema"]]) if layouts and (motor_vivo or arquivo_foto is not None) and config["tema"] in layouts else aparencia()
-    if not config["ritmo"]:
+    a["bussola"] = bool(config["compacto"] and config["tema"] == "minecraft" and tem_bussola and a["enfeites"])
+    if a["bussola"]:
+        a["barra"] = (20.0, 20.0)  # o lugar da bússola (o overlay.ps1 usa 20 px também)
+    if not config["ritmo"] or (config["compacto"] and not a["bussola"]):
         a["colRitmo"] = 0.0
     elif not a["enfeites"]:
         # a maior palavra das duas línguas: trocar o idioma não mexe no tamanho do cartão
@@ -1126,7 +1147,7 @@ class Cartao:
         self.y0 = ap["moldura"][1] + ap["padding"][1]
         self.altura_linha = max(16, ap["letra"]) + 4
         self.altura_uso = max(0 if ap["enfeites"] else 16, ap["letra"], ap["barra"][1]) + 4
-        self.largura = max(186 + ap["colTempo"], ap["colRotulo"] + ap["barra"][0] + ap["colPct"] + ap["colRitmo"] + ap["colFalta"])
+        self.largura = max(186 - (94 if ap.get("bussola") else 0) + ap["colTempo"],ap["colRotulo"] + ap["barra"][0] + ap["colPct"] + ap["colRitmo"] + ap["colFalta"])
         self.y_paginas = self.y0 + (20 if not self.linhas else len(self.linhas) * self.altura_linha)
         self.y_uso = self.y_paginas + (self.altura_paginas if self.paginas > 1 else 0) + 10
         linhas_uso = linhas_do_uso()
@@ -1631,6 +1652,7 @@ def motor_estado():
         "msg": "estado", "tema": config["tema"], "idioma": config["idioma"], "clawd": config["clawd"], "modo": modo,
         "escala": escala(), "janela": [float(L), float(A)],
         "cartao": cartao.na_janela(0, 0, fw, fh), "raio": float(cartao.ap["raio"]), "opacidade": config["opacidade"],
+        "compacto": bool(cartao.ap.get("bussola")),  # o motor desenha a bússola no lugar da barra
         "linhas": cartao.caixas_das_linhas(), "uso": cartao.caixas_do_uso(),
     }
     texto = json.dumps(estado, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
@@ -1719,7 +1741,7 @@ def atualizar():
         visto = [f"sessao: {s['nome']} | hook={s['estado']} | janelinha={s['situacao']}" + (" | agente=codex" if s.get("codex") else "") for s in sessoes] + (
             [] if config["mostrar"] == "abas" else [f"mostrar: {config['mostrar']}"]) + (
             [f"pagina: {pagina_da_lista}/{total_de_paginas}"] if total_de_paginas > 1 else []) + [
-            f"clawd: {clawd}", f"usage: {'indisponivel' if not uso_atual() else 'ok'}"] + foto_da_conta() + ["ritmo: " + ritmo_do_claude()] + (
+            f"clawd: {clawd}", f"usage: {'indisponivel' if not uso_atual() else 'ok'}"] + foto_da_conta() + ["ritmo: " + ritmo_do_claude()] + (["compacto: ligado"] if config["compacto"] else []) + (
             [] if config["uso"] == "claude" else [f"uso: {config['uso']}", f"barras: {barras_com_grupo()}"]) + [
             f"som: {som}",
             f"som da cena: {som_da_cena_visto or 'nenhum'}", f"clique: {clique_da_vez or 'nenhum'}",
@@ -1794,6 +1816,12 @@ def montar_menu():
     item_ritmo.connect("toggled", lambda it: trocar("ritmo", it.get_active()))
     menu.append(item_ritmo)
 
+    # compacto: cartão mais estreito (no Minecraft, a bússola no lugar da barra de XP)
+    item_compacto = Gtk.CheckMenuItem(label=tr("Compacto", "Compact"))
+    item_compacto.set_active(config["compacto"])
+    item_compacto.connect("toggled", lambda it: trocar("compacto", it.get_active()))
+    menu.append(item_compacto)
+
     clawd = Gtk.CheckMenuItem(label="Clawd")
     clawd.set_active(config["clawd"])
     clawd.connect("toggled", lambda it: trocar("clawd", it.get_active()))
@@ -1848,6 +1876,9 @@ def trocar(chave, valor):
         anotar(f"uso: {valor}")
         atualizar()
     elif chave == "ritmo":
+        atualizar()
+    elif chave == "compacto":
+        anotar(f"compacto: {'ligado' if valor else 'desligado'}")
         atualizar()
     elif chave == "mostrar":
         anotar(f"mostrar: {valor}")

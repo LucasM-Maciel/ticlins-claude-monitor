@@ -2290,7 +2290,7 @@ if ($Foto) {
             "sessao: $($_.name) | hook=$($_.state) | janelinha=$($_.situacao)$(if ($_.agente -eq 'codex') { ' | agente=codex' })"
         }) + @(if ($config.mostrar -ne 'abas') { "mostrar: $($config.mostrar)" }) + @(if ($paginaDaLista.total -gt 1) { "pagina: $($paginaDaLista.atual)/$($paginaDaLista.total)" }) +
             "clawd: $(if (-not $config.clawd) { 'desligado' } else { "$($passeio.modo)$(if ($luta.tipo) { " ($($luta.tipo))" })" })" + "usage: $(if ($usosPorConta[(ContaAtual)].dados) { 'ok' } else { 'indisponivel' })" +
-            @(FotoDaConta) + "ritmo: $($listaFeita.ritmo)" +
+            @(FotoDaConta) + "ritmo: $($listaFeita.ritmo)" + @(if ($config.compacto) { 'compacto: ligado' }) +
             @(if ($config.uso -ne 'claude') { "uso: $($config.uso)"; "barras: $($listaFeita.barras)" }) +
             "som: $(if ($somDaVez) { $nomeDoSom[$config.tema][$avisoDaSituacao[$somDaVez]] } else { 'nenhum' })" +
             "som da cena: $(if ($somDaCena) { $somDaCena } else { 'nenhum' })" +

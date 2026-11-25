@@ -224,6 +224,12 @@ t_cenario() {
   if [ "$c" = minecraft ] || [ "$c" = padrao ]; then
     enfeites_mc "$c" "$foto" || return 1
   fi
+  # modo compacto: a bússola (magenta no cenarios.js) que o motor desenha no lugar da barra de XP; sem ele, nada dela
+  if [ "$c" = compacto ]; then
+    [ "$(pixels "$foto" 255 0 255 40)" -gt 20 ] || falha "cadê a bússola do compacto (magenta)? perto: $(pixels "$foto" 255 0 255 120 lista)" || return 1
+  elif [ "$c" = minecraft ]; then
+    [ "$(pixels "$foto" 255 0 255 40)" -lt 5 ] || falha "a bússola apareceu sem o compacto" || return 1
+  fi
   if [ "$c" = bug ]; then
     [ "$(pixels "$foto" 239 68 68 30)" -gt 20 ] || falha "o bug não ficou vermelho com a espadada" || return 1
   fi
@@ -277,7 +283,7 @@ enfeites_mc() {
 }
 # picareta magenta de teste: prova que a textura do Minecraft, quando existe, é a usada
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAlSURBVDhPY2AYCPCf4f9/dDGiAUgz2QaMaiYRjGomA1CkeUABAMm+R7mIjocJAAAAAElFTkSuQmCC' | base64 -D > "$TMP/magenta.png"
-for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas contas contas-sem-credencial contas-mesmo-login contas-mesmo-login-outra contas-mesmo-login-padrao ritmo-desligado ingles; do
+for c in misto andando parado vazio levelup xp-rodando xp-esperando aldeao clique atualizar preferencias minecraft compacto padrao epico codex uso-codex uso-codex-sem uso-ambos agentes agentes-tudo paginas contas contas-sem-credencial contas-mesmo-login contas-mesmo-login-outra contas-mesmo-login-padrao ritmo-desligado ingles; do
   teste "cenário '$c': mostra exatamente o esperado" t_cenario "$c"
 done
 # Sem o motor: o Clawd daqui (Swift), o de quando falta o node. As lutas antigas (pedra, bug)

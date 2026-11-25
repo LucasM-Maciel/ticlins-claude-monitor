@@ -295,7 +295,7 @@ function PngMagenta($arquivo) {
     for ($i = 2; $i -lt 14; $i++) { $b.SetPixel($i, 15 - $i, [Drawing.Color]::Magenta); $b.SetPixel($i, 14 - $i, [Drawing.Color]::Magenta) }
     $b.Save($arquivo, [Drawing.Imaging.ImageFormat]::Png); $b.Dispose()
 }
-foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas', 'contas', 'contas-sem-credencial', 'contas-mesmo-login', 'contas-mesmo-login-outra', 'contas-mesmo-login-padrao', 'ritmo-desligado', 'ingles') {
+foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodando', 'xp-esperando', 'aldeao', 'clique', 'pedra', 'bug', 'atualizar', 'preferencias', 'minecraft', 'compacto', 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas', 'contas', 'contas-sem-credencial', 'contas-mesmo-login', 'contas-mesmo-login-outra', 'contas-mesmo-login-padrao', 'ritmo-desligado', 'ingles') {
     Teste "cenário '$cenario': mostra exatamente o esperado" {
         $pasta = "$tmp\cenario $cenario ção"  # espaço e acento no caminho
         $r = Rodar $node @("$raiz\testes\cenarios.js", $pasta, $cenario, "$PID")
@@ -331,6 +331,9 @@ foreach ($cenario in 'misto', 'andando', 'parado', 'vazio', 'levelup', 'xp-rodan
         elseif ($cenario -eq 'pedra') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 2) 'cadê o diamante (diamante.png) subindo?' }
         elseif ($cenario -in 'padrao', 'epico', 'codex', 'uso-codex', 'uso-codex-sem', 'uso-ambos', 'agentes', 'agentes-tudo', 'paginas', 'contas', 'contas-sem-credencial', 'contas-mesmo-login', 'contas-mesmo-login-outra', 'contas-mesmo-login-padrao', 'ritmo-desligado', 'ingles') { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -lt 5) 'o Clawd do Padrão apareceu com a ferramenta' }
         else { Verdade ([Pixels]::Contar($foto, 74, 237, 217, 30) -gt 5) 'cadê a ferramenta desenhada (ciano)?' }
+        # modo compacto: a bússola (magenta no cenarios.js) no lugar da barra de XP; sem ele, nada dela
+        if ($cenario -eq 'compacto') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -gt 20) 'cadê a bússola do compacto (magenta)?' }
+        elseif ($cenario -eq 'minecraft') { Verdade ([Pixels]::Contar($foto, 255, 0, 255, 30) -lt 5) 'a bússola apareceu sem o compacto' }
         # tema Minecraft com as texturas de mentira do cenarios.js; o Padrão tem elas na pasta e não usa
         if ($cenario -in 'minecraft', 'padrao') {
             $mc = @{

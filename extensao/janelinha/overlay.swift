@@ -74,7 +74,7 @@ let idiomas: [(id: String, nome: String)] = [("pt", "Português"), ("en", "Engli
 let arquivoConfig = pasta + "/config.json"
 // mostrar: "abas" (o padrão), "agentes" (sessões automáticas: claude -p, codex exec) ou "tudo"
 // idioma: "pt" (o padrão; quem já tinha instalado não tem a chave) ou "en"
-var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft", uso: "claude", mostrar: "abas", ritmo: true, idioma: "pt")
+var config = (opacidade: 1.0, clawd: true, volume: 1.0, tema: "minecraft", uso: "claude", mostrar: "abas", ritmo: true, idioma: "pt", compacto: false)
 // o texto na língua do menu: tr("agora", "now")
 func tr(_ pt: String, _ en: String) -> String { config.idioma == "en" ? en : pt }
 func nomeNoIdioma(_ nome: String, _ en: String?) -> String { tr(nome, en ?? nome) }
@@ -88,6 +88,7 @@ func lerJSON(_ caminho: String) -> [String: Any]? {
 if let o = lerJSON(arquivoConfig) {
     if let v = (o["opacidade"] as? NSNumber)?.doubleValue { config.opacidade = min(1, max(0.2, v)) }
     if let v = o["ritmo"] as? Bool { config.ritmo = v }
+    if let v = o["compacto"] as? Bool { config.compacto = v }
     if let v = o["clawd"] as? Bool { config.clawd = v }
     if let v = (o["volume"] as? NSNumber)?.doubleValue { config.volume = min(1, max(0, v)) }
     if let v = o["tema"] as? String, temas.contains(where: { $0.id == v }) { config.tema = v }
@@ -103,12 +104,22 @@ func salvarConfig() {
     o["volume"] = config.volume
     o["tema"] = config.tema
     o["ritmo"] = config.ritmo
+    o["compacto"] = config.compacto
     o["uso"] = config.uso
     o["mostrar"] = config.mostrar
     o["idioma"] = config.idioma
     if let d = try? JSONSerialization.data(withJSONObject: o) { try? d.write(to: URL(fileURLWithPath: arquivoConfig)) }
 }
 func nomeDoTema() -> String { temas.first(where: { $0.id == config.tema }).map { nomeNoIdioma($0.nome, $0.en) } ?? config.tema }
+// Modo compacto (botão direito > Compacto, igual ao overlay.ps1/UsaBussola): no Minecraft, com o
+// motor, a bússola do jogo (bussola00..31.png, 16x16) fica no lugar da barra de XP e o cartão
+// estreita; nos outros temas (ou sem o motor, que aqui não tem o visual do Minecraft) só some a
+// coluna do ritmo. Quem desenha a bússola é o motor (minecraft-enfeites.js, host.compacto).
+let temBussola: Bool = (0..<32).allSatisfy { q in
+    guard let d = FileManager.default.contents(atPath: pasta + String(format: "/bussola%02d.png", q)), d.count >= 24 else { return false }
+    let b = [UInt8](d.prefix(24))
+    return b[0] == 0x89 && b[1] == 0x50 && Array(b[16..<24]) == [0, 0, 0, 16, 0, 0, 0, 16]  // PNG de 16x16
+}
 
 // motor das animações (o resto mais embaixo, depois da janela)
 var motor: Motor?                        // o processo aberto (vivo, ou ainda sem o 1º quadro)
@@ -815,6 +826,7 @@ struct Aparencia {
     var colRitmo: CGFloat = 72             // a palavra do ritmo; com enfeites, só se o tema pedir
     var letra: CGFloat = 16                // altura das caixas de número
     var barra = CGSize(width: 118, height: 4)
+    var bussola = false                    // compacto no Minecraft: a bússola no lugar da barra (o motor desenha)
 }
 func aparencia(_ o: [String: Any]) -> Aparencia {
     func n(_ v: Any?) -> CGFloat? { (v as? NSNumber).map { CGFloat($0.doubleValue) } }
@@ -847,7 +859,9 @@ func aparencia(_ o: [String: Any]) -> Aparencia {
 func aparenciaAtual() -> Aparencia {
     var a = Aparencia()
     if let l = layouts, motorVivo || arquivoFoto != nil, let tema = l[config.tema] { a = tema }
-    if !config.ritmo { a.colRitmo = 0 }
+    a.bussola = config.compacto && config.tema == "minecraft" && temBussola && a.enfeites
+    if a.bussola { a.barra = CGSize(width: 20, height: 20) }  // o lugar da bússola (o overlay.ps1 usa 20 px também)
+    if !config.ritmo || (config.compacto && !a.bussola) { a.colRitmo = 0 }
     // a maior palavra das duas línguas: trocar o idioma não mexe no tamanho do cartão
     else if !a.enfeites { a.colRitmo = palavrasRitmo.flatMap { [$0.0, $0.1] }.reduce(a.colRitmo) { max($0, ceil(($1 as NSString).size(withAttributes: [.font: fonte]).width) + 4) } }
     return a
@@ -915,6 +929,13 @@ final class Preferencias: NSObject {
         config.ritmo.toggle()
         item.state = config.ritmo ? .on : .off
         salvarConfig()
+        atualizar()
+    }
+    @objc func alternarCompacto(_ item: NSMenuItem) {
+        config.compacto.toggle()
+        item.state = config.compacto ? .on : .off
+        salvarConfig()
+        anotar("compacto: \(config.compacto ? "ligado" : "desligado")")
         atualizar()
     }
     @objc func trocarUso(_ b: NSButton) {
@@ -1082,7 +1103,7 @@ final class Cartao: NSView {
         alturaLinha = max(16, ap.letra) + 4
         // a do usage: com enfeites só tem os lugares do motor; sem, o texto daqui (16)
         alturaUso = max(ap.enfeites ? CGFloat(0) : CGFloat(16), ap.letra, ap.barra.height) + 4
-        largura = max(186 + ap.colTempo, ap.colRotulo + ap.barra.width + ap.colPct + ap.colRitmo + ap.colFalta)
+        largura = max(186 - (ap.bussola ? 94 : 0) + ap.colTempo,ap.colRotulo + ap.barra.width + ap.colPct + ap.colRitmo + ap.colFalta)
         yPaginas = y0 + (linhas.isEmpty ? 20 : CGFloat(linhas.count) * alturaLinha)
         yUso = yPaginas + (paginas > 1 ? alturaPaginas : 0) + 10
         let linhasUso = linhasDoUso()
@@ -1278,6 +1299,11 @@ final class Cartao: NSView {
         ritmo.target = preferencias
         ritmo.state = config.ritmo ? .on : .off
         menu.addItem(ritmo)
+        // compacto: cartão mais estreito (no Minecraft, a bússola no lugar da barra de XP)
+        let compacto = NSMenuItem(title: tr("Compacto", "Compact"), action: #selector(Preferencias.alternarCompacto(_:)), keyEquivalent: "")
+        compacto.target = preferencias
+        compacto.state = config.compacto ? .on : .off
+        menu.addItem(compacto)
         let clawd = NSMenuItem(title: "Clawd", action: #selector(Preferencias.alternarClawd(_:)), keyEquivalent: "")
         clawd.target = preferencias
         clawd.state = config.clawd ? .on : .off
@@ -2106,6 +2132,7 @@ func motorEstado() {
         "msg": "estado", "tema": config.tema, "idioma": config.idioma, "clawd": config.clawd, "modo": palco.modo,
         "escala": Double(janela.backingScaleFactor), "janela": [Double(L), Double(A)],
         "cartao": cartao.naJanela(0, 0, f.width, f.height), "raio": Double(cartao.ap.raio), "opacidade": config.opacidade,
+        "compacto": cartao.ap.bussola,  // o motor desenha a bússola no lugar da barra
         "linhas": cartao.caixasDasLinhas(), "uso": cartao.caixasDoUso(),
     ]
     guard JSONSerialization.isValidJSONObject(estado),
@@ -2182,6 +2209,7 @@ func atualizar() {
         visto.append("usage: \(temUso)")
         visto.append(contentsOf: fotoDaConta())
         visto.append("ritmo: " + ritmoDoClaude())
+        if config.compacto { visto.append("compacto: ligado") }
         if config.uso != "claude" {
             visto.append("uso: \(config.uso)")
             visto.append("barras: \(barrasComGrupo())")
