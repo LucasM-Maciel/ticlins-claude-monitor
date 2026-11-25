@@ -125,7 +125,7 @@ $modosDeUso = [ordered]@{ claude = 'Claude'; codex = 'Codex'; ambos = @('Os dois
 $modosDeMostrar = [ordered]@{ abas = @('Abas', 'Tabs'); agentes = @('Agentes', 'Agents'); tudo = @('Tudo', 'All') }
 # Idioma (botão direito): sem a chave no config.json é português, então quem já instalou não vê nada mudar
 $idiomas = [ordered]@{ pt = 'Português'; en = 'English' }
-$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft'; uso = 'claude'; mostrar = 'abas'; ritmo = $true; idioma = 'pt' }
+$config = @{ opacidade = 1.0; clawd = $true; volume = 1.0; tema = 'minecraft'; uso = 'claude'; mostrar = 'abas'; ritmo = $true; idioma = 'pt'; compacto = $false }
 # o texto na língua do menu: Tr 'agora' 'now'
 function Tr($pt, $en) {
     if ($config.idioma -eq 'en') { $en } else { $pt }
@@ -141,6 +141,7 @@ if ([IO.File]::Exists($configArquivo)) {
         # 1.0, não 1: o [math]::Min(1, x) escolhe a versão inteira e 0,5 vira 0
         if ($null -ne $configLido.opacidade) { $config.opacidade = [math]::Min(1.0, [math]::Max(0.2, [double]$configLido.opacidade)) }
         if ($configLido.ritmo -is [bool]) { $config.ritmo = $configLido.ritmo }
+        if ($configLido.compacto -is [bool]) { $config.compacto = $configLido.compacto }
         if ($null -ne $configLido.clawd) { $config.clawd = [bool]$configLido.clawd }
         if ($null -ne $configLido.volume) { $config.volume = [math]::Min(1.0, [math]::Max(0.0, [double]$configLido.volume)) }
         if ($temas.Contains("$($configLido.tema)")) { $config.tema = "$($configLido.tema)" }
@@ -437,7 +438,15 @@ if ($orbe -and $orbe.PixelWidth -ge 12 -and $orbe.PixelHeight -ge 12) {
 $relogioOrbe = [Diagnostics.Stopwatch]::StartNew()
 $tiqueOrbe = New-Object Windows.Threading.DispatcherTimer
 $tiqueOrbe.Interval = [TimeSpan]::FromMilliseconds(50)
-$tiqueOrbe.Add_Tick({ $orbeVerde.ImageSource = $quadrosOrbe[[int][math]::Floor($relogioOrbe.Elapsed.TotalSeconds * 10 / (2 * [math]::PI) * 32) % 32] })
+$tiqueOrbe.Add_Tick({
+    $orbeVerde.ImageSource = $quadrosOrbe[[int][math]::Floor($relogioOrbe.Elapsed.TotalSeconds * 10 / (2 * [math]::PI) * 32) % 32]
+    # compacto sem o motor: com sessão trabalhando, a bússola gira (uma volta a cada 1,6 s, igual ao motor)
+    if ($bussolaGirando.agora) {
+        $quadroDoGiro = $bussolas[[int][math]::Floor($relogioOrbe.Elapsed.TotalSeconds * 20) % 32]
+        foreach ($lugaresDoGiro in $listaFeita.lugaresDoUso) { if ($lugaresDoGiro[1] -is [Windows.Controls.Image]) { $lugaresDoGiro[1].Source = $quadroDoGiro } }
+    }
+})
+$bussolaGirando = @{ agora = $false }
 
 # borda de terra com grama em cima: a textura repetida em blocos de 32 (2 px por pixel)
 function Ladrilho($nome, $semTextura) {
@@ -473,7 +482,26 @@ if ($xpFundo -and $xpBarra -and $xpFundo.PixelWidth -eq 182 -and $xpBarra.PixelW
         $barraXP[$tinta[0]] = Bitmap $px 182 5
     }
 }
-$coresDoUso = @{ padrao = '#D1D5DB', '#F59E0B', '#EF4444'; minecraft = '#80FF20', '#FFAA00', '#FF5555'; dragonball = '#FDE047', '#F59E0B', '#EF4444'; sith = '#FCA5A5', '#F59E0B', '#EF4444'; akatsuki = '#FCA5A5', '#F59E0B', '#EF4444'; elden = '#F2D77A', '#F59E0B', '#EF4444' }  # normal, >= 80%, >= 95%
+# Modo compacto (botão direito > Compacto): no Minecraft a bússola do jogo fica no lugar da
+# barra de XP (16 px em vez de 118) e o cartão estreita; nos outros temas, que desenham a
+# barra deles, só some a coluna do ritmo. O nome da sessão encolhe junto, pra linha caber.
+# A agulha marca quanto da janela de uso (5h, 7d) já passou: o quadro 16 aponta pra cima e
+# os quadros giram no sentido do relógio, então ela começa em cima e dá uma volta até renovar.
+# Na tela vai em 20 px (a textura tem 16), suavizada como a letra do jogo em 11/9: em tamanho
+# quebrado o pixel duro sai torto. A margem de cima negativa sobe ela: a parte pintada da
+# textura desce 2 px além da letra e a metade de baixo é a clara, então no meio exato ela
+# parecia mais baixa que o texto da linha.
+$ladoDaBussola = 20
+$margemDaBussola = [Windows.Thickness]::new(2, -4, 2, 0)
+$bussolas =@(foreach ($q in 0..31) { PNG ('bussola{0:00}' -f $q) })
+if (@($bussolas | Where-Object { $_ -and $_.PixelWidth -eq 16 -and $_.PixelHeight -eq 16 }).Count -ne 32) { $bussolas = $null }
+function UsaBussola { [bool]($config.compacto -and $config.tema -eq 'minecraft' -and $bussolas) }
+function RitmoNaColuna { [bool]($config.ritmo -and -not ($config.compacto -and -not (UsaBussola))) }
+function QuadroDaBussola($decorrido) {
+    if ($null -eq $decorrido) { return 16 }
+    (16 + [int][math]::Floor([math]::Min(99.999, [math]::Max(0, [double]$decorrido)) * 32 / 100)) % 32
+}
+$coresDoUso = @{ padrao ='#D1D5DB', '#F59E0B', '#EF4444'; minecraft = '#80FF20', '#FFAA00', '#FF5555'; dragonball = '#FDE047', '#F59E0B', '#EF4444'; sith = '#FCA5A5', '#F59E0B', '#EF4444'; akatsuki = '#FCA5A5', '#F59E0B', '#EF4444'; elden = '#F2D77A', '#F59E0B', '#EF4444' }  # normal, >= 80%, >= 95%
 
 # letra do Minecraft (font/ascii.png: 16x16 letras de 8x8), com a sombra do jogo (cor/4,
 # 1 px pra direita e pra baixo). Cada letra vai até a última coluna pintada, como no jogo.
@@ -540,6 +568,27 @@ function Rotulo($texto, $hex, $largura, $alinhar, $larguraMC) {
     $caixa
 }
 # troca o texto de um Rotulo sem refazer a linha (o tempo "12m" e o "falta" andam a cada minuto)
+# nome da sessão com a letra do jogo (Minecraft). A fonte do jogo (ascii.png) não tem letra
+# acentuada: "ç" vira "c", "ã" vira "a"; o que não for ASCII depois disso vira "?". Não cabe
+# na $largura: corta e põe "..." no fim, como o TextTrimming da letra normal.
+function SemAcento($texto) {
+    $sb = [Text.StringBuilder]::new()
+    foreach ($ch in "$texto".Normalize([Text.NormalizationForm]::FormD).ToCharArray()) {
+        if ([Globalization.CharUnicodeInfo]::GetUnicodeCategory($ch) -eq 'NonSpacingMark') { continue }
+        [void]$sb.Append($(if ([int]$ch -ge 32 -and [int]$ch -le 126) { $ch } else { '?' }))
+    }
+    $sb.ToString()
+}
+function NomeMC($texto, $hex, $largura) {
+    $limpo = SemAcento $texto
+    $cabe = { param($t) [math]::Round((TextoMC $t $hex).PixelWidth * 11 / 9) -le $largura }
+    if (-not (& $cabe $limpo)) {
+        $n = $limpo.Length
+        while ($n -gt 0 -and -not (& $cabe ($limpo.Substring(0, $n).TrimEnd() + '...'))) { $n-- }
+        $limpo = $limpo.Substring(0, $n).TrimEnd() + '...'
+    }
+    Rotulo $limpo $hex $largura $null $largura
+}
 function TrocarTexto($elemento, $texto, $hex) {
     if ($elemento -is [Windows.Controls.TextBlock]) { $elemento.Text = $texto; $elemento.Foreground = Cor $hex; return }
     $elemento.Child.Source = TextoMC $texto $hex
@@ -800,7 +849,7 @@ $palavrasDoRitmo = @(@('folga', 'slow'), @('no ritmo', 'on pace'), @('acima', 'f
 # a coluna cabe a maior palavra das duas línguas: trocar o idioma não mexe no tamanho do cartão
 $largurasDoRitmo = @{}
 function LarguraDoRitmo {
-    if (-not $config.ritmo) { return 0 }
+    if (-not (RitmoNaColuna)) { return 0 }
     if ($largurasDoRitmo.ContainsKey($config.tema)) { return $largurasDoRitmo[$config.tema] }
     $medidaDoRitmo = 72
     foreach ($palavraDoRitmo in $palavrasDoRitmo | ForEach-Object { $_ }) {
@@ -816,7 +865,8 @@ function LarguraDoRitmo {
     $medidaDoRitmo
 }
 function RitmoDe($pct, $decorrido, $rotulo) {
-    if (-not $config.ritmo -or $null -eq $decorrido -or $rotulo -notin '5h', '7d') { return '', '#6B7280' }
+    # sem a coluna (Ritmo desligado, ou compacto num tema sem bússola): sem a palavra, senão o motor a desenha por cima do %
+    if (-not (RitmoNaColuna) -or $null -eq $decorrido -or $rotulo -notin '5h', '7d') { return '', '#6B7280' }
     if ($rotulo -eq '5h' -and ($decorrido -lt 3.33 -or $decorrido -gt 96.67)) { return '', '#9CA3AF' }
     $d = $pct - $decorrido
     $corDoRitmo = $(if ($d -ge 20) { '#EF4444' } elseif ($d -ge 6) { '#F59E0B' } elseif ($d -le -10) { '#22C55E' } else { '#9CA3AF' })
@@ -847,9 +897,20 @@ function Medidor($medidor) {
         # quem desenha é o motor: aqui só o lugar de cada coisa
         $lugarDoRotulo = Lugar $layoutDoTema.colunas.rotulo $layoutDoTema.letra
         $trilho = Lugar $layoutDoTema.barra[0] $layoutDoTema.barra[1]
+        if (UsaBussola) { $trilho.Margin = $margemDaBussola }
         $p = Lugar $layoutDoTema.colunas.pct $layoutDoTema.letra
         $r = Lugar $layoutDoTema.colunas.ritmo $layoutDoTema.letra
         $f = Lugar $layoutDoTema.colunas.falta $layoutDoTema.letra
+    } elseif (UsaBussola) {
+        # sem o motor: a bússola daqui (o quadro anda no Atualizar, a cada 2 s)
+        $trilho = New-Object Windows.Controls.Image
+        $trilho.Source = $bussolas[(QuadroDaBussola $medidor.decorrido)]
+        $trilho.Width = $ladoDaBussola; $trilho.Height = $ladoDaBussola
+        $trilho.Margin = $margemDaBussola
+        $trilho.VerticalAlignment = 'Center'
+        $trilho.UseLayoutRounding = $true
+        $trilho.ToolTip = Tr "$rotulo`: a agulha dá uma volta até renovar" "$rotulo`: the needle turns once until it resets"
+        [Windows.Media.RenderOptions]::SetBitmapScalingMode($trilho, 'HighQuality')
     } elseif ($config.tema -eq 'minecraft' -and $barraXP) {
         $trilho = New-Object Windows.Controls.Canvas
         $trilho.Width = 118; $trilho.Height = 5
@@ -882,11 +943,12 @@ function Medidor($medidor) {
     $barraNaLinha, $tracinho = $trilho, $null
     if (-not $layoutDoTema.enfeites) {
         $p = Rotulo $pctTexto $cor 38 'Right' 38
-        if ($config.ritmo) { $r = Rotulo $medidor.ritmo $medidor.corDoRitmo (LarguraDoRitmo) 'Right' (LarguraDoRitmo) } else { $r = Lugar 0 16 }
+        if (RitmoNaColuna) { $r = Rotulo $medidor.ritmo $medidor.corDoRitmo (LarguraDoRitmo) 'Right' (LarguraDoRitmo) } else { $r = Lugar 0 16 }
         $f = Rotulo $falta '#6B7280' 48 'Right' 56
         $lugarDoRotulo = Rotulo $rotulo '#9CA3AF' 18 $null 18
-        # o tracinho do ritmo: onde o % estaria gastando por igual (anda no lugar, TracinhoNoLugar)
-        if ($config.ritmo -and $null -ne $medidor.decorrido) {
+        # o tracinho do ritmo: onde o % estaria gastando por igual (anda no lugar, TracinhoNoLugar).
+        # Na bússola não tem: a própria agulha já mostra o tempo
+        if ($config.ritmo -and $null -ne $medidor.decorrido -and -not (UsaBussola)) {
             $barraNaLinha = New-Object Windows.Controls.Grid
             $barraNaLinha.Width = 118; $barraNaLinha.VerticalAlignment = 'Center'
             $tracinho = New-Object Windows.Shapes.Rectangle
@@ -1072,7 +1134,7 @@ function Atualizar {
         @{ s = $s; cor = $cor; rotulo = $rotulo; tempo = Tempo (($agora - $s.since) / 60) }
     })
     # o tempo não entra: cada sessão vira o minuto num segundo diferente (TrocarTexto, abaixo)
-    $chaveDaLista = "$($config.tema) $($config.idioma) $doMotor $($config.ritmo) $($paginaDaLista.atual)/$($paginaDaLista.total)`n" + (@($linhasDaLista | ForEach-Object { "$($_.s.id) $($_.s.agente) $($_.s.situacao) $($_.s.name)" }) -join "`n")
+    $chaveDaLista = "$($config.tema) $($config.idioma) $doMotor $($config.ritmo) $($config.compacto) $($paginaDaLista.atual)/$($paginaDaLista.total)`n" + (@($linhasDaLista | ForEach-Object { "$($_.s.id) $($_.s.agente) $($_.s.situacao) $($_.s.name)" }) -join "`n")
     if ($chaveDaLista -ne $listaFeita.sessoes) {
         $listaFeita.sessoes = $chaveDaLista
         $listaFeita.lugaresDasSessoes = @()
@@ -1095,8 +1157,15 @@ function Atualizar {
             $bola.Margin = [Windows.Thickness]::new(0, 0, 8, 0)
             $bola.VerticalAlignment = 'Center'
             # a coluna do ritmo no usage alarga o cartão: o nome ganha o espaço e o tempo fica na direita
-            $nomeSessao = Texto $s.name '#E5E7EB' (160 + $(if ($doMotor) { $layoutDoTema.colunas.ritmo } else { (LarguraDoRitmo) }))
-            $nomeSessao.TextTrimming = 'CharacterEllipsis'
+            # compacto: a bússola (16 + 4 de margem) no lugar da barra de 118 tira esse tanto do nome
+            $larguraDoNome = 160 + $(if ($doMotor) { $layoutDoTema.colunas.ritmo } else { (LarguraDoRitmo) }) - $(if (UsaBussola) { 118 - ($ladoDaBussola + 4) } else { 0 })
+            if ($config.tema -eq 'minecraft' -and $larguraDaLetra) {
+                $nomeSessao = NomeMC $s.name '#E5E7EB' $larguraDoNome
+                $nomeSessao.ToolTip = $s.name
+            } else {
+                $nomeSessao = Texto $s.name '#E5E7EB' $larguraDoNome
+                $nomeSessao.TextTrimming = 'CharacterEllipsis'
+            }
             $tempo = $(if ($doMotor) { Lugar $layoutDoTema.colunas.tempo $layoutDoTema.letra } else { Rotulo $tempoTexto $cor 36 'Right' 44 })
             $listaFeita.lugaresDasSessoes += , @($bola, $tempo, $tempoTexto)
             # toda linha tem o ícone do agente (claude ou codex), então o nome tem sempre 160 px
@@ -1116,6 +1185,7 @@ function Atualizar {
     }
     # pedindo algo (pergunta/permissão) ganha de trabalhando, que ganha de parado
     $situacoes = @($sessoes | ForEach-Object { $_.situacao })
+    $bussolaGirando.agora = (UsaBussola) -and -not $Foto -and $situacoes -contains 'working'
     Clawd $(if ($situacoes -contains 'question' -or $situacoes -contains 'permission') { 'pulando' }
             elseif ($situacoes -contains 'working') { 'andando' } else { 'parado' })
     if ($config.tema -eq 'minecraft' -and $passeio.modo -eq 'andando' -and -not $luta.tipo -and -not $Foto -and -not $motor.vivo -and [DateTime]::Now -ge $luta.proxima) {
@@ -1143,7 +1213,7 @@ function Atualizar {
         $descricaoDoRitmo
     }) -join ' | ' } else { 'nenhum' })
     # sem o motor, a barra muda com a %; o "falta" anda a cada minuto e é trocado no lugar
-    $chaveDoUso = "$($config.tema) $($config.idioma) $doMotor $($config.ritmo) $($config.uso) $dirUsoAtual $($contasDoUso.pagina)/$($contasDoUso.dirs.Count) $($medidoresDoClaude.Count) $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct) $($null -ne $_.decorrido)" }) }) -join '')
+    $chaveDoUso = "$($config.tema) $($config.idioma) $doMotor $($config.ritmo) $($config.compacto) $($config.uso) $dirUsoAtual $($contasDoUso.pagina)/$($contasDoUso.dirs.Count) $($medidoresDoClaude.Count) $($medidores.Count)" + (@($medidores | ForEach-Object { $(if (-not $doMotor) { " $($_.pct) $($null -ne $_.decorrido)" }) }) -join '')
     if ($chaveDoUso -ne $listaFeita.uso) {
         $listaFeita.uso = $chaveDoUso
         $listaFeita.lugaresDoUso = @()
@@ -1177,8 +1247,10 @@ function Atualizar {
         if (-not $doMotor -and $lugares[4] -ne $medidor.falta) { TrocarTexto $lugares[3] $medidor.falta '#6B7280'; $lugares[4] = $medidor.falta }
         if (-not $doMotor -and ($lugares[6] -ne $medidor.ritmo -or $lugares[8] -ne $medidor.corDoRitmo)) { TrocarTexto $lugares[5] $medidor.ritmo $medidor.corDoRitmo; $lugares[6] = $medidor.ritmo; $lugares[8] = $medidor.corDoRitmo }
         if ($lugares[7] -and $null -ne $medidor.decorrido) { TracinhoNoLugar $lugares[7] $medidor.decorrido }
+        # a bússola daqui (sem o motor): a agulha anda com o tempo
+        if ($lugares[1] -is [Windows.Controls.Image] -and $bussolas -and -not $bussolaGirando.agora) { $lugares[1].Source = $bussolas[(QuadroDaBussola $medidor.decorrido)] }
         [void]$caixasDoMotor.uso.Add(@{ rotulo = @($medidor.rotulo, '#9CA3AF', $lugares[0]); barra = $lugares[1]; pct = $medidor.pct; nivel = $medidor.nivel; pctTxt = @($medidor.pctTexto, $medidor.cor, $lugares[2])
-            decorrido = $(if ($config.ritmo) { $medidor.decorrido }); ritmo = @($medidor.ritmo, $medidor.corDoRitmo, $lugares[5]); falta = @($medidor.falta, '#6B7280', $lugares[3]) })
+            decorrido = $(if ($config.ritmo) { $medidor.decorrido }); janela = $medidor.decorrido; ritmo = @($medidor.ritmo, $medidor.corDoRitmo, $lugares[5]); falta = @($medidor.falta, '#6B7280', $lugares[3]) })
     }
     $nova = VersaoNova
     if ("$nova $($config.idioma)" -ne $listaFeita.aviso) {
@@ -1628,8 +1700,10 @@ function LayoutDoMotor {
     if (-not $motor.layouts -or -not ($motor.vivo -or $Foto)) { return $null }
     $layoutDoRitmo = $motor.layouts[$config.tema].PSObject.Copy()
     $layoutDoRitmo.colunas = $layoutDoRitmo.colunas.PSObject.Copy()
-    if (-not $config.ritmo) { $layoutDoRitmo.colunas.ritmo = 0 }
+    if (-not (RitmoNaColuna)) { $layoutDoRitmo.colunas.ritmo = 0 }
     elseif (-not $layoutDoRitmo.enfeites) { $layoutDoRitmo.colunas.ritmo = LarguraDoRitmo }
+    # compacto no Minecraft: o lugar da barra vira o da bússola (o motor desenha ela ali)
+    if (UsaBussola) { $layoutDoRitmo.barra = @($ladoDaBussola, $ladoDaBussola) }
     $layoutDoRitmo
 }
 function Lugar($largura, $altura) {
@@ -1736,13 +1810,14 @@ function MotorEstado {
         escala = $escala; janela = @($win.Width, $win.Height)
         cartao = @([math]::Round($origem.X, 2), [math]::Round($origem.Y, 2), [math]::Round($cartao.ActualWidth, 2), [math]::Round($cartao.ActualHeight, 2))
         raio = $(if ($config.tema -eq 'minecraft') { 1 } else { 8 }); opacidade = $config.opacidade
+        compacto = (UsaBussola)  # o motor desenha a bússola no lugar da barra (minecraft-enfeites.js)
         # onde ficou cada bolinha, número e barra (docs/MOTOR.md)
         linhas = @(foreach ($umaLinha in $caixasDoMotor.linhas) {
             [ordered]@{ id = $umaLinha.id; sit = $umaLinha.sit; cor = $umaLinha.cor; bola = @(CaixaNaJanela $umaLinha.bola); tempo = (TextoNaJanela $umaLinha.tempo) }
         })
         uso = @(foreach ($umUso in $caixasDoMotor.uso) {
             [ordered]@{ rotulo = (TextoNaJanela $umUso.rotulo); barra = @(CaixaNaJanela $umUso.barra); pct = $umUso.pct; nivel = $umUso.nivel; pctTxt = (TextoNaJanela $umUso.pctTxt)
-                decorrido = $(if ($null -ne $umUso.decorrido) { [math]::Round($umUso.decorrido, 2) }); ritmo = (TextoNaJanela $umUso.ritmo); falta = (TextoNaJanela $umUso.falta) }
+                decorrido = $(if ($null -ne $umUso.decorrido) { [math]::Round($umUso.decorrido, 2) }); janela = $(if ($null -ne $umUso.janela) { [math]::Round($umUso.janela, 2) }); ritmo = (TextoNaJanela $umUso.ritmo); falta = (TextoNaJanela $umUso.falta) }
         })
     }
     $json = $estadoDoMotor | ConvertTo-Json -Compress -Depth 6
@@ -1987,6 +2062,15 @@ $itemRitmo.Add_Checked({ $config.ritmo = $true; SalvarConfig; Atualizar })
 $itemRitmo.Add_Unchecked({ $config.ritmo = $false; SalvarConfig; Atualizar })
 [void]$menu.Items.Add($itemRitmo)
 
+# modo compacto: cartão mais estreito (no Minecraft, a bússola no lugar da barra de XP)
+$itemCompacto = New-Object Windows.Controls.MenuItem
+$itemCompacto.Header = Tr 'Compacto' 'Compact'
+$itemCompacto.IsCheckable = $true
+$itemCompacto.IsChecked = $config.compacto
+$itemCompacto.Add_Checked({ $config.compacto = $true; SalvarConfig; Anotar 'compacto: ligado'; Atualizar })
+$itemCompacto.Add_Unchecked({ $config.compacto = $false; SalvarConfig; Anotar 'compacto: desligado'; Atualizar })
+[void]$menu.Items.Add($itemCompacto)
+
 # toggle do Clawd
 $itemClawd = New-Object Windows.Controls.MenuItem
 $itemClawd.Header = 'Clawd'
@@ -2057,9 +2141,11 @@ function TrocarIdioma($direcaoDoIdioma) {
     $rotuloDoModoMostrar.Text = Tr 'Mostrar' 'Show'
     $nomeDoModoMostrar.Text = NomeNoIdioma $modosDeMostrar[$config.mostrar]
     $itemRitmo.Header = Tr 'Ritmo' 'Pace'
+    $itemCompacto.Header = Tr 'Compacto' 'Compact'
     $rotuloDaOpacidade.Text = Tr 'Opacidade' 'Opacity'
     $rotuloDoIdioma.Text = Tr 'Idioma' 'Language'
     $fechar.Header = Tr 'Fechar' 'Close'
+    $itemPortal.Header = Tr 'Abrir portal do Nether' 'Open Nether portal'
     SalvarConfig
     Anotar "idioma: $($config.idioma)"
     Atualizar
@@ -2076,6 +2162,13 @@ SetaDoIdioma '◀' -1
 SetaDoIdioma '▶' 1
 [void]$menu.Items.Add($painelIdioma)
 
+# a cena do portal do Nether na hora (motor/minecraft-nether.js): só no Minecraft, com o motor
+# e o Clawd ligados. Não gasta o portal que o Clawd ganhou (o de 12 em 12 eventos)
+$itemPortal = New-Object Windows.Controls.MenuItem
+$itemPortal.Header = Tr 'Abrir portal do Nether' 'Open Nether portal'
+$itemPortal.Add_Click({ Anotar 'portal do Nether pelo menu'; MotorEvento 'portal' })
+[void]$menu.Items.Add($itemPortal)
+
 $fechar = New-Object Windows.Controls.MenuItem
 $fechar.Header = Tr 'Fechar' 'Close'
 $fechar.Add_Click({ Anotar 'fechada pelo menu'; $win.Close() })
@@ -2083,6 +2176,8 @@ $fechar.Add_Click({ Anotar 'fechada pelo menu'; $win.Close() })
 $win.ContextMenu = $menu
 try { Add-Type -Namespace ClaudeMonitor -Name DWM -MemberDefinition '[DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr h, uint a, ref int v, uint s);' } catch {}
 $menu.Add_Opened({
+    $itemPortal.Visibility = $(if ($config.tema -eq 'minecraft') { 'Visible' } else { 'Collapsed' })
+    $itemPortal.IsEnabled = [bool]($motor.vivo -and $config.clawd -and $passeio.modo -ne 'pulando')
     try {
         $src = [Windows.PresentationSource]::FromVisual($fechar)
         if ($src -is [Windows.Interop.HwndSource]) {

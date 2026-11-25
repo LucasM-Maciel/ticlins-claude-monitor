@@ -52,24 +52,29 @@ function wav16(mix) {
 // devolve o Buffer do arquivo (ou lança erro); os que falharam vão pra `faltando`.
 function mixar(pistas, ler, faltando = []) {
   const lidos = new Map(), partes = [];
-  for (const [t, arquivo, ganho = 1, tom = 1, dur = Infinity] of pistas) {
+  // desde (opcional, 6º): começa o arquivo desse ponto (s), com 0,15 s de entrada: a mesma música
+  // em pedaços com volumes diferentes (o portal do Nether abaixa a música no susto)
+  for (const [t, arquivo, ganho = 1, tom = 1, dur = Infinity, desde = 0] of pistas) {
     if (!lidos.has(arquivo)) {
       try { lidos.set(arquivo, lerWav(ler(arquivo))); } catch { lidos.set(arquivo, null); faltando.push(arquivo); }
     }
     const w = lidos.get(arquivo);
     if (!w || w.amostras.length < 2 || !(t >= 0) || !(dur > 0)) continue;
-    const passo = w.taxa * tom / TAXA, m = Math.min(Math.floor((w.amostras.length - 1) / passo), Math.floor(dur * TAXA));
-    partes.push({ i0: Math.round(t * TAXA), a: w.amostras, ganho, passo, m, some: dur < Infinity ? Math.max(1, Math.round(Math.min(0.25, dur / 4) * TAXA)) : 0 });
+    const pula = Math.max(0, Math.floor(desde * w.taxa));
+    if (pula >= w.amostras.length - 2) continue;
+    const a = pula ? w.amostras.subarray(pula) : w.amostras;
+    const passo = w.taxa * tom / TAXA, m = Math.min(Math.floor((a.length - 1) / passo), Math.floor(dur * TAXA));
+    partes.push({ i0: Math.round(t * TAXA), a, ganho, passo, m, some: dur < Infinity ? Math.max(1, Math.round(Math.min(0.25, dur / 4) * TAXA)) : 0, entra: pula ? Math.round(0.15 * TAXA) : 0 });
   }
   if (!partes.length) return null;
   let n = 0;
   for (const p of partes) n = Math.max(n, p.i0 + p.m + 1);
   const mix = new Float32Array(n);
-  for (const { i0, a, ganho, passo, m, some } of partes) {
+  for (const { i0, a, ganho, passo, m, some, entra } of partes) {
     for (let i = 0; i <= m; i++) {  // linear: só o tom do Minecraft (e taxa diferente) cai entre amostras
       const x = i * passo, k = Math.floor(x), f = x - k;
       const v = k + 1 < a.length ? a[k] + (a[k + 1] - a[k]) * f : a[k];
-      mix[i0 + i] += ganho * v * (some && m - i < some ? (m - i) / some : 1);
+      mix[i0 + i] += ganho * v * (some && m - i < some ? (m - i) / some : 1) * (entra && i < entra ? i / entra : 1);
     }
   }
   // passou do teto: abaixa tudo junto, sem distorcer

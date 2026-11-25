@@ -78,6 +78,17 @@ const MOBS = [
     [8, 8, 8, 8, -4, -32, 0, { parte: 'cab' }],
     [8, 8, 8, 8, -4, -32, 0, { parte: 'cab', tex: 'enderman_olhos' }],
   ] },
+  // piglin zumbi (cena do portal do Nether, minecraft-nether.js): o corpo do zumbi com a cabeça
+  // de 10 de largura e o focinho na frente; braços pra baixo
+  { id: 'piglinZumbi', tex: 'piglin_zumbi', s: 0.8, andar: 'humano', queda: 90, pecas: [
+    [44, 20, 4, 8, -8, -14, 1, { parte: 'bd' }],                                // braço de lá
+    [4, 20, 4, 4, -4, -6, 0, { parte: 'pe' }], [4, 30, 4, 2, -4, -2, 0, { parte: 'pe' }],
+    [4, 20, 4, 4, 0, -6, 1, { parte: 'pd' }], [4, 30, 4, 2, 0, -2, 1, { parte: 'pd' }],
+    [20, 20, 8, 6, -4, -14], [20, 30, 8, 2, -4, -8],
+    [8, 8, 10, 8, -5, -22, 0, { parte: 'cab' }],                               // cabeça (10 de largura)
+    [32, 2, 4, 3, -2, -17, 0, { parte: 'cab' }],                               // focinho
+    [44, 20, 4, 8, 4, -14, 0, { parte: 'be' }],                                 // braço de cá
+  ] },
   { id: 'lobo', tex: 'lobo', s: 0.9, andar: 'quatro', queda: 90, pecas: LOBO_PECAS(false) },
   { id: 'loboManso', tex: 'lobo_manso', s: 0.9, andar: 'quatro', queda: 90, pecas: LOBO_PECAS(true) },
   { id: 'galinha', tex: 'galinha', s: 1.1, andar: 'galinha', queda: 90, pecas: [

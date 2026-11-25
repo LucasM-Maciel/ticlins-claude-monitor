@@ -13,13 +13,14 @@ enfeites dela (no Windows, os do Minecraft em WPF; o resto, como o Padrão).
   padrão, uma linha JSON por mensagem:
   - `{"msg":"estado", ...}` (abaixo): só quando algo muda.
   - `{"msg":"evento","tipo":"terminou"|"tudo"}`: uma sessão terminou / acabou tudo.
+  - `{"msg":"evento","tipo":"portal"}`: botão direito > "Abrir portal do Nether" (só o tema Minecraft usa).
 - O motor desenha 32 quadros/s (5 quando nada mexe; 31,25 ms = 2 tiques do relógio do Windows) em software (`raster.js`, um pedaço
   do Canvas 2D sem suavização) e manda pela saída padrão só o retângulo que mudou:
   `"CM"` + tipo + 0 + tamanho (uint32 LE) + dados. Tipos: `Q` quadro (W,H,x,y,w,h em
   uint16 + BGRA pré-multiplicado), `L` linha pro diário, `P` pronto (`{pronto, temas:
   {nome: layout}}`), `S` som da cena épica (`{tocar: <.wav na pasta>, cena}` ou
   `{parar: true}`, quando ela é cortada).
-- Som: só os épicos têm (Invaders/Kaiju no Padrão, Ender Dragon, Shenlong (com o pedido), a lua cheia do SSJ 4, a Batalha da Frota e a
+- Som: só os épicos têm (Invaders/Kaiju no Padrão, Ender Dragon e o portal do Nether, Shenlong (com o pedido), a lua cheia do SSJ 4, a Batalha da Frota e a
   Defesa da Floresta no Sith, uma de cada lado da Força; a Juubi e o Time 7 completo na Akatsuki, um de cada
   lado; as lutas contra Margit, Godrick, Malenia e Radahn no Elden Ring, em rodízio). A cena diz o que
   toca e quando (`sons`, abaixo); quando ela começa, o motor junta tudo num .wav só
@@ -149,10 +150,11 @@ Clawd), terminando no Clawd normal em pé. Pergunta, festa ou dragão cortam sem
 gastam a vez. O tema liga com `const P = require('./parado').paradas('<tema>', [ids])` e chama
 `P.passo`, `P.clawd`, `P.bloqueia`, `P.aoComecarCena`, `P.aoFimCena` e `P.cena` (cenaPorNome).
 
-Cena épica com som: `sons: [[t, arquivo, ganho = 1, tom = 1, dur], ...]`, `t` em s desde o
+Cena épica com som: `sons: [[t, arquivo, ganho = 1, tom = 1, dur, desde = 0], ...]`, `t` em s desde o
 começo da cena, `arquivo` relativo à pasta (`sons-padrao/...`, `sons-dragonball/...`,
 `sons-sith/...`, `sons-akatsuki/...`, `sons-elden/...` ou `sons/...`, os da Mojang), `tom` > 1 = mais agudo e mais curto, `dur` = corta ali (some em até
-0,25 s). Arquivo que falta fica de fora (uma linha no diário) e o resto toca. Cada épico tem um
+0,25 s), `desde` = começa o arquivo desse ponto (s), entrando em 0,15 s (a mesma música em
+pedaços com volumes diferentes: o portal do Nether abaixa a música no susto). Arquivo que falta fica de fora (uma linha no diário) e o resto toca. Cada épico tem um
 `VOLUME` que deixa a trilha no nível dos avisos (−17 dB; as trilhas mixadas dão de −21 a −23
 LUFS); os .wav do Padrão, do Shenlong, do pedido e do SSJ 4 saem do `sons-epicos.py`, os do Sith do `sons-sith.py`, os da Akatsuki do `sons-akatsuki.py` e os do Elden Ring do `sons-elden.py`.
 

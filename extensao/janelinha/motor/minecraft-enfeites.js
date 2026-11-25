@@ -136,6 +136,33 @@ function desenharBarra(g, u) {
   if (cheia >= 118) g.drawImage(tinta, 181, 0, 1, 5, x + 117, y, 1, 5);
 }
 
+// -- modo compacto: a bússola do jogo (item/compass_00..31, 16x16) no lugar da barra de XP.
+// A agulha marca quanto da janela de uso (5h, 7d) já passou (u.janela, 0..100): o quadro 16
+// aponta pra cima e os quadros giram no sentido do relógio, então ela começa em cima e dá uma
+// volta até renovar. Igual ao QuadroDaBussola do overlay.ps1 (a janelinha sem o motor).
+const BUSSOLAS = Array.from({ length: 32 }, (_, i) => 'bussola' + String(i).padStart(2, '0'));
+const temBussola = () => BUSSOLAS.every(n => IMG[n] && IMG[n].width === 16 && IMG[n].height === 16);
+// (a textura tem 1 px transparente em volta: o reamostrar esmaece a borda pra fora sem cortar)
+function quadroDaBussola(janela) {
+  if (!Number.isFinite(janela)) return 16;
+  return (16 + Math.floor(Math.min(99.999, Math.max(0, janela)) * 32 / 100)) % 32;
+}
+// no tamanho da caixa (a janelinha manda 20 DIPs), suavizada como a letra em 11/9 e feita 1x por
+// quadro/tamanho/escala; colada em pixel inteiro da tela
+const BUSSOLAS_PRONTAS = cache(80);
+// Com alguma sessão trabalhando, a agulha gira (como a bússola do jogo no Nether): uma volta
+// a cada 1,6 s, os 32 quadros a 20 por segundo. Parou de trabalhar: volta a marcar o tempo.
+const GIRO_QPS = 20;
+function desenharBussola(g, u, esc, girando, T) {
+  const [x, y, w, h] = u.barra, lado = Math.min(w, h);
+  const q = girando ? Math.floor(T * GIRO_QPS) % 32 : quadroDaBussola(Number(u.janela));
+  const chave = q + ' ' + lado + ' ' + esc;
+  const img = BUSSOLAS_PRONTAS.get(chave) || BUSSOLAS_PRONTAS.set(chave, reamostrar(IMG[BUSSOLAS[q]], lado * esc, lado * esc));
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(img, Math.round((x + (w - lado) / 2) * esc), Math.round((y + (h - lado) / 2) * esc));
+  g.restore();
+}
+
 // -- letra do Minecraft (font/ascii.png: 16x16 letras de 8x8). Cada letra vai até a última
 // coluna pintada (o espaço tem 3), 1 px entre elas; a sombra é a cor/4, 1 px pra direita e
 // pra baixo. Na tela: 11/9 do tamanho, suavizada como o HighQuality do WPF.
@@ -203,13 +230,16 @@ function desenharEnfeites(g, host, T) {
     if (l.bola) g.drawImage(orbeDaSituacao(l.sit, l.cor, T), l.bola[0], l.bola[1], l.bola[2], l.bola[3]);
     if (l.tempo) escrever(g, l.tempo.txt, l.cor, l.tempo.caixa, true, esc);
   }
+  const bussola = !!host.compacto && temBussola();
+  const girando = bussola && (host.linhas || []).some(l => l.sit === 'working');  // o tema já redesenha todo quadro assim (animado)
   for (const u of host.uso || []) {
-    if (u.barra) desenharBarra(g, u);
-    desenharRitmo(g, u, '#FFFFFF', (txt, cor, caixa) => escrever(g, txt, cor, caixa, true, esc));
+    if (u.barra) { if (bussola) desenharBussola(g, u, esc, girando, T); else desenharBarra(g, u); }
+    // na bússola não tem o tracinho do ritmo (a agulha já mostra o tempo): só a palavra
+    desenharRitmo(g, bussola ? { ...u, barra: null } : u, '#FFFFFF', (txt, cor, caixa) => escrever(g, txt, cor, caixa, true, esc));
     if (u.rotulo) escrever(g, u.rotulo.txt, '#9CA3AF', u.rotulo.caixa, false, esc);
     if (u.pctTxt) escrever(g, u.pctTxt.txt, COR_PCT[u.nivel] || COR_PCT[0], u.pctTxt.caixa, true, esc);
     if (u.falta) escrever(g, u.falta.txt, '#6B7280', u.falta.caixa, true, esc);
   }
 }
 
-module.exports = { TEXTURAS, prontos, desenharEnfeites, larguraLetra, larguraRitmo, letreiro };
+module.exports = { TEXTURAS, BUSSOLAS, prontos, desenharEnfeites, larguraLetra, larguraRitmo, letreiro };

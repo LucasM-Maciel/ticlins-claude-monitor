@@ -85,8 +85,8 @@ function ladrilhoWPF(img, x, y) {
   return p;
 }
 
-test('o tema: layout dos enfeites, trilha e os eventos da prévia', () => {
-  assert.deepStrictEqual(tema.cenas.slice().sort(), ['aranha', 'creeper', 'enderman', 'esqueleto', 'galinha', 'lobo', 'mineracao', 'slime', 'totem', 'traca', 'zumbi']);
+test('o tema: layout dos enfeites, trilha e os eventos da prévia (e o portal do Nether)', () => {
+  assert.deepStrictEqual(tema.cenas.slice().sort(), ['aranha', 'creeper', 'enderman', 'esqueleto', 'galinha', 'lobo', 'mineracao', 'portal', 'slime', 'totem', 'traca', 'zumbi']);
   const L = layoutDe(tema);
   assert.deepStrictEqual(L, {
     raio: 0, fundo: '#F0181818', moldura: [6, 8, 6, 6], padding: [8, 6, 8, 6], enfeites: true,

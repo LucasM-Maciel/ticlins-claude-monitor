@@ -222,3 +222,32 @@ test('trilha do Ender Dragon: só sons que o minecraft.js baixa da Mojang (e, co
   }
   assert.ok(levelups > 0, 'o levelup a cada 5 níveis nunca tocou');
 });
+
+test('mixar: desde (6º) começa o arquivo do meio, entrando em 0,15 s; desde depois do fim = fica de fora', () => {
+  const w = mix([[0, 'longo', 1, 1, Infinity, 0.5]]);
+  assert.strictEqual(w.amostras.length, TAXA / 2, 'tocou só a metade de trás');
+  perto(w.amostras[0], 0, 'entra do zero');
+  perto(w.amostras[Math.round(0.075 * TAXA)], 0.25, 'no meio da entrada, a metade');
+  perto(w.amostras[Math.round(0.2 * TAXA)], 0.5, 'depois da entrada, inteiro');
+  assert.strictEqual(mix([[0, 'longo', 1, 1, Infinity, 2]]), null);
+  assert.strictEqual(mix([[0, 'meio']]).amostras.length, 100, 'sem desde, igual a antes');
+});
+
+test('trilha do portal do Nether (3 biomas): só sons que o minecraft.js baixa, dentro da cena, e a música em 4 pedaços', (t) => {
+  const tema = require(path.join(MOTOR, 'tema-minecraft'));
+  const nomes = new Set(Object.keys(SONS).flatMap(n => TONS[n] ? TONS[n].map((_, i) => n + (i + 1)) : [n]));
+  const baixa = a => { const k = /^sons\/(.+)\.wav$/.exec(a); return !!k && nomes.has(k[1]); };
+  const pasta = [process.env.CM_TEXTURAS, path.join(os.homedir(), '.claude-monitor')]
+    .find(p => p && [...nomes].every(n => fs.existsSync(path.join(p, 'sons', n + '.wav'))));
+  const lerArquivo = pasta && (a => fs.readFileSync(path.join(pasta, a)));
+  t.diagnostic(pasta ? `mixou com os sons de ${pasta}` : 'sem os sons da Mojang nesta máquina: só os nomes');
+  for (const bioma of ['netherrack', 'almas', 'basalto']) {
+    const m = new Mundo({ tema, semente: 7 });
+    m.receber(estadoDeMentira('minecraft', 'andando'));
+    const cena = tema.cenaPorNome(m, 'portal:' + bioma);
+    conferirTrilha(cena, `portal (${bioma})`, baixa, lerArquivo);
+    const musica = cena.sons.filter(s => s[1] === `sons/nether_musica_${bioma}.wav`);
+    assert.strictEqual(musica.length, 4, `${bioma}: a música normal, o silêncio antes do susto, baixa no PAN e de volta`);
+    assert.ok(cena.sons.some(s => s[1] === 'sons/nether_pan.wav'), `${bioma}: cadê o PAN?`);
+  }
+});

@@ -151,8 +151,15 @@ a janelinha antes dos temas continua no Minecraft.
   borda de terra com grama, bolinhas de orbe de XP e o usage na barra de XP.
   Andando, ele enfrenta zumbi, esqueleto, creeper, aranha e outros mobs, ou
   minera; sobe de nível a cada 5 mortes e, a cada 20, enfrenta o **Ender
-  Dragon**, com os sons do jogo. Quando fica tudo quieto, ele põe uma cama e
-  dorme, ou cava um laguinho e pesca (uma vez cada).
+  Dragon**, com os sons do jogo. A cada 12 eventos vem o **portal do Nether**:
+  ele monta o portal de obsidiana, acende com o isqueiro e atravessa; a borda
+  vira netherrack, soul sand ou basalto, com a música do bioma, até um mob
+  aparecer e ele fugir de volta (no Windows, pra ver na hora: botão direito >
+  Abrir portal do Nether). Quando fica tudo quieto, ele põe uma cama e dorme,
+  ou cava um laguinho e pesca (uma vez cada). No Windows o nome das sessões vai
+  na letra do jogo, e botão direito > **Compacto** deixa o cartão mais estreito,
+  com a bússola do jogo no lugar da barra de XP (a agulha dá uma volta até o
+  limite renovar e gira enquanto alguém trabalha).
 - **Dragon Ball**: o Clawd de quimono, que às vezes se transforma; a nuvem
   voadora, as esferas no lugar das bolinhas e a barra de ki ("MAIS DE 8000!").
   Cada sessão que termina dá uma esfera; na 7ª, o dragão aparece e realiza um
