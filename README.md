@@ -213,11 +213,15 @@ janelinha mostra o Clawd simples, sem as cenas.
 No tema Minecraft os sons são os do **jogo**: o "hmm" do aldeão quando alguém
 espera você, o som de XP quando uma sessão termina e o de **subir de nível**
 quando termina a última (nada mais rodando nem esperando você). Os mobs, os
-blocos e o dragão também são os do jogo.
+blocos e o dragão também são os do jogo. O portal do Nether também: obsidiana,
+isqueiro, o portal, o fogo, os mobs e um trecho de 11 s da música de cada bioma
+(Rubedo, So Below e Dead Voxel), cortado e igualado na hora de baixar, além
+da bússola do modo compacto.
 
 O instalador baixa tudo do servidor da Mojang, o mesmo que o launcher do jogo
 usa: **não precisa ter o Minecraft nem o ffmpeg**, e nada da Mojang vai no
-pacote. Instalou sem internet? A extensão baixa sozinha depois, ou, no VS Code:
+pacote. Instalou sem internet, ou atualizou e faltam os novos (como os do
+portal do Nether)? A extensão baixa sozinha depois, ou, no VS Code:
 `Ctrl+Shift+P` > **Claude Monitor: Usar sons do Minecraft**.
 
 ## Deu problema?

@@ -8,10 +8,20 @@
  *               diamante) e as do tema Minecraft da janelinha (terra, grama,
  *               orbe de XP, barra de XP, letra): do jar da versão, só os pedaços
  *               que interessam (o jar tem ~40 MB, baixa ~4 MB)
+ *   bussola00..31.png  a bússola do modo compacto (item/compass_00..31)
+ *   o portal do Nether (motor/minecraft-nether.js): as texturas (obsidiana, portal,
+ *               netherrack, soul sand, basalto, magma, os 2 fogos, isqueiro, piglin
+ *               zumbi, magma cube) e os sons nether_* em sons/ (obsidiana, isqueiro,
+ *               portal, fogo, os mobs, o susto e as 3 músicas do Nether)
+ * Som longo vai cortado: as músicas do Nether (RECORTES) guardam só os 11 s mais
+ * fortes dos 2 primeiros minutos, com fade e no mesmo volume (~1 MB cada, não a
+ * faixa de ~4 MB); os que começam baixinho e crescem (ATAQUES: o PAN e os de clima
+ * do susto) começam no ataque, pra entrar forte na hora certa da cena.
  * Sem internet, fica o que tinha (sons do sistema e os desenhos da janelinha).
  * Uso: node minecraft.js  (o instalador roda; o comando "Usar sons do Minecraft"
  * e a extensão, quando falta som, chamam baixarTudo()).
- * Pra trocar/adicionar som, mexa em SONS (os nomes estão no índice de assets do jogo).
+ * Pra trocar/adicionar som, mexa em SONS (os nomes estão no índice de assets do jogo;
+ * as cenas usam como sons/<nome>.wav, ver docs/MOTOR.md).
  * Teste: CLAUDE_MONITOR_MOJANG=http://127.0.0.1:porta troca a Mojang por
  * testes/mojang-falso.js.
  */
