@@ -1159,7 +1159,8 @@ function Atualizar {
             # a coluna do ritmo no usage alarga o cartão: o nome ganha o espaço e o tempo fica na direita
             # compacto: a bússola (16 + 4 de margem) no lugar da barra de 118 tira esse tanto do nome
             $larguraDoNome = 160 + $(if ($doMotor) { $layoutDoTema.colunas.ritmo } else { (LarguraDoRitmo) }) - $(if (UsaBussola) { 118 - ($ladoDaBussola + 4) } else { 0 })
-            if ($config.tema -eq 'minecraft' -and $larguraDaLetra) {
+            # letra do jogo no nome só no compacto: ela não tem acento nem emoji, e fora dele o nome fica como sempre foi
+            if ((UsaBussola) -and $larguraDaLetra) {
                 $nomeSessao = NomeMC $s.name '#E5E7EB' $larguraDoNome
                 $nomeSessao.ToolTip = $s.name
             } else {
