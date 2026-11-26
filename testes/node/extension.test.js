@@ -121,7 +121,8 @@ async function ativar({ plataforma = "win32", config = {}, casa, versao = manife
         // com os sons do Minecraft já baixados: a extensão não vai atrás da Mojang
         // (soSonsAntigos: só os de antes do portal do Nether e da bússola, como quem atualizou)
         fs.mkdirSync(path.join(casa, ".claude-monitor", "sons"), { recursive: true });
-        const ja = soSonsAntigos ? [["sons", "levelup.wav"]] : [["sons", "levelup.wav"], ["sons", "nether_pan.wav"], ["portal_nether.png"], ["bussola31.png"]];
+        // (soSonsAntigos também aceita a lista exata do que já existia)
+        const ja = Array.isArray(soSonsAntigos) ? soSonsAntigos : soSonsAntigos ? [["sons", "levelup.wav"]] : [["sons", "levelup.wav"], ["sons", "nether_pan.wav"], ["portal_nether.png"], ["bussola31.png"], ["ghast.png"]];
         for (const p of ja) fs.writeFileSync(path.join(casa, ".claude-monitor", ...p), "");
     }
     process.env.HOME = casa;
@@ -705,6 +706,15 @@ test("atualizou com só os sons antigos (sem os do portal do Nether e a bússola
         const { pasta } = await ativar({ soSonsAntigos: true });
         await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha/);
         assert.ok(m.pedidos.length > 0, "não foi atrás da Mojang");
+    });
+});
+
+test("atualizou da 1.0.2 (tudo, menos o Ghast do Nether novo): a extensão baixa sozinha", async () => {
+    await comMojang(async (m) => {
+        const { pasta } = await ativar({ soSonsAntigos: [["sons", "levelup.wav"], ["sons", "nether_pan.wav"], ["portal_nether.png"], ["bussola31.png"]] });
+        await noDiario(pasta, /baixou os sons do Minecraft 1\.99 sozinha/);
+        assert.ok(m.pedidos.length > 0, "não foi atrás da Mojang");
+        assert.ok(fs.existsSync(path.join(pasta, "ghast.png")), "cadê o ghast.png?");
     });
 });
 

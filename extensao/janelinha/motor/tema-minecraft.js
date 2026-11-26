@@ -17,7 +17,7 @@ const P = require('./parado').paradas('minecraft', ['cama', 'pesca']);
 const NIVEL = 5;      // mortes por nível
 const DRAGAO = 20;    // mortes por Ender Dragon (o dono mudou de 30 pra 20 em 06/10)
 const PET = 25;       // s que o lobo manso segue o Clawd
-const PORTAL = 12;    // eventos comuns por portal do Nether (a cena épica, minecraft-nether.js)
+const PORTAL = 30;    // eventos comuns por portal do Nether (a cena épica, minecraft-nether.js)
 const PESO = { comum: 4, incomum: 2, raro: 1 };
 // 1 nível a cada 5 mortes + os que o Ender Dragon deu (o dono quis que o +28 da cena ficasse)
 const nivelDe = (m, mortes = m.salvo.mortes || 0) => Math.floor(mortes / NIVEL) + (m.salvo.niveisDoDragao || 0);
@@ -159,7 +159,7 @@ module.exports = {
       if (c) return c;
       m.salvo.dragao = false; m.salvar();
     }
-    // a cada 12 eventos: o portal do Nether (épico), na próxima vez que ele passar pelo começo
+    // a cada 30 eventos: o portal do Nether (épico), na próxima vez que ele passar pelo começo
     // da borda de cima (nos outros lados: tenta de novo já já)
     if (m.salvo.portal && EV.portal && !m.ruins.has('portal') && temTexturas(...EV.portal.texturas)) {
       if (Math.cos(m.pose().a) < 0.99) return undefined;
@@ -189,7 +189,7 @@ module.exports = {
     m.estado.pendente = null;
     if (cena.dragao) { m.salvo.dragao = false; m.salvar(); }
     if (cena.evento) m.estado.ultimo = cena.nome;
-    // conta os eventos comuns; o 12º arma o portal (que sobrevive a reabrir, como o dragão)
+    // conta os eventos comuns; o 30º arma o portal (que sobrevive a reabrir, como o dragão)
     if (cena.nome === 'portal') { if (!cena.manual) { m.salvo.portal = false; m.salvar(); } }
     else if (cena.evento) {
       m.salvo.eventos = (m.salvo.eventos || 0) + 1;

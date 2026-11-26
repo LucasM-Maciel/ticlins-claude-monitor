@@ -2179,7 +2179,7 @@ SetaDoIdioma '▶' 1
 [void]$menu.Items.Add($painelIdioma)
 
 # a cena do portal do Nether na hora (motor/minecraft-nether.js): só no Minecraft, com o motor
-# e o Clawd ligados. Não gasta o portal que o Clawd ganhou (o de 12 em 12 eventos)
+# e o Clawd ligados. Não gasta o portal que o Clawd ganhou (o de 30 em 30 eventos)
 $itemPortal = New-Object Windows.Controls.MenuItem
 $itemPortal.Header = Tr 'Abrir portal do Nether' 'Open Nether portal'
 $itemPortal.Add_Click({ Anotar 'portal do Nether pelo menu'; MotorEvento 'portal' })

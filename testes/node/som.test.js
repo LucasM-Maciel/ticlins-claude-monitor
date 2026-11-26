@@ -233,7 +233,7 @@ test('mixar: desde (6º) começa o arquivo do meio, entrando em 0,15 s; desde de
   assert.strictEqual(mix([[0, 'meio']]).amostras.length, 100, 'sem desde, igual a antes');
 });
 
-test('trilha do portal do Nether (3 biomas): só sons que o minecraft.js baixa, dentro da cena, e a música em 4 pedaços', (t) => {
+test('trilha do portal do Nether (3 biomas): só sons que o minecraft.js baixa, dentro da cena, a música inteira e o Ghast', (t) => {
   const tema = require(path.join(MOTOR, 'tema-minecraft'));
   const nomes = new Set(Object.keys(SONS).flatMap(n => TONS[n] ? TONS[n].map((_, i) => n + (i + 1)) : [n]));
   const baixa = a => { const k = /^sons\/(.+)\.wav$/.exec(a); return !!k && nomes.has(k[1]); };
@@ -247,7 +247,8 @@ test('trilha do portal do Nether (3 biomas): só sons que o minecraft.js baixa, 
     const cena = tema.cenaPorNome(m, 'portal:' + bioma);
     conferirTrilha(cena, `portal (${bioma})`, baixa, lerArquivo);
     const musica = cena.sons.filter(s => s[1] === `sons/nether_musica_${bioma}.wav`);
-    assert.strictEqual(musica.length, 4, `${bioma}: a música normal, o silêncio antes do susto, baixa no PAN e de volta`);
-    assert.ok(cena.sons.some(s => s[1] === 'sons/nether_pan.wav'), `${bioma}: cadê o PAN?`);
+    assert.strictEqual(musica.length, 1, `${bioma}: a música do bioma toca inteira (o susto do PAN saiu em 26/11)`);
+    for (const s of ['nether_ghast_geme', 'nether_ghast_morre', 'nether_explode'])
+      assert.ok(cena.sons.some(x => x[1] === `sons/${s}.wav`), `${bioma}: cadê o ${s}?`);
   }
 });

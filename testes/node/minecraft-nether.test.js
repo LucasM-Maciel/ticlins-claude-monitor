@@ -1,7 +1,7 @@
 'use strict';
 // motor/minecraft-nether.js (o portal do Nether, épico do tema Minecraft) e o modo compacto do
 // tema (a bússola no lugar da barra de XP, minecraft-enfeites.js):
-// - o portal fica fora do sorteio comum, arma a cada 12 eventos e só começa no começo da borda de
+// - o portal fica fora do sorteio comum, arma a cada 30 eventos e só começa no começo da borda de
 //   cima; cortado antes do Nether não gasta a vez; o do menu (evento 'portal') não gasta nunca;
 // - pelo menu, parado ou andando, ele vai pro começo da borda de cima e fica lá até o fim, mesmo
 //   que comece a andar no meio; no fim a trilha avança o tanto que ele andou (sem pulo);
@@ -18,7 +18,9 @@ const { IMG } = require(path.join(MOTOR, 'comum'));
 const { Mundo } = require(path.join(MOTOR, 'mundo'));
 const tema = require(path.join(MOTOR, 'tema-minecraft'));
 const enfeites = require(path.join(MOTOR, 'minecraft-enfeites'));
-const { T: TN } = require(path.join(MOTOR, 'minecraft-nether'));
+const { T: TN, FIM_X } = require(path.join(MOTOR, 'minecraft-nether'));
+const palco = require(path.join(MOTOR, 'minecraft-nether-palco'));
+const { lim } = require(path.join(MOTOR, 'comum'));
 const { estadoDeMentira } = require('../motor-foto');
 
 // textura de mentira: uma cor por textura (as das mobs em 64x64), e a bússola com uma cor por quadro
@@ -32,8 +34,9 @@ for (const n of tema.texturas) {
   if (IMG[n]) continue;
   const q = /^bussola(\d\d)$/.exec(n);
   IMG[n] = q ? deMentira(n, 16, 16, corDaBussola(Number(q[1])))
-    : /^(zumbi|creeper|esqueleto|aranha|slime|silverfish|enderman|lobo|galinha|orbe|escudo|piglin_zumbi)/.test(n) ? deMentira(n, 64, 64)
-      : /^xp_/.test(n) ? deMentira(n, 182, 5) : n === 'fonte' ? deMentira(n, 128, 128) : deMentira(n);
+    : /^(zumbi|creeper|esqueleto|aranha|slime|silverfish|enderman|lobo|galinha|orbe|escudo)/.test(n) ? deMentira(n, 64, 64)
+      : /^ghast/.test(n) ? deMentira(n, 128, 64) : n === 'lava' ? deMentira(n, 16, 320)
+        : /^xp_/.test(n) ? deMentira(n, 182, 5) : n === 'fonte' ? deMentira(n, 128, 128) : deMentira(n);
 }
 
 function novoMundo(modo = 'andando', semente = 7) {
@@ -49,13 +52,13 @@ function novoMundo(modo = 'andando', semente = 7) {
 const emCima = m => Math.cos(m.pose().a) > 0.99;
 const comum = { nome: 'zumbi', evento: { danos: [], mortes: [] } };
 
-test('portal: fora do sorteio comum, arma a cada 12 eventos e só começa na borda de cima', () => {
+test('portal: fora do sorteio comum, arma a cada 30 eventos e só começa na borda de cima', () => {
   const m = novoMundo();
   assert.ok(!('portal' in tema.pesosDosEventos(m)), 'o portal não entra no sorteio comum');
-  for (let i = 1; i <= 11; i++) tema.aoComecarCena(m, { ...comum });
-  assert.ok(!m.salvo.portal, 'armou antes do 12º');
+  for (let i = 1; i <= 29; i++) tema.aoComecarCena(m, { ...comum });
+  assert.ok(!m.salvo.portal, 'armou antes do 30º');
   tema.aoComecarCena(m, { ...comum });
-  assert.strictEqual(m.salvo.portal, true, 'o 12º evento arma o portal');
+  assert.strictEqual(m.salvo.portal, true, 'o 30º evento arma o portal');
   // no lado direito: espera (undefined); em cima: a cena do portal
   const [, , w] = m.host.cartao;
   m.dist = w + 20;
@@ -67,8 +70,8 @@ test('portal: fora do sorteio comum, arma a cada 12 eventos e só começa na bor
   assert.strictEqual(tema.naParada(m), c, 'sem espaço: devolve o mesmo, sem sortear de novo');
   tema.aoComecarCena(m, c);
   assert.ok(!m.salvo.portal, 'começou: gastou a vez');
-  // 12 eventos depois, arma de novo
-  for (let i = 0; i < 12; i++) tema.aoComecarCena(m, { ...comum });
+  // 30 eventos depois, arma de novo
+  for (let i = 0; i < 30; i++) tema.aoComecarCena(m, { ...comum });
   assert.strictEqual(m.salvo.portal, true);
 });
 
@@ -107,7 +110,7 @@ test('menu (evento portal): parado ou andando, no começo da borda de cima até 
     }
     assert.deepStrictEqual(m.erros, [], `${modo}: erros`);
     assert.strictEqual(m.salvo.portal, true, `${modo}: o do menu gastou o portal ganho`);
-    if (m.andando) assert.ok(Math.abs(distFim - 66) < 3, `${modo}: a trilha avançou ${distFim} no fim (esperado ~66)`);
+    if (m.andando) assert.ok(Math.abs(distFim - FIM_X) < 3, `${modo}: a trilha avançou ${distFim} no fim (esperado ~${FIM_X})`);
   }
 });
 
@@ -128,6 +131,110 @@ test('a cena nos 3 biomas, quadro a quadro, sem erro; a borda vira Nether e volt
     assert.notStrictEqual(vistos[(TN.vira1 + 1).toFixed(2)], antes, `${bioma}: a borda não virou Nether`);
     assert.strictEqual(vistos[(TN.desvira1 + 0.5).toFixed(2)], antes, `${bioma}: a borda não voltou a ser terra`);
   }
+});
+
+// ---------- o palco e o Ghast (minecraft-nether-palco.js) ----------
+const mundoFalso = cartao => ({ host: { cartao, escala: 1 } });
+
+test('palco: cabe acima do cartão (HJ de 72 a 184) e nada é desenhado de y do cartão pra baixo', () => {
+  for (const cartao of [[98, 90, 248, 146], [98, 300, 248, 146]]) {
+    const P = palco.montarPalco(mundoFalso(cartao));
+    assert.strictEqual(P.HJ, Math.round(lim(cartao[1] - 14, 72, 184)));
+    for (const bioma of palco.BIOMAS) {
+      const tela = new Tela(380, 440), g = tela.getContext('2d');
+      palco.desenhaPalco(g, P, bioma, 1, 3.3, { atras: x => palco.desenhaGhast(x, P, P.cw / 2, -P.HJ / 2) });
+      let tinta = 0, vazou = 0;
+      for (let y = 0; y < 440; y++) for (let x = 0; x < 380; x++) if (tela.pixels[y * 380 + x] >>> 24) { if (y >= cartao[1]) vazou++; else tinta++; }
+      assert.strictEqual(vazou, 0, `${bioma}: ${vazou} px desenhados do cartão pra baixo (cartão em y=${cartao[1]})`);
+      assert.ok(tinta > 5000, `${bioma}: o palco quase não desenhou (${tinta} px)`);
+    }
+  }
+});
+
+test('palco: o Ghast cabe (os tentáculos abaixo do teto) e é grande no palco alto', () => {
+  const baixo = { cw: 248, HJ: 72, OX: 98, OY: 90, e: 1 }, alto = { cw: 248, HJ: 184, OX: 98, OY: 200, e: 1 };
+  assert.ok(palco.GHAST_LADO(baixo) + 8 <= baixo.HJ - 12, `Ghast ${palco.GHAST_LADO(baixo)} não cabe no palco de ${baixo.HJ}`);
+  assert.ok(palco.GHAST_LADO(alto) >= 40);
+});
+
+test('palco: 3 biomas, o Ghast e a bola desenham sem erro em qualquer abertura', () => {
+  const P = palco.montarPalco(mundoFalso([98, 200, 248, 146])), tela = new Tela(380, 440), g = tela.getContext('2d');
+  for (const bioma of palco.BIOMAS) for (const ab of [0, 0.3, 1]) {
+    tela.limpar();
+    palco.desenhaPalco(g, P, bioma, ab, 1.7);
+    palco.desenhaGhast(g, P, 100, -60, { alfa: 0.5, boca: true, balanco: 2, golpeado: 0.6 });
+    palco.desenhaBola(g, 50, -40, 1.2, { lado: 12, branca: 1, rastro: [[40, -38], [30, -36]] });
+  }
+});
+
+// um quadro da cena do portal em t (s desde o começo dela); devolve a tela e o mundo
+function quadroDaCena(bioma, t, antes) {
+  const m = novoMundo();
+  m.dist = 2;
+  const tela = new Tela(380, 440), g = tela.getContext('2d');
+  const desenha = T => { m.passo(T); tela.limpar(); g.setTransform(1, 0, 0, 1, 0, 0); m.desenhar(g); };
+  desenha(0);
+  m.comecarCena(tema.cenaPorNome(m, 'portal:' + bioma));
+  const t0 = m.T;
+  for (let s = 0; s <= t + 1e-9; s += 1 / 20) { if (antes && antes(m, s)) break; desenha(t0 + s); }
+  return { m, tela, g, t0 };
+}
+// quantos px estão desenhados acima do cartão
+function acimaDoCartao(tela, m) {
+  const cy = Math.round(m.host.cartao[1]); let n = 0;
+  for (let y = 0; y < cy - 2; y++) for (let x = 0; x < tela.width; x++) if (tela.pixels[y * tela.width + x] >>> 24) n++;
+  return n;
+}
+
+test('portal: o Ghast morre e solta orbes (a explosão muda o meio do Ghast)', () => {
+  const lerMeio = t => {
+    const { m, tela } = quadroDaCena('netherrack', t);
+    const P = palco.montarPalco(m), M = { x: m.host.cartao[0] + P.cw * 0.72, y: m.host.cartao[1] - P.HJ * 0.55 };
+    const pix = []; for (let dy = -6; dy <= 6; dy += 3) for (let dx = -6; dx <= 6; dx += 3) pix.push(tela.pixels[Math.round(M.y + dy) * tela.width + Math.round(M.x + dx)]);
+    assert.deepStrictEqual(m.erros, []);
+    return pix.join();
+  };
+  assert.notStrictEqual(lerMeio(TN.acerta + 0.3), lerMeio(TN.acerta - 0.1));
+});
+
+test('portal: a trilha tem os sons do Ghast e não tem os do mob que saiu', () => {
+  const m = novoMundo(), c = tema.cenaPorNome(m, 'portal'), arqs = c.sons.map(s => s[1]);
+  for (const n of ['nether_ghast_geme', 'nether_ghast_grita', 'nether_ghast_morre', 'nether_explode']) assert.ok(arqs.includes(`sons/${n}.wav`), `falta ${n}`);
+  assert.ok(!arqs.some(a => /nether_(piglin|esqueleto|magma)/.test(a)), 'sobrou som do mob');
+});
+
+test('portal cortado: a borda e o palco somem no quadro seguinte', () => {
+  const m = novoMundo();
+  m.dist = 2;
+  const tela = new Tela(380, 440), g = tela.getContext('2d');
+  const desenha = T => { m.passo(T); tela.limpar(); g.setTransform(1, 0, 0, 1, 0, 0); m.desenhar(g); };
+  desenha(0);
+  const vazio = new Tela(380, 440);
+  m.comecarCena(tema.cenaPorNome(m, 'portal:netherrack'));
+  const t0 = m.T;
+  for (let s = 0; s <= TN.ghast0 + 0.5; s += 1 / 20) desenha(t0 + s);
+  assert.ok(acimaDoCartao(tela, m) > 5000, 'o palco não estava aberto antes do corte');
+  m.fimCena(true);
+  desenha(t0 + TN.ghast0 + 0.55);
+  // o que sobra acima do cartão é só o Clawd/borda do mundo comum: o palco (milhares de px) sumiu
+  const ref = novoMundo(); ref.dist = 2;
+  const tr = new Tela(380, 440), gr = tr.getContext('2d');
+  ref.passo(0); ref.passo(t0 + TN.ghast0 + 0.55); tr.limpar(); gr.setTransform(1, 0, 0, 1, 0, 0); ref.desenhar(gr);
+  assert.ok(Math.abs(acimaDoCartao(tela, m) - acimaDoCartao(tr, ref)) < 300, 'o palco ficou desenhado depois do corte');
+  void vazio;
+});
+
+test('portal pelo menu, parado: o palco abre acima do cartão', () => {
+  const m = novoMundo('parado');
+  m.salvo.portal = true;
+  for (let T = 0; T < 1; T += 0.05) m.passo(T);
+  const tela = new Tela(380, 440), g = tela.getContext('2d');
+  const antes = (() => { tela.limpar(); g.setTransform(1, 0, 0, 1, 0, 0); m.desenhar(g); return acimaDoCartao(tela, m); })();
+  m.evento('portal');
+  const t0 = m.T;
+  for (let s = 0; s <= TN.abre1 + 0.1; s += 1 / 30) { m.passo(t0 + s); tela.limpar(); g.setTransform(1, 0, 0, 1, 0, 0); m.desenhar(g); }
+  assert.ok(acimaDoCartao(tela, m) - antes > 5000, 'o palco não abriu no menu');
+  assert.deepStrictEqual(m.erros, []);
 });
 
 test('compacto: a bússola no lugar da barra; o quadro marca o tempo da janela e gira com sessão trabalhando', () => {

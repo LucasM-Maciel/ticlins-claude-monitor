@@ -151,10 +151,11 @@ a janelinha antes dos temas continua no Minecraft.
   borda de terra com grama, bolinhas de orbe de XP e o usage na barra de XP.
   Andando, ele enfrenta zumbi, esqueleto, creeper, aranha e outros mobs, ou
   minera; sobe de nível a cada 5 mortes e, a cada 20, enfrenta o **Ender
-  Dragon**, com os sons do jogo. A cada 12 eventos vem o **portal do Nether**:
+  Dragon**, com os sons do jogo. A cada 30 eventos vem o **portal do Nether**:
   ele monta o portal de obsidiana, acende com o isqueiro e atravessa; a borda
-  vira netherrack, soul sand ou basalto, com a música do bioma, até um mob
-  aparecer e ele fugir de volta (no Windows, pra ver na hora: botão direito >
+  vira netherrack, soul sand ou basalto e o Nether abre em cima do cartão,
+  com a música do bioma. Um Ghast sobe e cospe uma bola de fogo; ele rebate
+  com a picareta, o Ghast explode e ele volta pelo portal (no Windows, pra ver na hora: botão direito >
   Abrir portal do Nether). Quando fica tudo quieto, ele põe uma cama e dorme,
   ou cava um laguinho e pesca (uma vez cada). Botão direito > **Compacto** deixa
   o cartão mais estreito, com a bússola do jogo no lugar da barra de XP (a
@@ -214,7 +215,7 @@ No tema Minecraft os sons são os do **jogo**: o "hmm" do aldeão quando alguém
 espera você, o som de XP quando uma sessão termina e o de **subir de nível**
 quando termina a última (nada mais rodando nem esperando você). Os mobs, os
 blocos e o dragão também são os do jogo. O portal do Nether também: obsidiana,
-isqueiro, o portal, o fogo, os mobs e um trecho de 11 s da música de cada bioma
+isqueiro, o portal, o fogo, o Ghast, a explosão e um trecho de 11 s da música de cada bioma
 (Rubedo, So Below e Dead Voxel), cortado e igualado na hora de baixar, além
 da bússola do modo compacto.
 

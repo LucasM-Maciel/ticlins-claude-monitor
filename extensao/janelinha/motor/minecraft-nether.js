@@ -1,25 +1,31 @@
 'use strict';
 // Cena do portal do Nether (tema Minecraft). Só no começo da borda de CIMA do cartão: a cena
-// precisa da reta inteira na frente (o mob vem da outra ponta) e de altura pro portal.
-//  1. o Clawd põe 10 obsidianas (o portal 4x5 sem os cantos) e acende com o isqueiro;
+// precisa da reta inteira na frente e de altura pro portal e pro palco.
+//  1. o Clawd põe 10 obsidianas (o portal 4x5 sem os cantos, em dobro: blocos de 16 px) e acende
+//     com o isqueiro;
 //  2. anda até o portal, some no roxo e a borda do cartão vira Nether a partir do portal:
 //     netherrack (fogo vermelho), soul sand (fogo azul e almas subindo) ou basalto (blocos de
-//     magma no meio e cinza caindo, como nos Basalt Deltas), sorteado;
-//  3. sai do portal do lado de lá, olha em volta; um mob do bioma vem da outra ponta da borda
-//     (netherrack: piglin zumbi; soul sand: esqueleto; basalto: magma cube pulando);
-//  4. o Clawd leva um susto, corre de volta pro portal, a borda volta a ser terra e grama,
-//     ele sai do lado de cá, o portal quebra e ele segue andando dali (avanca).
+//     magma no meio e cinza caindo, como nos Basalt Deltas), sorteado. Ao mesmo tempo o PALCO abre
+//     acima do cartão (minecraft-nether-palco.js): o Nether do bioma, com o teto de netherrack e a
+//     luz do glowstone;
+//  3. ele sai do portal do lado de lá e para, olhando pro alto: um Ghast sobe por trás do cenário,
+//     geme, abre a boca e cospe uma bola de fogo. O Clawd rebate com a picareta (o golpe, a varrida),
+//     a bola volta e explode no Ghast, que solta orbes de XP;
+//  4. o Clawd comemora e volta pro portal, o palco fecha, a borda volta a ser terra e grama, ele
+//     sai do lado de cá, o portal quebra e ele segue andando dali (avanca).
 // Quadro = função do tempo (referencial do Clawd: x+ pra frente, y- pra fora do cartão, chão 0).
 // A borda virando Nether é desenhada no fundo (fundoNether, coordenadas da janela) pelo
-// tema-minecraft.js, por cima da borda de terra e por baixo do Clawd.
-const { lim, sai, rng, IMG, arte, tingida } = require('./comum');
+// tema-minecraft.js, por cima da borda de terra e por baixo do Clawd. O palco é desenhado aqui, no
+// referencial do cartão (como o palco dos épicos do Elden e do Akatsuki), por baixo do Clawd.
+const { lim, sai, entra, rng, IMG } = require('./comum');
 const clawd = require('./clawd');
-const { MOB, desenhaMob, fazPoof, desenhaPoof, fazPontos, desenhaPontos, ROXOS, fazCacos, desenhaCacos } = require('./minecraft-kit');
+const { fazPoof, desenhaPoof, fazPontos, desenhaPontos, ROXOS, fazCacos, desenhaCacos, fazOrbes, desenhaOrbes, fazFaiscas, desenhaVarrida } = require('./minecraft-kit');
+const palco = require('./minecraft-nether-palco');
 
-const L = 8;                       // lado do bloco de obsidiana (px)
-const FX = 30;                     // a coluna de fora do portal, à esquerda (px na frente do Clawd)
-const CX = FX + 2 * L;             // o meio do portal (46)
-const DENTRO = [FX + L, -4 * L, 2 * L, 3 * L];  // o vão do portal [x, y, w, h]: 16 x 24
+const L = 16;                      // lado do bloco de obsidiana (px)
+const FX = 20;                     // a coluna de fora do portal, à esquerda (px na frente do Clawd)
+const CX = FX + 2 * L;             // o meio do portal (52)
+const DENTRO = [FX + L, -4 * L, 2 * L, 3 * L];  // o vão do portal [x, y, w, h]: 32 x 48
 // as 10 obsidianas na ordem em que o Clawd põe: [x da esquerda, y de baixo]
 const BLOCOS = [
   [FX + L, 0], [FX + 2 * L, 0],
@@ -34,38 +40,33 @@ const T = {
   vai: 4.3, chega: 5.2,            // anda até o portal
   some: 5.7,                       // some no roxo
   vira0: 5.5, vira1: 6.4,          // a borda vira Nether (do portal pros lados)
+  abre0: 5.6, abre1: 6.6,          // o palco abre, de baixo pra cima (junto com a borda)
   volta: 6.6, saiu: 7.0,           // aparece do lado de lá
-  anda1: 7.05, anda2: 7.65,        // sai do portal e para (X1), olha em volta
-  explora0: 8.9, explora1: 9.5,    // anda mais um pouco (X2) e fica olhando pros lados
-  mob0: 9.6, mob1: 13.4,           // o mob vem devagar da outra ponta (ele não vê: está virado)
-  susto: 12.6, corre0: 13.1, corre1: 13.8, entra: 14.2,
+  anda1: 7.05, anda2: 7.65,        // sai do portal e para (X1), olhando pro alto
+  ghast0: 7.3, ghast1: 9.3,        // o Ghast sobe por trás do cenário e geme
+  atira: 9.8,                      // abre a boca (a bola cresce nela) e cospe 0,4 s depois
+  rebate: 11.2,                    // a bola chega no Clawd e ele rebate com a picareta
+  acerta: 11.9,                    // a bola volta e explode no Ghast, que solta orbes
+  retorna0: 13.0, retorna1: 13.8,  // o Clawd comemorou e volta andando pro portal
+  entra: 14.2,                     // some no portal
+  fecha0: 14.1, fecha1: 15.0,      // o palco fecha, de cima pra baixo (junto com desvira0..desvira1)
   desvira0: 14.1, desvira1: 15.0,  // a borda volta a ser terra
   reaparece0: 14.9, reaparece1: 15.3,
   sai0: 15.6, sai1: 16.2,          // sai do portal do lado de cá
   ufa: 16.5,                       // fecha os olhos um instante: ufa
   quebra: 18.6, fim: 20.0,
 };
-const X1 = 72, X2 = 92;            // as duas paradas do lado de lá
-const FIM_X = 66;                  // onde ele termina (a cena avança a trilha isso)
+const X1 = 108;                    // onde ele para do lado de lá (a direita do portal)
+const FIM_X = FX + 4 * L + 4;      // onde ele termina (a cena avança a trilha isso)
+const LANCA = 0.4;                 // a bola sai da boca 0,4 s depois de ele abrir (atira + LANCA)
+const GOLPE = [-0.51, 0.09];       // a janela do golpe em volta do rebate (o impacto cai no meio da descida)
 
 const BIOMAS = {
-  netherrack: { bloco: 'netherrack', fogo: 'fogo', mob: 'piglin' },
-  almas: { bloco: 'areia_almas', fogo: 'fogo_almas', mob: 'esqueleto', almas: true },
-  basalto: { bloco: 'basalto_lado', mob: 'magma', cinza: true, magma: true },
+  netherrack: { bloco: 'netherrack', fogo: 'fogo' },
+  almas: { bloco: 'areia_almas', fogo: 'fogo_almas', almas: true },
+  basalto: { bloco: 'basalto_lado', cinza: true, magma: true },
 };
 const NOMES_BIOMAS = Object.keys(BIOMAS);
-
-// magma cube (8x8): fatias pretas e vermelhas com a lava entre elas, olhos laranja
-const MAGMA = arte([
-  'kkkkkkkk',
-  'yoyooyoy',
-  'kRkkkkRk',
-  'kOOkkOOk',
-  'oyooyooy',
-  'kkRkkRkk',
-  'yoyyooyo',
-  'kkkkkkkk',
-], { k: '#2A0A06', R: '#4A120A', o: '#E05A0A', y: '#FFC23A', O: '#FF8A1A' });
 
 // ---------- utilidades ----------
 const fatia = (t, a, b) => lim((t - a) / (b - a), 0, 1);
@@ -79,27 +80,18 @@ function bloco(g, nome, x, yBaixo, lado, escala = 1, alfa = 1) {
   g.drawImage(img, 0, 0, 16, 16, -lado / 2, -lado / 2, lado, lado);
   g.restore();
 }
-// o "!" do susto, em cima da cabeça
-function exclamacao(g, x, y, alfa) {
-  if (alfa <= 0) return;
-  g.save(); g.globalAlpha *= alfa;
-  g.fillStyle = '#3A0000'; g.fillRect(x - 2, y - 11, 4, 8); g.fillRect(x - 2, y - 2, 4, 4);
-  g.fillStyle = '#FF5555'; g.fillRect(x - 1, y - 10, 2, 6); g.fillRect(x - 1, y - 1, 2, 2);
-  g.restore();
-}
 
 // ---------- a trilha (som.js): sons do próprio jogo, que o minecraft.js baixou da Mojang ----------
 // cada obsidiana posta, o isqueiro, o zumbido do portal aceso, o "entrar no portal" (trigger) e a
-// chegada (travel, só o começo), a música do bioma enquanto está no Nether (um trecho de 7 s), o
-// fogo crepitando, o mob (grunhido do piglin, o esqueleto, os pulos do magma cube), o susto (o
-// som de clima tenso do bioma) e a obsidiana quebrando no fim
+// chegada (travel, só o começo), a música do bioma enquanto está no Nether (um trecho de 11 s), o
+// fogo crepitando, o Ghast (gemido ao subir, grito ao cuspir, a explosão e a morte), a bola (o
+// sopro), o golpe do Clawd, o XP e a obsidiana quebrando no fim
 const S = n => `sons/${n}.wav`, VOLUME = 0.42;  // o nível dos avisos, como o dragão
 const MUSICA = { netherrack: 'nether_musica_netherrack', almas: 'nether_musica_almas', basalto: 'nether_musica_basalto' };
 // os trechos de 11 s já vêm no mesmo volume (o minecraft.js iguala ao recortar)
 const GANHO_MUSICA = { netherrack: 1.3, almas: 1.3, basalto: 1.3 };
-const PAN = 1.6;   // s que a música fica baixa no susto
 function sons(nomeBioma, B) {
-  const musica = S(MUSICA[nomeBioma]), gm = GANHO_MUSICA[nomeBioma], antes = T.susto - T.vira0;
+  const musica = S(MUSICA[nomeBioma]), gm = GANHO_MUSICA[nomeBioma];
   const L = [
     ...BLOCOS.map((_, i) => [T.poe + i * T.cada + 0.05, S(`nether_pedra${i % 4 + 1}`), 0.55, 0.85 + (i % 3) * 0.08]),
     [T.acende - 0.12, S('nether_isqueiro'), 0.9],
@@ -107,52 +99,78 @@ function sons(nomeBioma, B) {
     // ida: entra (o som de ficar no portal), chega do lado de lá
     [T.chega - 0.25, S('nether_entra'), 0.7, 1.1, T.volta - T.chega + 0.35],
     [T.volta - 0.05, S('nether_viagem'), 0.45, 1, 1.0],
-    // a música do bioma: normal; 1 s antes do susto ela baixa (o silêncio tenso), fica baixa
-    // enquanto o PAN soa, e volta quando ele foge
-    [T.vira0, musica, gm, 1, antes - 1.0 + 0.1],
-    [T.susto - 1.0, musica, gm * 0.25, 1, 1.0 + 0.1, antes - 1.0],
-    [T.susto, musica, gm * 0.3, 1, PAN, antes],
-    [T.susto + PAN, musica, gm, 1, T.desvira1 - T.susto - PAN + 0.3, antes + PAN],
-    // o susto: o PAN (a morte do enderman, que já começa forte) e o clima tenso do bioma por baixo
-    [T.susto - 0.03, S('nether_pan'), 1.25, 1, 1.6],
-    [T.susto + 0.05, S(`nether_susto_${nomeBioma}`), 0.9, 1, 2.6],
+    // a música do bioma, do começo do Nether até a borda voltar (sem baixar: o Ghast é o clima)
+    [T.vira0, musica, gm, 1, T.desvira1 - T.vira0 + 0.3],
+    // o Ghast: geme ao subir (duas vezes), grita ao cuspir, a bola sopra; o golpe, a explosão e a morte
+    [T.ghast0 + 0.15, S('nether_ghast_geme'), 0.8, 1, 0.9],
+    [T.ghast0 + 1.25, S('nether_ghast_geme'), 0.7, 0.9, 0.9],
+    [T.atira, S('nether_ghast_grita'), 0.85, 1, 1.1],
+    [T.atira + LANCA, S('sopro'), 0.8, 1, 1.0],
+    [T.rebate - 0.02, S('critico1'), 0.8],
+    [T.rebate, S('sopro'), 0.6, 1.25, 0.8],
+    [T.acerta, S('nether_explode'), 0.8, 1, 1.4],
+    [T.acerta + 0.05, S('nether_ghast_morre'), 0.8, 1, 1.5],
+    // o XP chegando no Clawd (o tom sobe, como no jogo)
+    ...[0, 1, 2].map(i => [T.acerta + 1.05 + i * 0.09, S(`xp${i + 1}`), 0.55]),
     // volta: entra de novo, chega do lado de cá
-    [T.corre1 - 0.1, S('nether_entra'), 0.65, 1.2, T.reaparece0 - T.corre1 + 0.3],
+    [T.retorna1 - 0.1, S('nether_entra'), 0.65, 1.2, T.reaparece0 - T.retorna1 + 0.3],
     [T.reaparece0 - 0.05, S('nether_viagem'), 0.4, 1.1, 0.9],
     // o portal quebra
     ...[0, 0.06, 0.13].map((d, i) => [T.quebra + d, S(`nether_pedra${i + 1}`), 0.6, 0.75]),
   ];
   // o fogo crepitando o tempo todo do lado de lá
-  // (menos no silêncio antes do susto e durante o PAN)
-  if (B.fogo) for (let t = T.vira1 - 0.2; t < T.desvira0; t += 1.5) {
-    if (t + 1.6 > T.susto - 1.0 && t < T.susto + PAN) continue;
-    L.push([t, S('nether_fogo'), 0.32, 1, 1.6]);
+  if (B.fogo) for (let t = T.vira1 - 0.2; t < T.desvira0; t += 1.5) L.push([t, S('nether_fogo'), 0.32, 1, 1.6]);
+  // 0,75 (era 1,35, perto do dragão): ~5 dB abaixo; o dono achou alto (26/11)
+  return L.map(([t, a, g, ...r]) => [t, a, g * VOLUME * 0.75, ...r]);
+}
+
+// ---------- o Ghast e a bola: onde cada um está em cada instante ----------
+// tudo em px do palco (x de 0 na esquerda do cartão, y de 0 na borda de cima, pra cima negativo).
+// xc: onde o Clawd para (X1 no palco)
+function medidasDaCena(P, xc) {
+  const med = palco.medidas(P), lado = med.lado;
+  const gx = lim(xc + 96, xc + 56, P.cw - lado / 2 - 18);
+  const yb = -P.HJ + med.teto + lado + (P.HJ < 110 ? 8 : 24);  // o meio de baixo do corpo, no repouso (abaixo das estalactites)
+  const alvo = [xc + 15, -11];                        // o peito do Clawd, onde ele rebate
+  return { med, lado, gx, yb, alvo, centro: [gx, yb - lado / 2], bola: Math.round(8 + lado / 8) };
+}
+// a posição do Ghast em t: sobe de trás do horizonte, flutua, treme quando apanha e some
+function ghastEm(t, M) {
+  const k = M.lado / 32, flu = Math.sin(t * 1.7) * 2 * k;
+  const sobe = sai(fatia(t, T.ghast0, T.ghast1)), partida = -M.med.mar + 10 + M.lado;
+  let x = M.gx, y = partida + (M.yb - partida) * sobe + (sobe >= 1 ? flu : flu * sobe);
+  // um tranco pra trás ao cuspir (a bola sai) e o tremor de quando apanha
+  const cuspe = t >= T.atira + LANCA ? Math.sin(Math.PI * fatia(t, T.atira + LANCA, T.atira + LANCA + 0.3)) : 0;
+  x += 3 * k * cuspe;
+  const apanha = fatia(t, T.acerta, T.acerta + 0.4);
+  if (t >= T.acerta) x += Math.round(Math.sin(t * 70) * 2 * k * (1 - apanha));
+  return { x, y, alfa: fatia(t, T.ghast0, T.ghast0 + 0.5) * (1 - fatia(t, T.acerta + 0.2, T.acerta + 0.3)), boca: t >= T.atira && t < T.acerta + 0.2, golpeado: t >= T.acerta ? (1 - fatia(t, T.acerta + 0.03, T.acerta + 0.28)) * 0.5 : 0 };
+}
+// a bola: cresce na boca, vai até o Clawd (reta com um arco leve) e volta mais rápida pro Ghast
+function bolaEm(t, M, G) {
+  const tl = T.atira + LANCA;
+  if (t < T.atira || t >= T.acerta) return null;
+  const mx = G.x, my = G.y - Math.round(M.lado * 0.32);
+  if (t < tl) return { x: mx - 2, y: my + 2, lado: Math.max(3, M.bola * fatia(t, T.atira, tl) * 0.7), branca: 0, carga: true };
+  if (t < T.rebate) {
+    const u = fatia(t, tl, T.rebate);
+    return { x: mx + (M.alvo[0] - mx) * u, y: my + (M.alvo[1] - my) * u - 7 * Math.sin(Math.PI * u), lado: M.bola, branca: 0 };
   }
-  // o mob: de vez em quando enquanto vem, e no susto (o piglin bravo)
-  // (o do meio antes do silêncio que vem 1 s antes do susto)
-  if (B.mob === 'piglin') L.push([T.mob0 + 0.2, S('nether_piglin1'), 0.6], [T.mob0 + 1.3, S('nether_piglin1'), 0.6, 0.92, 0.6], [T.susto + 0.15, S('nether_piglin2'), 0.85]);
-  if (B.mob === 'esqueleto') L.push([T.mob0 + 0.2, S('nether_esqueleto'), 0.6], [T.mob0 + 1.3, S('nether_esqueleto'), 0.6, 0.95], [T.susto + 0.2, S('nether_esqueleto'), 0.8, 1.15]);
-  if (B.mob === 'magma') {
-    // cada vez que ele cai do pulo (o mesmo ritmo do desenho: 1,6 pulos por s, cai em 0,7 da volta)
-    for (let k = Math.ceil(T.mob0 * 1.6 - 0.7); (k + 0.7) / 1.6 < T.desvira0; k++) {
-      const t = (k + 0.7) / 1.6;
-      if (t >= T.mob0 + 0.1) L.push([t, S(`nether_magma${k % 2 + 1}`), 0.6]);
-    }
-  }
-  return L.map(([t, a, g, ...r]) => [t, a, g * VOLUME * 1.35, ...r]);  // 1,35: perto do volume do dragão
+  const v = fatia(t, T.rebate, T.acerta), w = v * v * 0.6 + v * 0.4;
+  return { x: M.alvo[0] + (M.centro[0] - M.alvo[0]) * w, y: M.alvo[1] + (M.centro[1] - M.alvo[1]) * w - 5 * Math.sin(Math.PI * v), lado: M.bola + 2, branca: 1 };
 }
 
 // ---------- o evento ----------
-// ctx.variante (testes: "portal:almas") escolhe o bioma; senão sorteia. ctx.falta: quanto
-// de reta tinha na frente quando a cena começou (o mob nasce lá na ponta)
+// ctx.variante (testes: "portal:almas") escolhe o bioma; senão sorteia
 function fazer(ctx) {
   const r = rng(131 + (ctx.semente || 0));
   const nomeBioma = BIOMAS[ctx.variante] ? ctx.variante : NOMES_BIOMAS[Math.floor(r() * NOMES_BIOMAS.length) % NOMES_BIOMAS.length];
   const B = BIOMAS[nomeBioma];
-  const roxos = [0, 1, 2, 3, 4, 5].map(() => fazPontos(r, 8, ROXOS, 10, 0.9));
-  const faiscas = fazPontos(r, 10, ['#FFF3A0', '#FFC23A', '#FF8A1A'], 40, 0.35);
+  const roxos = [0, 1, 2, 3, 4, 5, 6, 7].map(() => fazPontos(r, 8, ROXOS, 18, 0.9));
+  const faiscas = fazPontos(r, 12, ['#FFF3A0', '#FFC23A', '#FF8A1A'], 56, 0.35);
   const poofs = BLOCOS.map(() => fazPoof(r, 5));
-  const cacos = fazCacos(r, 16, 60, 2);
+  const cacos = fazCacos(r, 20, 70, 3);
+  const orbes = fazOrbes(r, 8), fagulhas = fazFaiscas(r, 10, 90);
   return {
     dur: T.fim, danos: [], mortes: [], bioma: nomeBioma, avanca: FIM_X, sons: sons(nomeBioma, B),
     // o fundo (a borda virando Nether) precisa saber onde o portal ficou e em que pé está
@@ -161,7 +179,19 @@ function fazer(ctx) {
       return { k, bioma: nomeBioma, B, portalX: CX };
     },
     quadro(g, t, roupa, mundo) {
-      const falta = mundo ? mundo.pose().falta : 160;
+      // -- o palco, acima do cartão (no referencial do cartão: o transform do Clawd fica pra depois) --
+      if (mundo && mundo.host && mundo.host.cartao) {
+        const P = palco.montarPalco(mundo), ab = t < T.fecha0 ? sai(fatia(t, T.abre0, T.abre1)) : 1 - entra(fatia(t, T.fecha0, T.fecha1));
+        if (ab > 0) {
+          const xc = mundo.pose().x - P.OX + X1, M = medidasDaCena(P, xc), G = ghastEm(t, M), bola = bolaEm(t, M, G), T0 = mundo.T;
+          palco.desenhaPalco(g, P, nomeBioma, ab, T0, {
+            // por trás do chão: o Ghast subindo do horizonte (a lava e o teto cobrem o que passa deles)
+            atras: k => palco.desenhaGhast(k, P, G.x, G.y, { alfa: G.alfa, boca: G.boca, balanco: t, golpeado: G.golpeado }),
+            // por cima de tudo: a bola e o rastro, o golpe, a explosão, a fumaça e os orbes
+            frente: k => desenhaAcao(k, t, M, G, bola, { orbes, fagulhas }, xc, P),
+          });
+        }
+      }
       // -- o portal: obsidianas, o roxo e a quebra no fim --
       const quebra = fatia(t, T.quebra, T.quebra + 0.3);
       if (t >= T.acende && t < T.quebra + 0.1 && IMG.portal_nether) {
@@ -171,7 +201,7 @@ function fazer(ctx) {
         g.drawImage(img, 0, q, 16, 16, DENTRO[0], DENTRO[1], DENTRO[2], DENTRO[3]);
         g.restore();
         // o roxo soltando pontinhos
-        for (let i = 0; i < roxos.length; i++) desenhaPontos(g, roxos[i], CX, -20, 14, 22, ((t - T.acende + i * 0.15) % 0.9));
+        for (let i = 0; i < roxos.length; i++) desenhaPontos(g, roxos[i], CX, -40, 28, 44, ((t - T.acende + i * 0.15) % 0.9));
       }
       BLOCOS.forEach(([x, yb], i) => {
         const t0 = T.poe + i * T.cada;
@@ -180,35 +210,15 @@ function fazer(ctx) {
         bloco(g, 'obsidiana', x, yb, L, quebra > 0 ? 1 - quebra : 0.4 + 0.6 * brota);
         desenhaPoof(g, poofs[i], x + L / 2, yb - L / 2, L, L, t - T.quebra);
       });
-      desenhaCacos(g, cacos, 'obsidiana', CX, -16, t - T.quebra);
+      desenhaCacos(g, cacos, 'obsidiana', CX, -32, t - T.quebra);
       // faísca do isqueiro
-      desenhaPontos(g, faiscas, CX, -10, 6, 4, t - (T.acende - 0.05));
-
-      // -- o mob (só do lado de lá: aparece quando ele já saiu, some quando a borda volta) --
-      if (t >= T.mob0 && t < T.desvira0 + 0.35) {
-        // nasce na ponta da reta, chega perto (X2 + 30) e, quando ele foge, vai atrás até o portal
-        const x0 = lim(falta - 10, X2 + 56, 300), x1 = X2 + 30, xParado = CX + 34;
-        const u = fatia(t, T.mob0, T.mob1);
-        let x = x0 + (x1 - x0) * u;
-        if (t > T.mob1) x = x1 + (xParado - x1) * sai(fatia(t, T.mob1, T.desvira0));
-        const alfa = fatia(t, T.mob0, T.mob0 + 0.3) * (1 - fatia(t, T.desvira0, T.desvira0 + 0.3));
-        const anda = t < T.desvira0;
-        if (B.mob === 'magma') {
-          // pula: sobe 7 px, amassa ao cair
-          const p = (t * 1.6) % 1, alto = Math.sin(Math.PI * Math.min(1, p / 0.7)) * (p < 0.7 ? 7 : 0), amassa = p >= 0.7 ? 1 - 0.25 * Math.sin(Math.PI * (p - 0.7) / 0.3) : 1;
-          g.save(); g.globalAlpha *= alfa; g.translate(x, -alto); g.scale(1 / amassa, amassa);
-          g.drawImage(MAGMA, -6, -12, 12, 12);
-          g.restore();
-        } else {
-          const m = B.mob === 'piglin' ? MOB.piglinZumbi : MOB.esqueleto;
-          desenhaMob(g, m, x, 0, { quadro: anda ? Math.floor(t / 0.2) % 2 : 0, alfa });
-        }
-      }
+      desenhaPontos(g, faiscas, CX, -14, 10, 8, t - (T.acende - 0.05));
 
       // -- o Clawd --
       const p = { roupa, T: mundo ? mundo.T : 0 };
       let x = 0, y = 0, alfa = 1, tinta = null, olhos = 'abertos', ferr = null, ang = 0, sx = 1, pose = {};
       const roxo = a => ({ cor: '#B31FE6', a });
+      const sobePortal = xx => (xx < FX + 4 * L ? -L : -L * (1 - lim((xx - (FX + 4 * L)) / 4, 0, 1)));  // dentro do portal ele está em cima das obsidianas
       if (t < T.isqueiro) {
         // pondo as obsidianas: o braço vai e volta a cada bloco, com o bloquinho na mão
         const i = Math.floor((t - T.poe) / T.cada);
@@ -234,32 +244,25 @@ function fazer(ctx) {
       } else if (t < T.anda2) {
         const u = fatia(t, T.anda1, T.anda2);
         x = CX + (X1 - CX) * u; pose = clawd.andando(t);
-        y = pose.y + (x < FX + 4 * L ? -L : -L * (1 - lim((x - (FX + 4 * L)) / 4, 0, 1)));
-      } else if (t < T.explora0) {
-        // 1ª parada: olha pra frente e pra trás, olhos piscando
+        y = pose.y + sobePortal(x);
+      } else if (t < T.retorna0) {
+        // parado em X1, de olho no Ghast: olha pro alto (pisca pra frente), levanta a picareta quando a bola
+        // sai, golpeia no rebate, comemora com dois pulinhos quando a bola explode
         x = X1;
-        sx = Math.floor((t - T.anda2) / 0.6) % 2 ? -1 : 1;
-        olhos = Math.floor(t / 0.45) % 2 ? 'abertos' : 'cima';
-      } else if (t < T.explora1) {
-        const u = fatia(t, T.explora0, T.explora1);
-        x = X1 + (X2 - X1) * u; pose = clawd.andando(t);
-      } else if (t < T.susto) {
-        // 2ª parada: olhando pros lados (quase sempre pra trás, pro portal): não vê o mob chegando
-        x = X2;
-        sx = t >= T.susto - 0.7 || Math.floor((t - T.explora1) / 0.9) % 2 === 0 ? -1 : 1;
-        olhos = Math.floor(t / 0.5) % 2 ? 'abertos' : 'cima';
-      } else if (t < T.corre0) {
-        // vira pra frente, dá de cara com o mob: pula e arregala
-        x = X2;
-        y = -6 * Math.sin(Math.PI * fatia(t, T.susto, T.susto + 0.3)); olhos = 'cima';
-      } else if (t < T.corre1) {
-        // corre de volta (virado pra trás)
-        const u = fatia(t, T.corre0, T.corre1);
-        x = X2 + (CX - X2) * u; sx = -1; pose = clawd.andando(t * 1.6);
-        y = pose.y + (x < FX + 4 * L ? -L : 0);
-        olhos = 'cima';
+        olhos = Math.floor(t / 0.55) % 3 === 2 ? 'abertos' : 'cima';
+        const a0 = T.rebate + GOLPE[0], a1 = T.rebate + GOLPE[1];
+        if (t >= T.atira + LANCA && t < a0) pose = { ang: -28 * sai(fatia(t, T.atira + LANCA, T.atira + LANCA + 0.25)) };
+        else if (t >= a0 && t < a1) { const u = fatia(t, a0, a1); pose = { ang: clawd.golpe(u) }; x = X1 + 4 * Math.sin(Math.PI * u); olhos = 'abertos'; }
+        else if (t >= a1) pose = { ang: 70 * (1 - sai(fatia(t, T.acerta, T.acerta + 0.5))) };
+        if (t >= T.acerta + 0.15 && t < T.acerta + 0.75) { y = -7 * Math.abs(Math.sin(Math.PI * 2 * fatia(t, T.acerta + 0.15, T.acerta + 0.75))); olhos = 'cima'; }
+        if (t >= T.retorna0 - 0.25) sx = -1;
+      } else if (t < T.retorna1) {
+        // volta andando pro portal (virado pra trás)
+        const u = fatia(t, T.retorna0, T.retorna1);
+        x = X1 + (CX - X1) * u; sx = -1; pose = clawd.andando(t);
+        y = pose.y + sobePortal(x);
       } else if (t < T.entra) {
-        x = CX; y = -L; sx = -1; alfa = 1 - fatia(t, T.corre1, T.entra); tinta = roxo(fatia(t, T.corre1, T.entra));
+        x = CX; y = -L; sx = -1; alfa = 1 - fatia(t, T.retorna1, T.entra); tinta = roxo(fatia(t, T.retorna1, T.entra));
       } else if (t < T.reaparece0) {
         alfa = 0;
       } else if (t < T.sai0) {
@@ -267,7 +270,7 @@ function fazer(ctx) {
       } else if (t < T.sai1) {
         const u = fatia(t, T.sai0, T.sai1);
         x = CX + (FIM_X - CX) * u; pose = clawd.andando(t);
-        y = pose.y + (x < FX + 4 * L ? -L : -L * (1 - lim((x - (FX + 4 * L)) / 4, 0, 1)));
+        y = pose.y + sobePortal(x);
       } else {
         // ufa: fecha os olhos um instante e espera o portal quebrar
         x = FIM_X;
@@ -280,9 +283,36 @@ function fazer(ctx) {
         clawd.desenhaClawd(g, { ...p, ...pose, x: 0, y, sx, alfa, tinta, olhos, ferr: naMao, ang: angulo });
         g.restore();
       }
-      exclamacao(g, X2, -24, t >= T.susto && t < T.corre0 + 0.1 ? 1 : 0);
     },
   };
+}
+
+// a ação do palco, no referencial do palco: a bola, o golpe, a explosão, a fumaça, os orbes
+function desenhaAcao(g, t, M, G, bola, P, xc, PP) {
+  const { lado } = M;
+  if (bola) {
+    const rastro = [];
+    for (let i = 1; i <= 6; i++) { const b = bolaEm(Math.max(T.atira + LANCA, t - i * 0.03), M, ghastEm(Math.max(T.atira + LANCA, t - i * 0.03), M)); if (b && !b.carga) rastro.push([b.x, b.y]); }
+    palco.desenhaBola(g, bola.x, bola.y, t, { lado: bola.lado, branca: bola.branca, rastro: bola.carga ? null : rastro });
+  }
+  // o golpe: a varrida da picareta e as faíscas no choque, e o clarão da bola mudando de lado
+  const dr = t - T.rebate;
+  if (dr >= -0.02 && dr < 0.3) {
+    desenhaVarrida(g, xc + 14, -13, dr + 0.02, '#FFFFFF', 30);
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const R = 22, a = 0.7 * (1 - fatia(dr, 0, 0.22)), gr = g.createRadialGradient(M.alvo[0], M.alvo[1], 1, M.alvo[0], M.alvo[1], R);
+    gr.addColorStop(0, `rgba(255,240,190,${a.toFixed(3)})`); gr.addColorStop(1, 'rgba(255,200,120,0)');
+    g.fillStyle = gr; g.fillRect(M.alvo[0] - R, M.alvo[1] - R, 2 * R, 2 * R);
+    g.restore();
+    for (const f of P.fagulhas) if (dr >= 0 && dr < f.vida) { g.fillStyle = f.cor; g.fillRect(Math.round(M.alvo[0] + f.vx * dr * 0.5), Math.round(M.alvo[1] + f.vy * dr * 0.5 + 60 * dr * dr), 2, 2); }
+  }
+  // a explosão no Ghast: clarão, a nuvem de fumaça em blocos e os pedaços; depois os orbes
+  const da = t - T.acerta;
+  if (da >= 0) {
+    const [cx, cy] = M.centro;
+    palco.desenhaExplosaoGhast(g, cx, cy, lado, da);
+    desenhaOrbes(g, P.orbes, cx, cy, da - 0.3, xc);
+  }
 }
 
 // ---------- o fundo: a borda do cartão virando Nether ----------
@@ -348,12 +378,12 @@ function fundoNether(g, info, T0) {
   }
 }
 
-const TEXTURAS = ['obsidiana', 'portal_nether', 'isqueiro', 'netherrack', 'areia_almas', 'basalto_lado', 'magma', 'fogo', 'fogo_almas', 'piglin_zumbi', 'esqueleto'];
+const TEXTURAS = ['obsidiana', 'portal_nether', 'isqueiro', 'netherrack', 'areia_almas', 'basalto_lado', 'basalto_topo', 'magma', 'fogo', 'fogo_almas', 'ghast', 'ghast_atira', 'lava', 'tijolo_nether', 'glowstone', 'bola_fogo'];
 
 module.exports = {
   // cena épica (especial: fora do sorteio comum; o tema chama a cada PORTAL eventos), só na
-  // borda de cima, no comecinho dela: o mob precisa da reta inteira pra vir
+  // borda de cima, no comecinho dela: o portal, o palco e o Ghast precisam da reta inteira
   evento: { id: 'portal', grupo: 'nether', raridade: 'raro', especial: true, mortes: 0, soCima: true, espaco: { frente: 140, tras: 0 }, texturas: TEXTURAS, fazer },
-  T,
+  T, FIM_X,
   fundoNether, BIOMAS,
 };

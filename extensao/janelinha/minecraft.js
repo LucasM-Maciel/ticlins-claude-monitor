@@ -70,6 +70,8 @@ const SONS = {
     nether_susto_netherrack: "ambient/nether/nether_wastes/mood1", nether_susto_almas: "ambient/nether/soulsand_valley/mood1",
     nether_susto_basalto: "ambient/nether/basalt_deltas/twist1",
     nether_pan: "mob/endermen/death",  // o "PAN" do susto: a morte do enderman
+    // o Ghast do palco (motor/minecraft-nether-palco.js): geme, grita ao cuspir, morre; a explosão da bola
+    nether_ghast_geme: "mob/ghast/moan1", nether_ghast_grita: "mob/ghast/scream1", nether_ghast_morre: "mob/ghast/death", nether_explode: "random/explode1",
     // as músicas do Nether: só um trecho (RECORTES), não a faixa inteira
     nether_musica_netherrack: "music/game/nether/nether_wastes/rubedo", nether_musica_almas: "music/game/nether/soulsand_valley/so_below",
     nether_musica_basalto: "music/game/nether/dead_voxel",
@@ -159,6 +161,9 @@ Object.assign(TEXTURAS, {
     areia_almas: "block/soul_sand", basalto_lado: "block/basalt_side", basalto_topo: "block/basalt_top", magma: "block/magma",
     fogo: "block/fire_0", fogo_almas: "block/soul_fire_0", isqueiro: "item/flint_and_steel",
     piglin_zumbi: "entity/piglin/zombified_piglin", cubo_magma: "entity/slime/magmacube",
+    // o palco e o Ghast: o corpo e a cara de atirar, a lava (animada), o tijolo da fortaleza, o glowstone do teto e a bola de fogo
+    ghast: "entity/ghast/ghast", ghast_atira: "entity/ghast/ghast_shooting", lava: "block/lava_still",
+    tijolo_nether: "block/nether_bricks", glowstone: "block/glowstone", bola_fogo: "item/fire_charge",
 });
 // modo compacto do tema Minecraft: a bússola no lugar da barra de XP (32 quadros da agulha)
 for (let i = 0; i < 32; i++) TEXTURAS[`bussola${String(i).padStart(2, "0")}`] = `item/compass_${String(i).padStart(2, "0")}`;
